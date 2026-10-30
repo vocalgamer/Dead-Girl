@@ -24,7 +24,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.51 2026-10-30';
+const VERSION='v0.52 2026-10-30';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -1003,8 +1003,9 @@ function drawTutWorld(){
 }
 function drawTutPanel(){
   const T_=G.tut;if(!T_||state!=='play'||!TUT[T_.step])return;
-  const [h,b]=TUT[T_.step],y=H-92,a=Math.min(1,T_.t*3);g.save();g.globalAlpha=a;
-  rr(16,y,W-32,52,8,'rgba(8,8,14,.82)');g.strokeStyle='rgba(255,213,74,.7)';g.lineWidth=1.5;rrPath(16,y,W-32,52,8);g.stroke();
+  // 床の邪魔にならないよう、ヘッダーのすぐ下に半透明で表示（主人公が近づくとさらに薄くなる）
+  const [h,b]=TUT[T_.step],y=AY0+6,near=P.y<AY0+130?.45:1,a=Math.min(1,T_.t*3)*.85*near;g.save();g.globalAlpha=a;
+  rr(16,y,W-32,52,8,'rgba(8,8,14,.45)');g.strokeStyle='rgba(255,213,74,.4)';g.lineWidth=1.2;rrPath(16,y,W-32,52,8);g.stroke();
   txt(h,30,y+21,15,'#ffd54a','left',JP,null,false,900);if(T_.step<=4)txt('導入 '+Math.min(T_.step,4)+'/4',W-30,y+21,10,'#8b93a8','right',JP,null,false,700);
   txt(b,30,y+41,12,'#fff','left',JP,null,false,700);
   if(T_.step===3)pointer(66+98,27,null);
