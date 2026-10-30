@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.09 2026-10-31';
+const VERSION='v0.10 2026-10-31';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -1141,6 +1141,8 @@ function screenAction(p,key){
   if(state==='stintro'){if(stateT>.3){SFX.ui();stateT=0;if(++G.cardI>=G.cards.length){G.cards=null;state='play'}}return}
   if(state==='tutmenu'){if(stateT<.3)return;if(p){if(inR(p,SCR.tnext))tutChoice(true);else if(inR(p,SCR.tretry))tutChoice(false);return}tutChoice(key!=='retry');return}
   // タイトル：音がまだ鳴らせない状態なら、最初の1回は「音をONにするだけ」（BGMを聴かせるため）。2回目で開始
+  // プロローグ中のタップ（クリック・キー）は読み飛ばし：すぐロゴとボタンを出す（音の準備もこのタップで済ませる）
+  if(state==='title'&&stateT<LOGO_T+.6){skipPrologue();return}
   if(state==='title'){if(!muted&&!(AC&&AC.state==='running')&&!G.titleTap){G.titleTap=1;return}
     if(p){if(inR(p,SCR.tstart))newGame(false);else if(inR(p,SCR.ttut))newGame(true);return}
     newGame(key==='tut');return}
@@ -1236,6 +1238,7 @@ addEventListener('keydown',ev=>{
   if(ev.repeat)return;
   const sndOff=!(AC&&AC.state==='running');
   keys.add(k);touchMode=false;initAudio();updKeys();
+  if(state==='title'&&stateT<LOGO_T+.6){skipPrologue();return}
   if(state==='title'&&sndOff&&!muted&&!G.titleTap){G.titleTap=1;return}
   if(state==='pick'){pickKey(k);return}
   if(state!=='play'){
@@ -2155,6 +2158,7 @@ function button(r,label,col,font){
 }
 const PROLOGUE=['あの夜——','鬼頭組の「取引」を見てしまった私は、殺された。','','冷たいアスファルトの上で、私の心臓は止まった。','——でも、私は蘇った。','','復讐するために蘇ったのか。','それとも、別の何かに動かされているのか。答えはわからない。','ただ、脳裏に響き続ける声がある。','','『奴らを、血の海に沈めろ』'];
 const LOGO_T=(PROLOGUE.length-1)*.6+.43; // タイトルロゴが出始める時刻（BGMもここから）
+function skipPrologue(){stateT=Math.max(stateT,LOGO_T+.86);G.titleTap=1}
 let TART=null;
 // タイトル用イラスト：元画像の背景ごと切り出し、周囲を闇に溶かす
 function titleArt(){
