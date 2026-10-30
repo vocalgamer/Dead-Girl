@@ -24,7 +24,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.04 2026-10-30';
+const VERSION='v0.05 2026-10-30';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -401,13 +401,9 @@ function updateWave(dt){
       if(G.spawnT<=0&&alive<cap&&!G.tutMode){let n=Math.random()<.4?(G.wave>=6&&Math.random()<.5?3:2):1;if(waveEase()<1)n=Math.max(1,Math.min(n,Math.ceil(cap-alive)));for(let i=0;i<n;i++)queueSpawn(pickType(G.wave));G.spawnT=Math.max(.45,1-G.wave*.05)*rand(.7,1.2)*(waveEase()<1?1.15:1)}
     }
   }else if(G.phase==='break'){G.breakT-=dt;if(G.breakT<=0)openPick()}
-  else if(G.phase==='tutEnd'){G.tut&&(G.tut.t+=dt);G.endT-=dt;if(G.endT<=0){tutDone=true;lsSet('dg_tut','1');state='title';stateT=0;resetRun()}}
   else if(G.phase==='ending'){G.endT-=dt;if(G.endT<=0){state='clear';stateT=0;saveBest()}}
 }
 function waveClear(){
-  // チュートリアルはカード選択に進まず、完了の表示のあとタイトルへ戻る
-  if(G.tutMode&&G.tut){G.tut.step=8;G.tut.t=0;G.phase='tutEnd';G.endT=4.5;SFX.clear();addShake(12);G.flash=.4;G.flashCol='255,213,74';
-    for(const o of [...E])killEnemy(o,Math.atan2(o.y-P.y,o.x-P.x),700,{});MARKS.length=0;B.length=0;return}
   if(G.mis&&G.mis.id==='time'&&!G.mis.done&&!G.mis.fail&&G.waveTime<=G.mis.need)misDone();
   G.phase='break';G.breakT=3.2;healP(20);slow(.9,.2);SFX.clear();addShake(16);G.flash=.5;G.flashCol='255,20,50';
   for(const o of [...E])killEnemy(o,Math.atan2(o.y-P.y,o.x-P.x),700,{});
@@ -462,7 +458,7 @@ function fillTile(i){
   for(let k=0;k<6;k++){d.fillStyle=`rgba(${irand(90,140)},0,${irand(8,20)},${rand(.3,.55).toFixed(2)})`;d.beginPath();d.arc(t.x+rand(8,t.w-8),t.y+rand(8,Math.max(9,t.h-8)),rand(5,9),0,TAU);d.fill()}
   fx({k:'tile',x:t.x,y:t.y,w:t.w,h:t.h,life:.35,max:.35});SFX.tile();
   for(const c of G.crests)if(c.i===i&&!c.taken){c.taken=true;crestReward(c)}
-  if(!G.isBossWave&&G.phase==='fight'&&state==='play'&&!P.dead&&painted>=GN&&!(G.tut&&G.tut.step<7))waveClear();
+  if(!G.isBossWave&&G.phase==='fight'&&state==='play'&&!P.dead&&painted>=GN&&!G.tutMode)waveClear();
 }
 function tileAt(x,y){const cx=Math.floor((x-AX0)/TS),cy=Math.floor((y-AY0)/TS);return cx<0||cy<0||cx>=GC||cy>=GR?-1:cy*GC+cx}
 // 掃除屋がタイルの血を拭き取る（塗り済みが取り消される）
@@ -562,7 +558,8 @@ function killEnemy(e,ang,spd,o){
   const i=E.indexOf(e);if(i>=0)E.splice(i,1);
   if(e.boss){bossDown(e,ang);return}
   G.wk=(G.wk||0)+1;
-  if(G.tut&&G.tut.step===2&&G.tut.gap>=0&&!DONE[G.tut.gap]){const t=tileRect(G.tut.gap);if(dist(e.x,e.y,t.x+t.w/2,t.y+t.h/2)<95)fillTile(G.tut.gap)}
+  if(G.tut){const gl=G.tut.step===2&&G.tut.gap>=0?[G.tut.gap]:G.tut.step===7&&G.tut.targets?G.tut.targets:[];
+    for(const i of gl)if(!DONE[i]){const t=tileRect(i);if(dist(e.x,e.y,t.x+t.w/2,t.y+t.h/2)<95)fillTile(i)}}
   // お題用：仕掛け・怨念解放中・掃除屋の撃破を数える
   const cause=G.cause||(e.smoked>0?'ext':null);if(cause&&cause===G.gim)misAdd('gim');
   if(G.cause==='rage')misAdd('rage');
@@ -601,7 +598,7 @@ function fire(x,y,a,spd,dmg,big){
 // 弾き返し：ヒットストップ＋スローで「決まった」瞬間を強調。体に届く寸前で弾くとPERFECT（威力2倍・演出強化）
 // 跳ね返した弾は雑魚を貫通し続ける（装甲・ボスに当たると止まる）
 function reflect(b){
-  tutLater(4,500);
+  tutComplete(4,.6);
   const pf=dist(b.x,b.y,P.x,P.y)<P.r+26+15*lv('perfect');
   b.friendly=true;b.life=2;b.perfect=pf;b.kills=0;b.hits=new Set();b.trail=[];let t=null,bd=1e9;
   for(const e of E){const d=dist(b.x,b.y,e.x,e.y);if(d<bd){bd=d;t=e}}
@@ -631,7 +628,7 @@ function hurtPlayer(dmg,sx,sy){
   if(P.guard&&!front)popText(P.x,P.y-50,'背後を取られた！','#ffb44a',13,.8);
   if(P.guard&&front){
     // ガード：ダメージを完全に防ぎ、受けるはずだったダメージのGUARD_HEAL倍だけ回復。ノックバック小、連撃は途切れない
-    const heal=dmg*GUARD_HEAL;P.hp=Math.min(P.maxhp,P.hp+heal);misAdd('guard');P.guardLock=true;if(G.tut&&G.tut.step===3)tutNext();
+    const heal=dmg*GUARD_HEAL;P.hp=Math.min(P.maxhp,P.hp+heal);misAdd('guard');P.guardLock=true;tutComplete(3,.6);
     if(lv('counter')&&!P.crit){P.crit=.7;popText(P.x,P.y-48,'COUNTER!','#7fd8ff',15,.7)}
     // 防いだ相手（近接攻撃なら攻撃元の近くの敵）を弾き飛ばして少し怯ませ、間合いを作る
     let foe=null,fd=48;for(const e of E){if(e.boss)continue;const dd=dist(e.x,e.y,sx,sy);if(dd<fd){fd=dd;foe=e}}
@@ -928,7 +925,7 @@ function capture(tiles){
   const cx=sx/n,cy=sy/n,dd=new Map([[tiles[0],0]]),q=[tiles[0]];
   while(q.length){const j=q.shift(),x=j%GC,y=(j/GC)|0;for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){const k=(y+dy)*GC+(x+dx);if(x+dx<0||x+dx>=GC||y+dy<0||y+dy>=GR||!set.has(k)||dd.has(k))continue;dd.set(k,dd.get(j)+1);q.push(k)}}
   for(const j of tiles){const k=dd.get(j)||0;CAPQ.push({i:j,at:G.time+k*.045,k,n,cx,cy})}
-  const pts=100*n*G.wave;G.score+=pts;misAdd('capture',null,n);if(G.tut&&G.tut.step===2&&!G.tut.capQueued){G.tut.capQueued=true;setTimeout(tutNext,600)}
+  const pts=100*n*G.wave;G.score+=pts;misAdd('capture',null,n);tutComplete(2,.7);
   if(n>=3){
     callout('制 圧 ！',n+'マスを一気に血で染めた　+'+pts,'#ff2f5f');G.callout.dur=1.6;
     SFX.boom();SFX.tile();addShake(Math.min(22,8+n));G.flash=Math.max(G.flash,.3);G.flashCol='255,20,50';G.hitstop=Math.max(G.hitstop,.06);
@@ -949,7 +946,7 @@ function updateCapQ(){
 }
 // 塗りの進み具合が25%・50%・75%を超えたら告知（演出のみ。75%からはBGMも激しくなる）
 function checkMilestones(){
-  if(G.isBossWave||G.phase!=='fight')return;const pr=painted/GN,m=pr>=.75?3:pr>=.5?2:pr>=.25?1:0;
+  if(G.isBossWave||G.phase!=='fight'||G.tutMode)return;const pr=painted/GN,m=pr>=.75?3:pr>=.5?2:pr>=.25?1:0;
   if(m>G.mile){G.mile=m;popText(W/2,AY0+76,'侵食 '+(m*25)+'%','#ff4d6d',26,1.3);G.flash=Math.max(G.flash,.18);G.flashCol='255,20,50';tone(70,40,.7,'sine',.6);if(m===3)callout('侵食 75%','あと少し——街を血で沈めろ','#ff2f5f')}
 }
 
@@ -961,28 +958,43 @@ const lsGet=k=>{try{return localStorage.getItem(k)}catch(e){return null}},lsSet=
 let tutDone=lsGet('dg_tut')==='1';
 const SEEN=new Set((()=>{try{return JSON.parse(lsGet('dg_seen')||'[]')}catch(e){return[]}})());
 function markSeen(k){SEEN.add(k);lsSet('dg_seen',JSON.stringify([...SEEN]))}
-// 導入の手順（ステージ1：①〜⑥、ステージ2：⑦）。操作の説明はスマホ／PCで出し分ける
+// チュートリアルの手順（①〜⑦）。1つ達成するごとにゲームを止め、「次へ／もう一度」を選ばせる。操作の説明はスマホ／PCで出し分ける
 const TUT_STEPS=7;
 const tutText=st=>({1:['① 塗る','敵を倒すと、血で床が染まる。まず3マス塗ってみよう'],2:['② 囲う','光るマスを塗って輪を閉じろ。囲んだ中が一気に染まる'],
   3:['③ ガード',(touchMode?'右半分を長押し':'U／右クリックを押したまま')+'で正面ガード。防ぐとライフが回復'],
   4:['④ 弾き返し','銃撃手の弾は、当たる直前に攻撃すると跳ね返せる'],
   5:['⑤ 怨念解放','SOULが満タン！'+(touchMode?'光る主人公をタップ':'L／Eキー')+'で周りを一掃'],
-  6:['⑥ 掃除屋','塗った血を消しに来る。消される前に倒せ！'],7:['⑦ クリア','上のBLOODゲージを100%にするとステージクリア'],
-  8:['チュートリアル完了！','これで一通りの操作はばっちり。タイトルに戻ります']})[st];
+  6:['⑥ 掃除屋','塗った血を消しに来る。消される前に倒せ！'],7:['⑦ クリア','光るマスを塗ってBLOODを100%に。100%でステージクリア']})[st];
 function tutWave(n){
   if(!G.tutMode||n!==1){G.tut=null;return}
-  G.tut={step:1,t:0,gap:-1};G.mis=null;
+  G.tut={step:1,t:0,gap:-1};G.mis=null;tutSetup(1);
 }
-function tutNext(){const T_=G.tut;if(!T_)return;T_.step++;T_.t=0;T_.foe=null;SFX.ui();
-  // ②〜⑥は、前の手順の敵を煙とともに消してから、その手順に必要な敵だけを出す
-  if(T_.step>=2&&T_.step<=6){for(const e of E){for(let k=0;k<6;k++)fx({k:'smoke',x:e.x,y:e.y,vx:rand(-60,60),vy:rand(-60,60),life:.5,max:.5,sz:rand(8,14)})}E.length=0;MARKS.length=0;B.length=0}
-  if(T_.step===2)tutRing();else if(T_.step===3){P.hp=Math.min(P.hp,P.maxhp*.7);tutFoe('grunt',110)}else if(T_.step===4)tutFoe('gunner',230);
-  else if(T_.step===5){G.soul=100;for(let k=0;k<3;k++){const a=k/3*TAU+.5;tutFoe('grunt',140,a)}}
-  else if(T_.step===6){G.crewOut=true;queueSpawn('cleaner','mop')}
-  // ⑦：床を85%まで塗った状態にして、残りを少ない敵で塗り切ってもらう
-  else if(T_.step===7){const left=[];for(let i=0;i<GN;i++)if(!DONE[i])left.push(i);left.sort(()=>Math.random()-.5);capFilling=true;while(painted<GN*.85&&left.length)fillTile(left.pop());capFilling=false}}
-// 手順fromの達成から少し間を置いて次へ（同じ手順で何度呼ばれても1回だけ進む）
-function tutLater(from,ms){const T_=G.tut;if(!T_||T_.step!==from||T_.later===from)return;T_.later=from;setTimeout(()=>{if(G.tut&&G.tut.step===from)tutNext()},ms)}
+// 手順を始める（「もう一度」でも同じ準備をやり直す）。②以降は前の敵を煙とともに消し、その手順に必要な敵だけを出す
+function tutSetup(st){
+  const T_=G.tut;Object.assign(T_,{t:0,foe:null,later:false,doneAt:null,gap:-1,targets:null,spawnCd:0});
+  if(st>=2){for(const e of E){for(let k=0;k<6;k++)fx({k:'smoke',x:e.x,y:e.y,vx:rand(-60,60),vy:rand(-60,60),life:.5,max:.5,sz:rand(8,14)})}E.length=0;MARKS.length=0;B.length=0}
+  if(st===1)T_.base=painted;
+  else if(st===2)tutRing();
+  else if(st===3){P.hp=Math.min(P.hp,P.maxhp*.7);tutFoe('grunt',110)}
+  else if(st===4)tutFoe('gunner',230);
+  else if(st===5){G.soul=100;for(let k=0;k<3;k++){const a=k/3*TAU+.5;tutFoe('grunt',140,a)}}
+  else if(st===6){G.crewOut=true;queueSpawn('cleaner','mop')}
+  else if(st===7){
+    // ⑦：床をほぼ全部塗った状態にして、残り2マスだけを光らせる（近くに敵を多めに出す）
+    const cand=[];for(let i=0;i<GN;i++){const cx=i%GC,cy=(i/GC)|0,t=tileRect(i);if(cx>0&&cy>=3&&cx<GC-1&&cy<GR-1&&dist(t.x+t.w/2,t.y+t.h/2,P.x,P.y)>140)cand.push(i)}
+    cand.sort(()=>Math.random()-.5);T_.targets=cand.slice(0,2);
+    capFilling=true;for(let i=0;i<GN;i++)if(!T_.targets.includes(i)&&!DONE[i])fillTile(i);capFilling=false;
+    for(const i of T_.targets)if(DONE[i]){cleanTile(i,true)}for(const i of T_.targets)PAINT[i]=0;
+  }
+}
+// 手順の達成：少し間を置いてから止める（同じ手順で何度呼ばれても1回だけ。待ち時間はゲーム内の時間で数える）
+function tutComplete(from,delay){const T_=G.tut;if(!T_||T_.step!==from||T_.later)return;T_.later=true;T_.doneAt=T_.t+(delay||0)}
+function tutChoice(next){
+  const T_=G.tut;if(!T_)return;state='play';stateT=0;SFX.ui();
+  if(!next){tutSetup(T_.step);return}
+  if(T_.step>=TUT_STEPS){tutDone=true;lsSet('dg_tut','1');state='title';stateT=0;resetRun();return}
+  T_.step++;tutSetup(T_.step);
+}
 // 練習用の敵を、主人公の前方（または指定の向き）に出す
 function tutFoe(type,d,a){
   const an=a==null?P.face:a,x=clamp(P.x+Math.cos(an)*d,AX0+30,AX1-30),y=clamp(P.y+Math.sin(an)*d,AY0+40,AY1-30);
@@ -995,28 +1007,29 @@ function tutRing(){
     const inn=[[c,r],[c+1,r],[c,r+1],[c+1,r+1]].map(([x,y])=>y*GC+x);if(inn.some(i=>DONE[i]))continue;
     const t=tileRect(inn[0]),cx=t.x+TS,cy=t.y+TS,d=Math.abs(dist(cx,cy,P.x,P.y)-170);if(d<bd){bd=d;best=[c,r]}
   }
-  if(!best){G.tut.step=3;return}
+  if(!best){washFloor();return tutRing()}
   const [c,r]=best,ring=[[c-1,r],[c-1,r+1],[c+2,r],[c+2,r+1],[c,r-1],[c+1,r-1],[c,r+2],[c+1,r+2]].map(([x,y])=>y*GC+x);
   let gap=ring[0],gd=1e9;for(const i of ring){const t=tileRect(i),d=dist(t.x+t.w/2,t.y+t.h/2,P.x,P.y);if(d<gd&&!DONE[i]){gd=d;gap=i}}
   capFilling=true;for(const i of ring)if(i!==gap&&!DONE[i])fillTile(i);capFilling=false;
+  if(DONE[gap]){cleanTile(gap,true);PAINT[gap]=0}
   G.tut.gap=gap;G.tut.ring=ring;const g_=tileRect(gap);
   {const e=makeEnemy('grunt',g_.x+g_.w/2+rand(-20,20),g_.y+g_.h/2+rand(-20,20));e.state='chase'}
 }
 function updateTut(dt){
   const T_=G.tut;if(!T_)return;T_.t+=dt;
-  if(T_.step===1&&painted>=3&&T_.t>1)tutNext();
-  if(T_.step===2&&T_.gap>=0&&DONE[T_.gap]&&!T_.ringDone){T_.ringDone=true}
+  if(T_.doneAt!=null&&T_.t>=T_.doneAt){T_.doneAt=null;state='tutmenu';stateT=0;SFX.just();return}
+  if(T_.step===1&&painted>=T_.base+3&&T_.t>1)tutComplete(1,.3);
   // 練習相手を先に倒してしまったら出し直す
-  if((T_.step===3||T_.step===4)&&T_.t>1&&(!T_.foe||T_.foe.dead))tutFoe(T_.step===3?'grunt':'gunner',T_.step===3?110:230);
-  if(T_.step===5&&G.soul<100&&T_.t>1)G.soul=100;
-  // 練習中は床が埋まってもクリアを待たせ、⑥に来た時点でクリアにする
-  if(T_.step===6&&T_.t>1.5&&!E.some(e=>e.type==='cleaner')&&!MARKS.some(m=>m.type==='cleaner'))tutNext();
-  if(T_.step===7&&painted>=GN&&G.phase==='fight')waveClear();
-  // 塗るための相手：①は1体ずつ、②は光るマスの近くに1体、⑦は同時に最大2体まで（いなくなったら補充）
+  if((T_.step===3||T_.step===4)&&T_.t>1&&!T_.later&&(!T_.foe||T_.foe.dead))tutFoe(T_.step===3?'grunt':'gunner',T_.step===3?110:230);
+  if(T_.step===5&&G.soul<100&&T_.t>1&&!T_.later)G.soul=100;
+  if(T_.step===6&&T_.t>1.5&&!E.some(e=>e.type==='cleaner')&&!MARKS.some(m=>m.type==='cleaner'))tutComplete(6,.3);
+  if(T_.step===7&&T_.targets&&T_.targets.every(i=>DONE[i]))tutComplete(7,.6);
+  // 塗るための相手：①は1体ずつ、②は光るマスの近くに1体、⑦は光るマスの近くに同時に最大5体
   const foes=E.filter(e=>e.type!=='cleaner').length+MARKS.length;
   if(T_.step===1&&foes<1&&T_.t>.6)tutFoe('grunt',150,rand(0,TAU));
   if(T_.step===2&&foes<1&&T_.gap>=0&&!DONE[T_.gap]&&T_.t>.6){const g_=tileRect(T_.gap);const e=makeEnemy('grunt',g_.x+g_.w/2+rand(-20,20),g_.y+g_.h/2+rand(-20,20));e.state='chase'}
-  if(T_.step===7&&foes<2&&(T_.spawnCd=(T_.spawnCd||0)-dt)<=0){T_.spawnCd=.8;queueSpawn('grunt')}
+  if(T_.step===7&&!T_.later&&foes<5&&(T_.spawnCd-=dt)<=0){T_.spawnCd=.45;const tg=(T_.targets||[]).filter(i=>!DONE[i]);
+    if(tg.length){const t=tileRect(pick(tg)),a=rand(0,TAU),r=rand(40,90);const e=makeEnemy('grunt',clamp(t.x+t.w/2+Math.cos(a)*r,AX0+20,AX1-20),clamp(t.y+t.h/2+Math.sin(a)*r,AY0+30,AY1-20));e.state='chase'}}
 }
 // 初めて出会う敵・仕掛けに、矢印と一言説明（1回きり）
 const SPOT_TXT={gunner:'銃撃手：弾は攻撃で弾き返せる',brute:'用心棒：赤い円から離れろ',bazooka:'バズーカ兵：ロケットも弾き返せる',
@@ -1026,13 +1039,15 @@ function pointer(x,y,label,col){
   const b=Math.sin(G.time*8)*4;g.fillStyle=col||'#ffd54a';g.beginPath();g.moveTo(x,y+b);g.lineTo(x-8,y-12+b);g.lineTo(x+8,y-12+b);g.closePath();g.fill();
   g.strokeStyle='#000';g.lineWidth=1.5;g.stroke();if(label)txt(label,clamp(x,label.length*6+8,W-label.length*6-8),y-18+b,12,col||'#ffd54a','center',JP,['#000',4],false,900);
 }
+function glowTile(i,label){const t=tileRect(i),pl=.5+Math.sin(G.time*8)*.5;
+  g.fillStyle=`rgba(255,213,74,${.15+pl*.2})`;g.fillRect(t.x,t.y,t.w,t.h);g.strokeStyle=`rgba(255,213,74,${.6+pl*.4})`;g.lineWidth=3;g.strokeRect(t.x+2,t.y+2,t.w-4,t.h-4);
+  pointer(t.x+t.w/2,t.y-4,label)}
 function drawTutWorld(){
   for(const e of E)if(e.spot>0){g.globalAlpha=Math.min(1,e.spot);pointer(e.x,e.y-e.r-22,e.spotTxt,'#7ff3ff');g.globalAlpha=1}
   if(G.propSpot>0){g.globalAlpha=Math.min(1,G.propSpot);for(const pr of PROPS)if(!pr.used)pointer(pr.x,pr.y-pr.r-20,'殴れ！','#7ff3ff');g.globalAlpha=1}
-  const T_=G.tut;if(!T_||state!=='play')return;
-  if(T_.step===2&&T_.gap>=0&&!DONE[T_.gap]){const t=tileRect(T_.gap),pl=.5+Math.sin(G.time*8)*.5;
-    g.fillStyle=`rgba(255,213,74,${.15+pl*.2})`;g.fillRect(t.x,t.y,t.w,t.h);g.strokeStyle=`rgba(255,213,74,${.6+pl*.4})`;g.lineWidth=3;g.strokeRect(t.x+2,t.y+2,t.w-4,t.h-4);
-    pointer(t.x+t.w/2,t.y-4,'ここを塗れ（近くで敵を倒す）')}
+  const T_=G.tut;if(!T_||(state!=='play'&&state!=='tutmenu'))return;
+  if(T_.step===2&&T_.gap>=0&&!DONE[T_.gap])glowTile(T_.gap,'ここを塗れ（近くで敵を倒す）');
+  if(T_.step===7&&T_.targets)T_.targets.forEach((i,k)=>{if(!DONE[i])glowTile(i,k?null:'ここを塗れ（近くで敵を倒す）')});
   if(T_.step===6)for(const e of E)if(e.type==='cleaner'&&!(e.spot>0))pointer(e.x,e.y-e.r-22,'掃除屋','#5ab8ff');
   if((T_.step===3||T_.step===4)&&T_.foe&&!T_.foe.dead&&!(T_.foe.spot>0))pointer(T_.foe.x,T_.foe.y-T_.foe.r-22,T_.step===3?'攻撃に合わせてガード':'弾を跳ね返せ');
   if(T_.step===5&&!P.dead)pointer(P.x,P.y-74,touchMode?'タップ！':'L／E');
@@ -1042,10 +1057,19 @@ function drawTutPanel(){
   // 床の邪魔にならないよう、ヘッダーのすぐ下に半透明で表示（主人公が近づくとさらに薄くなる）
   const [h,b]=tutText(T_.step),y=AY0+6,near=P.y<AY0+130?.45:1,a=Math.min(1,T_.t*3)*.85*near;g.save();g.globalAlpha=a;
   rr(16,y,W-32,52,8,'rgba(8,8,14,.45)');g.strokeStyle='rgba(255,213,74,.4)';g.lineWidth=1.2;rrPath(16,y,W-32,52,8);g.stroke();
-  txt(h,30,y+21,15,'#ffd54a','left',JP,null,false,900);if(T_.step<=TUT_STEPS)txt('導入 '+T_.step+'/'+TUT_STEPS,W-30,y+21,10,'#8b93a8','right',JP,null,false,700);
+  txt(h,30,y+21,15,'#ffd54a','left',JP,null,false,900);txt('チュートリアル '+T_.step+'/'+TUT_STEPS,W-30,y+21,10,'#8b93a8','right',JP,null,false,700);
   txt(b,30,y+41,12,'#fff','left',JP,null,false,700);
   if(T_.step===7)pointer(66+98,27,null);
   g.restore();
+}
+// 手順クリアの画面：「次へ」「もう一度」（最後は「タイトルへ」「もう一度」）
+function drawTutMenu(){
+  const T_=G.tut;if(!T_)return;const a=clamp(stateT/.25,0,1),last=T_.step>=TUT_STEPS;dim(.6*a);g.globalAlpha=a;
+  txt(tutText(T_.step)[0]+' クリア！',W/2,330,26,'#ffd54a','center',JP,['#000',5],false,900);
+  txt(last?'これで一通りの操作を体験しました':'次は '+tutText(T_.step+1)[0],W/2,368,14,'#fff','center',JP,null,false,700);
+  button(SCR.tnext,last?'タイトルへ':'次へ ▶','rgba(160,20,45,.92)');button(SCR.tretry,'もう一度','rgba(30,32,44,.92)');
+  if(!touchMode)txt('Enter：'+(last?'タイトルへ':'次へ')+'　R：もう一度',W/2,540,12,'#8b93a8','center',JP,null,false,700);
+  g.globalAlpha=1;
 }
 
 /* ---------------- input ---------------- */
@@ -1058,7 +1082,7 @@ function guarding(){const held=inp.guardKey||inp.guardMouse||inp.guardTouch!=nul
 const UI={pause:{x:W-24,y:24,r:15},mute:{x:W-24,y:60,r:15}};
 // マウス：左=攻撃、右=ガード（同時押しは pointermove で来るので buttons から判定）
 function mouseBtn(ev){const a=!!(ev.buttons&1),gd=!!(ev.buttons&2);if(a&&!inp.atkMouse)pressAttack();inp.atkMouse=a;inp.guardMouse=gd}
-const SCR={endless:{x:W/2,y:612,w:260,h:52},title:{x:W/2,y:682,w:260,h:44},ptitle:{x:W/2,y:560,w:240,h:46},tstart:{x:W/2,y:522,w:250,h:46},ttut:{x:W/2,y:578,w:250,h:40}};
+const SCR={endless:{x:W/2,y:612,w:260,h:52},title:{x:W/2,y:682,w:260,h:44},ptitle:{x:W/2,y:560,w:240,h:46},tstart:{x:W/2,y:522,w:250,h:46},tnext:{x:W/2,y:430,w:240,h:48},tretry:{x:W/2,y:492,w:240,h:42},ttut:{x:W/2,y:578,w:250,h:40}};
 const inC=(p,c,pad)=>Math.hypot(p.x-c.x,p.y-c.y)<c.r+(pad||0);
 const inR=(p,r)=>Math.abs(p.x-r.x)<r.w/2&&Math.abs(p.y-r.y)<r.h/2;
 function toLocal(ev){const r=cv.getBoundingClientRect();return{x:(ev.clientX-r.left)*W/r.width,y:(ev.clientY-r.top)*H/r.height}}
@@ -1066,6 +1090,7 @@ function toLocal(ev){const r=cv.getBoundingClientRect();return{x:(ev.clientX-r.l
 function pressAttack(a){P.atkBuf=.25;P.atkA=a==null?null:a}
 function screenAction(p,key){
   if(state==='pick'){if(p){const i=cardAt(p);if(i>=0)pickCard(i)}else pickCard(G.cardSel);return}
+  if(state==='tutmenu'){if(stateT<.3)return;if(p){if(inR(p,SCR.tnext))tutChoice(true);else if(inR(p,SCR.tretry))tutChoice(false);return}tutChoice(key!=='retry');return}
   // タイトル：音がまだ鳴らせない状態なら、最初の1回は「音をONにするだけ」（BGMを聴かせるため）。2回目で開始
   if(state==='title'){if(!muted&&!(AC&&AC.state==='running')&&!G.titleTap){G.titleTap=1;return}
     if(p){if(inR(p,SCR.tstart))newGame(false);else if(inR(p,SCR.ttut))newGame(true);return}
@@ -1153,6 +1178,7 @@ addEventListener('keydown',ev=>{
   if(state==='title'&&sndOff&&!muted&&!G.titleTap){G.titleTap=1;return}
   if(state==='pick'){pickKey(k);return}
   if(state!=='play'){
+    if(state==='tutmenu'){if(k==='r')screenAction(null,'retry');else if(k==='enter'||k===' '||k==='j'||k==='z')screenAction(null,'go');return}
     if(state==='title'){if(k==='t')screenAction(null,'tut');else if(k==='enter'||k===' '||k==='j'||k==='z')screenAction(null,'go');return}
     if(k==='escape'||k==='t')screenAction(null,state==='pause'&&k==='escape'?null:'title');
     else if(k==='enter'||k===' '||k==='j'||k==='z'||(state==='pause'&&k==='p'))screenAction(null,'go');
@@ -1220,7 +1246,7 @@ function doHit(a){
 // 怨念解放：一撃の必殺技。周囲の雑魚を一掃し、敵弾を弾き返し、足元一帯を一気に血で染める（持続する強化は無し）
 function tryRage(){
   if(G.soul<100||P.dead)return;
-  tutLater(5,800);
+  tutComplete(5,1);
   const R=novaR();
   G.soul=0;SFX.rage();slow(.6,.2);G.flash=.7;G.flashCol='255,30,60';addShake(24);G.zoom=.07;G.hitstop=Math.max(G.hitstop,.1);
   P.inv=Math.max(P.inv,.9);healP(15);
@@ -2162,7 +2188,7 @@ function draw(){
   drawHUD();drawTutPanel();
   if(touchMode&&state==='play')drawControls();
   drawBanner();drawCallout();
-  if(state==='pause')drawPause();else if(state==='over')drawOver();else if(state==='clear')drawClear();else if(state==='pick')drawPick();
+  if(state==='pause')drawPause();else if(state==='over')drawOver();else if(state==='clear')drawClear();else if(state==='pick')drawPick();else if(state==='tutmenu')drawTutMenu();
 }
 function loop(ts){
   const rdt=Math.min(.05,(ts-last)/1000||0);last=ts;
