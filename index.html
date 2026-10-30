@@ -24,7 +24,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.47 2026-10-30';
+const VERSION='v0.48 2026-10-30';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -390,8 +390,8 @@ function updateWave(dt){
           if(fresh.length){const f=CLEANER_INFO[fresh[fresh.length-1]];callout(f[0],f[1],'#5ab8ff');G.callout.dur=2.4}
           else popText(W/2,AY0+40,'掃除屋 ×'+crew,'#5ab8ff',16,1.2)}}
       // 同時に出る敵の上限：WAVE1で6体〜最大11体（旧8〜15体）。まとめて薙ぎ払える集団湧きは残す
-      G.spawnT-=dt;const cap=Math.min(5+Math.ceil(G.wave*.7),11);
-      if(G.spawnT<=0&&alive<cap){const n=Math.random()<.4?(G.wave>=6&&Math.random()<.5?3:2):1;for(let i=0;i<n;i++)queueSpawn(pickType(G.wave));G.spawnT=Math.max(.45,1-G.wave*.05)*rand(.7,1.2)}
+      G.spawnT-=dt;const cap=Math.min(5+Math.ceil(G.wave*.7),11)*waveEase();
+      if(G.spawnT<=0&&alive<cap){let n=Math.random()<.4?(G.wave>=6&&Math.random()<.5?3:2):1;if(waveEase()<1)n=Math.max(1,Math.min(n,Math.ceil(cap-alive)));for(let i=0;i<n;i++)queueSpawn(pickType(G.wave));G.spawnT=Math.max(.45,1-G.wave*.05)*rand(.7,1.2)*(waveEase()<1?1.15:1)}
     }
   }else if(G.phase==='break'){G.breakT-=dt;if(G.breakT<=0)openPick()}
   else if(G.phase==='ending'){G.endT-=dt;if(G.endT<=0){state='clear';stateT=0;saveBest()}}
@@ -1149,6 +1149,8 @@ function updatePlayer(dt){
 const inside=e=>e.x>AX0+e.r&&e.x<AX1-e.r&&e.y>AY0+e.r&&e.y<AY1-e.r;
 // 同時に近接攻撃（構え・斬りかかり中）しているチンピラ・走り屋の数
 const MAX_MELEE=3;
+// WAVE1だけ易しく：敵の出現数と攻撃の頻度を75%に（同時に出る数の上限×0.75と出現間隔×1.15で、画面上の数が約75%に。攻撃は1サイクル全体が÷0.75の長さになるよう休みを延ばす）
+const waveEase=()=>G.wave===1?.75:1;
 function meleeBusy(){let n=0;for(const o of E)if((o.type==='grunt'||o.type==='runner')&&(o.state==='windup'||o.state==='strike'))n++;return n}
 function mv(e,a,s,dt){e.x+=Math.cos(a)*s*dt;e.y+=Math.sin(a)*s*dt;e.walk+=s*dt*.13}
 function wallCheck(e,sp){
@@ -1200,7 +1202,7 @@ function updateEnemy(e,dt){
         }}
       else if(e.state==='windup'){e.ang=turn(e.ang,toP,6*dt);e.aim=e.ang;if(e.st>(run?.26:.32)){e.state='strike';e.st=0;e.hitDone=false;const ls=run?470:380;e.vx=Math.cos(e.aim)*ls;e.vy=Math.sin(e.aim)*ls}}
       else if(e.state==='strike'){if(!e.hitDone&&d<e.r+P.r+16&&Math.abs(angDiff(e.aim,toP))<1.4){e.hitDone=true;hurtPlayer(e.dmg,e.x,e.y)}if(e.st>.2){e.state='recover';e.st=0}}
-      else if(e.state==='recover'){if(e.st>(run?.35:.5))e.state='chase'}
+      else if(e.state==='recover'){const rc=run?.35:.5;if(e.st>rc+((run?.26:.32)+.2+rc)*(1/waveEase()-1))e.state='chase'}
       break;
     }
     case 'gunner':{
@@ -1212,8 +1214,8 @@ function updateEnemy(e,dt){
         e.cd-=dt;if(e.cd<=0&&d<430&&!G.aimer&&G.shotGap<=0){e.state='aim';e.st=0;e.aim=toP;G.aimer=e}
       }else if(e.state==='aim'){
         if(e.st<.5)e.aim=turn(e.aim,toP,12*dt);e.ang=e.aim;
-        if(e.st>.78){fire(e.x+Math.cos(e.aim)*22,e.y+Math.sin(e.aim)*22,e.aim,360,e.dmg);G.aimer=null;G.shotGap=.5;e.state='recover';e.st=0;e.vx-=Math.cos(e.aim)*90;e.vy-=Math.sin(e.aim)*90}
-      }else if(e.state==='recover'){if(e.st>.35){e.state='chase';e.cd=rand(1.5,2.6);if(Math.random()<.35)e.v^=1}}
+        if(e.st>.78){fire(e.x+Math.cos(e.aim)*22,e.y+Math.sin(e.aim)*22,e.aim,360,e.dmg);G.aimer=null;G.shotGap=.5/waveEase();e.state='recover';e.st=0;e.vx-=Math.cos(e.aim)*90;e.vy-=Math.sin(e.aim)*90}
+      }else if(e.state==='recover'){if(e.st>.35){e.state='chase';e.cd=rand(1.5,2.6)+3.2*(1/waveEase()-1);if(Math.random()<.35)e.v^=1}}
       else e.state='chase';
       break;
     }
