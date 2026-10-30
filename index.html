@@ -24,7 +24,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.07 2026-10-30';
+const VERSION='v0.08 2026-10-30';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -969,7 +969,7 @@ const tutText=st=>({1:['① 塗る','敵を倒すと、血で床が染まる。�
   6:['⑥ 掃除屋','塗った血を消しに来る。消される前に倒せ！'],7:['⑦ クリア','光るマスを塗ってBLOODを100%に。100%でステージクリア']})[st];
 function tutWave(n){
   if(!G.tutMode||n!==1){G.tut=null;return}
-  G.tut={step:1,t:0,gap:-1,rep:0};G.mis=null;tutSetup(1);
+  G.tut={step:1,t:0,gap:-1,rep:0};G.mis=null;tutSetup(1);state='tutintro';stateT=0;
 }
 // 手順を始める（「もう一度」でも同じ準備をやり直す）。②以降は前の敵を煙とともに消し、その手順に必要な敵だけを出す
 function tutSetup(st){
@@ -992,7 +992,7 @@ function tutSetup(st){
 // 手順の達成：少し間を置いてから止める（同じ手順で何度呼ばれても1回だけ。待ち時間はゲーム内の時間で数える）
 function tutComplete(from,delay){const T_=G.tut;if(!T_||T_.step!==from||T_.later)return;T_.later=true;T_.doneAt=T_.t+(delay||0)}
 function tutChoice(next){
-  const T_=G.tut;if(!T_)return;state='play';stateT=0;SFX.ui();T_.rep=0;
+  const T_=G.tut;if(!T_)return;state='tutintro';stateT=0;SFX.ui();T_.rep=0;
   if(!next){tutSetup(T_.step);return}
   if(T_.step>=TUT_STEPS){tutDone=true;lsSet('dg_tut','1');state='title';stateT=0;resetRun();return}
   T_.step++;tutSetup(T_.step);
@@ -1050,7 +1050,7 @@ function glowTile(i,label){const t=tileRect(i),pl=.5+Math.sin(G.time*8)*.5;
 function drawTutWorld(){
   for(const e of E)if(e.spot>0){g.globalAlpha=Math.min(1,e.spot);pointer(e.x,e.y-e.r-22,e.spotTxt,'#7ff3ff');g.globalAlpha=1}
   if(G.propSpot>0){g.globalAlpha=Math.min(1,G.propSpot);for(const pr of PROPS)if(!pr.used)pointer(pr.x,pr.y-pr.r-20,'殴れ！','#7ff3ff');g.globalAlpha=1}
-  const T_=G.tut;if(!T_||(state!=='play'&&state!=='tutmenu'))return;
+  const T_=G.tut;if(!T_||(state!=='play'&&state!=='tutmenu'&&state!=='tutintro'))return;
   if(T_.step===2&&T_.gap>=0&&!DONE[T_.gap])glowTile(T_.gap,'ここを塗れ（近くで敵を倒す）');
   if(T_.step===7&&T_.targets)T_.targets.forEach((i,k)=>{if(!DONE[i])glowTile(i,k?null:'ここを塗れ（近くで敵を倒す）')});
   if(T_.step===6)for(const e of E)if(e.type==='cleaner'&&!(e.spot>0))pointer(e.x,e.y-e.r-22,'掃除屋','#5ab8ff');
@@ -1058,14 +1058,21 @@ function drawTutWorld(){
   if(T_.step===5&&!P.dead)pointer(P.x,P.y-74,touchMode?'タップ！':'L／E');
 }
 function drawTutPanel(){
-  const T_=G.tut;if(!T_||state!=='play'||!tutText(T_.step))return;
-  // 床の邪魔にならないよう、ヘッダーのすぐ下に半透明で表示（主人公が近づくとさらに薄くなる）
-  const [h,b]=tutText(T_.step),y=AY0+6,near=P.y<AY0+130?.45:1,a=Math.min(1,T_.t*3)*.85*near;g.save();g.globalAlpha=a;
-  rr(16,y,W-32,52,8,'rgba(8,8,14,.45)');g.strokeStyle='rgba(255,213,74,.4)';g.lineWidth=1.2;rrPath(16,y,W-32,52,8);g.stroke();
+  const T_=G.tut,intro=state==='tutintro';if(!T_||(state!=='play'&&!intro)||!tutText(T_.step))return;
+  // 床の邪魔にならないよう、ヘッダーのすぐ下に半透明で表示（主人公が近づくとさらに薄くなる）。開始待ちの間はくっきり表示し、枠を点滅させる
+  const [h,b]=tutText(T_.step),y=AY0+6,near=P.y<AY0+130?.45:1,a=intro?1:Math.min(1,T_.t*3)*.85*near;g.save();g.globalAlpha=a;
+  const bl=intro?.5+Math.sin(stateT*7)*.5:0;if(intro)glow(W/2,y+26,170,'#ffd54a',.12+bl*.12);
+  rr(16,y,W-32,52,8,intro?'rgba(8,8,14,.88)':'rgba(8,8,14,.45)');g.strokeStyle=intro?`rgba(255,213,74,${.4+bl*.6})`:'rgba(255,213,74,.4)';g.lineWidth=intro?2.5:1.2;rrPath(16,y,W-32,52,8);g.stroke();
   txt(h,30,y+21,15,'#ffd54a','left',JP,null,false,900);txt('チュートリアル '+T_.step+'/'+TUT_STEPS+'　'+Math.min(TUT_REPS,(T_.rep||0)+1)+'/'+TUT_REPS+'回目',W-30,y+21,10,'#8b93a8','right',JP,null,false,700);
   txt(b,30,y+41,12,'#fff','left',JP,null,false,700);
   if(T_.step===7)pointer(66+98,27,null);
   g.restore();
+}
+// 手順の開始待ち：ゲームを止めて説明を読ませ、タップ（クリック・Enter）で始める
+function drawTutIntro(){
+  const a=clamp(stateT/.25,0,1);dim(.45*a);drawTutPanel();g.globalAlpha=a*(.6+Math.sin(stateT*5)*.4);
+  txt(touchMode?'タップでスタート':'クリック / Enter でスタート',W/2,668,22,'#fff','center',JP,['#000',5],false,900);g.globalAlpha=a;
+  txt('上の説明を読んでから始めよう',W/2,698,13,'#c9cfdc','center',JP,['#000',3],false,700);g.globalAlpha=1;
 }
 // 手順クリアの画面：「次へ」「もう一度」（最後は「タイトルへ」「もう一度」）
 function drawTutMenu(){
@@ -1095,6 +1102,7 @@ function toLocal(ev){const r=cv.getBoundingClientRect();return{x:(ev.clientX-r.l
 function pressAttack(a){P.atkBuf=.25;P.atkA=a==null?null:a}
 function screenAction(p,key){
   if(state==='pick'){if(p){const i=cardAt(p);if(i>=0)pickCard(i)}else pickCard(G.cardSel);return}
+  if(state==='tutintro'){if(stateT>.3){state='play';stateT=0;SFX.ui()}return}
   if(state==='tutmenu'){if(stateT<.3)return;if(p){if(inR(p,SCR.tnext))tutChoice(true);else if(inR(p,SCR.tretry))tutChoice(false);return}tutChoice(key!=='retry');return}
   // タイトル：音がまだ鳴らせない状態なら、最初の1回は「音をONにするだけ」（BGMを聴かせるため）。2回目で開始
   if(state==='title'){if(!muted&&!(AC&&AC.state==='running')&&!G.titleTap){G.titleTap=1;return}
@@ -1183,6 +1191,7 @@ addEventListener('keydown',ev=>{
   if(state==='title'&&sndOff&&!muted&&!G.titleTap){G.titleTap=1;return}
   if(state==='pick'){pickKey(k);return}
   if(state!=='play'){
+    if(state==='tutintro'){if(k==='enter'||k===' '||k==='j'||k==='z')screenAction(null,'go');return}
     if(state==='tutmenu'){if(k==='r')screenAction(null,'retry');else if(k==='enter'||k===' '||k==='j'||k==='z')screenAction(null,'go');return}
     if(state==='title'){if(k==='t')screenAction(null,'tut');else if(k==='enter'||k===' '||k==='j'||k==='z')screenAction(null,'go');return}
     if(k==='escape'||k==='t')screenAction(null,state==='pause'&&k==='escape'?null:'title');
@@ -2195,7 +2204,7 @@ function draw(){
   drawHUD();drawTutPanel();
   if(touchMode&&state==='play')drawControls();
   drawBanner();drawCallout();
-  if(state==='pause')drawPause();else if(state==='over')drawOver();else if(state==='clear')drawClear();else if(state==='pick')drawPick();else if(state==='tutmenu')drawTutMenu();
+  if(state==='pause')drawPause();else if(state==='over')drawOver();else if(state==='clear')drawClear();else if(state==='pick')drawPick();else if(state==='tutmenu')drawTutMenu();else if(state==='tutintro')drawTutIntro();
 }
 function loop(ts){
   const rdt=Math.min(.05,(ts-last)/1000||0);last=ts;
