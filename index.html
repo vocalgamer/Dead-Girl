@@ -24,7 +24,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.46 2026-10-30';
+const VERSION='v0.47 2026-10-30';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -296,7 +296,7 @@ function resetRun(){
     phase:'fight',endless:false,deathT:0,endT:0,newBest:false,mis:null,gim:null,intro:[],cards:null,cardSel:0,lastMis:null,beamT:0,cause:null});
   Object.assign(P,{x:W/2,y:540,vx:0,vy:0,kx:0,ky:0,lx:0,ly:0,lt:0,r:14,hp:100,hpLag:100,maxhp:100,face:-Math.PI/2,
     atk:null,stage:0,comboWin:0,recover:0,atkBuf:0,atkA:null,inv:0,blinkT:0,
-    crit:false,walk:0,trail:[],ghostT:0,dead:false,guard:false,guardFx:0});
+    crit:false,walk:0,trail:[],ghostT:0,dead:false,guard:false,guardLock:false,guardFx:0});
   E=[];B=[];FX=[];ORBS=[];RINGS=[];TEXTS=[];MARKS=[];CORPSES=[];
   PROPS=[];SMOKES=[];WARNS=[];SHOCKS=[];SPILLS=[];for(const k in UP)delete UP[k];
   washFloor();setTheme(1);
@@ -614,7 +614,7 @@ function hurtPlayer(dmg,sx,sy){
   if(P.guard&&!front)popText(P.x,P.y-50,'背後を取られた！','#ffb44a',13,.8);
   if(P.guard&&front){
     // ガード：ダメージを完全に防ぎ、受けるはずだったダメージのGUARD_HEAL倍だけ回復。ノックバック小、連撃は途切れない
-    const heal=dmg*GUARD_HEAL;P.hp=Math.min(P.maxhp,P.hp+heal);misAdd('guard');
+    const heal=dmg*GUARD_HEAL;P.hp=Math.min(P.maxhp,P.hp+heal);misAdd('guard');P.guardLock=true;
     if(lv('counter')&&!P.crit){P.crit=.7;popText(P.x,P.y-48,'COUNTER!','#7fd8ff',15,.7)}
     // 防いだ相手（近接攻撃なら攻撃元の近くの敵）を弾き飛ばして少し怯ませ、間合いを作る
     let foe=null,fd=48;for(const e of E){if(e.boss)continue;const dd=dist(e.x,e.y,sx,sy);if(dd<fd){fd=dd;foe=e}}
@@ -922,7 +922,8 @@ const inp={kx:0,ky:0,tx:0,ty:0,px:0,py:0,stick:null,sx:0,sy:0,atkKey:false,atkMo
   ragePress:false,guardKey:false,guardMouse:false,guardTouch:null,padGuard:false};
 const keys=new Set();
 let touchMode=!!(window.matchMedia&&matchMedia('(pointer:coarse)').matches);
-const guarding=()=>inp.guardKey||inp.guardMouse||inp.guardTouch!=null||inp.padGuard;
+// ガードは押している間だけ。ただし正面の攻撃を1回防いで回復すると、押したままでも解ける（一度離して押し直すと再びガード）
+function guarding(){const held=inp.guardKey||inp.guardMouse||inp.guardTouch!=null||inp.padGuard;if(!held)P.guardLock=false;return held&&!P.guardLock}
 const UI={pause:{x:W-24,y:24,r:15},mute:{x:W-24,y:60,r:15}};
 // マウス：左=攻撃、右=ガード（同時押しは pointermove で来るので buttons から判定）
 function mouseBtn(ev){const a=!!(ev.buttons&1),gd=!!(ev.buttons&2);if(a&&!inp.atkMouse)pressAttack();inp.atkMouse=a;inp.guardMouse=gd}
@@ -972,7 +973,7 @@ cv.addEventListener('pointerdown',ev=>{
 /* タッチ操作（ボタン無し・左右分割）
    ・左半分をドラッグ → 移動
    ・右半分をタップ   → 攻撃（連打で連撃）。向きは移動の向き
-   ・右半分を長押し   → 正面ガード（向きは左手の移動で変えられる）
+   ・右半分を長押し   → 正面ガード（1回防ぐと解除、指を離して押し直すと再び。向きは左手の移動で変えられる）
    ・SOUL満タン中に光る主人公をタップ（または画面上部をタップ）→ 怨念解放 */
 const TOUCH=new Map(),TOUCH_HOLD=230,STICK_R=44;
 function checkTouchHold(){
@@ -1945,8 +1946,8 @@ function drawTitle(){
   const sndWait=!muted&&!(AC&&AC.state==='running')&&!G.titleTap;
   txt(sndWait?(touchMode?'TAP FOR SOUND':'CLICK / ANY KEY FOR SOUND'):(touchMode?'TAP TO START':'PRESS ENTER / CLICK'),W/2,660,19,'#fff','center',EN,null,true);
   g.globalAlpha=la*.85;
-  const L=touchMode?['目的：血で床を塗りつぶせ。囲めば中も一気に制圧','画面の左半分をドラッグ：移動','右半分をタップ：攻撃(連打で連撃)／長押し：正面ガード','SOUL満タン中に光る主人公をタップ：怨念解放']
-    :['目的：血で床を塗りつぶせ。囲めば中も一気に制圧','WASD/矢印：移動　J/左クリック：攻撃(連打で連撃)','U/右クリック：正面ガード(受けた攻撃の4割回復)','L/E：怨念解放　P：ポーズ　ゲームパッド対応'];
+  const L=touchMode?['目的：血で床を塗りつぶせ。囲めば中も一気に制圧','画面の左半分をドラッグ：移動','右半分をタップ：攻撃／長押し：ガード(1回防ぐと解除)','SOUL満タン中に光る主人公をタップ：怨念解放']
+    :['目的：血で床を塗りつぶせ。囲めば中も一気に制圧','WASD/矢印：移動　J/左クリック：攻撃(連打で連撃)','U/右クリック長押し：ガード(1回防ぐと解除)','L/E：怨念解放　P：ポーズ　ゲームパッド対応'];
   L.push('WAVEクリアで強化を1つ選択／ステージの仕掛けとお題でボーナス');
   L.forEach((l,i)=>txt(l,W/2,690+i*18,11,i===4?'#ffd54a':'#c9cfdc','center',JP,null,false,700));
   if(best>0)txt('BEST '+best,W/2,H-8,12,'#b8ff5a','center',EN);
