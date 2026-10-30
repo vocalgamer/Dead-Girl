@@ -24,7 +24,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.49 2026-10-30';
+const VERSION='v0.50 2026-10-30';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -177,7 +177,7 @@ const sfxStamp={};
 function can(k,gap){const n=performance.now();if(sfxStamp[k]&&n-sfxStamp[k]<gap)return false;sfxStamp[k]=n;return true}
 const SFX={
   swing(st){if(!can('sw',35))return;if(st===3){noise(.3,.4,'bandpass',500,2600,0,0,1.2);tone(90,50,.25,'sawtooth',.08)}else noise(.13,.24,'bandpass',2600,700,0,0,1.5)},
-  hit(big){if(!can('hit',28))return;tone(big?170:200,42,big?.24:.13,'sine',big?1:.7);noise(.05,big?.5:.35,'highpass',2600);if(big)noise(.2,.45,'lowpass',2200,250)},
+  hit(big){if(!can('hit',28))return;const hp_=Math.min(G.chain,60)*3;tone((big?170:200)+hp_,42,big?.24:.13,'sine',big?1:.7);noise(.05,big?.5:.35,'highpass',2600);if(big)noise(.2,.45,'lowpass',2200,250)},
   kill(c){if(!can('kill',30))return;tone(120,32,.32,'triangle',.7);noise(.24,.5,'lowpass',2800,300);noise(.08,.3,'bandpass',900,0,0,0,3);tone(500+Math.min(c,60)*18,0,.06,'square',.05)},
   dash(){noise(.18,.28,'highpass',1000,5200);tone(300,1100,.12,'sine',.07)}, // 突進ボスの溜め音
   gun(){if(!can('gun',45))return;noise(.12,.3,'bandpass',1800,500,0,0,.8);tone(380,90,.07,'square',.07)},
@@ -253,7 +253,7 @@ function titleStep(s,t){
   if(s===56)noise(1.8,.07,'bandpass',300,1300,t,musG,2);
 }
 function playStep(s,t){
-  const bar=Math.floor(s/16)%4,st=s%16,hype=(!G.isBossWave&&G.phase==='fight'&&painted/GN>=.75);
+  const bar=Math.floor(s/16)%4,st=s%16,hype=(!G.isBossWave&&G.phase==='fight'&&(painted/GN>=.75||G.rush>0));
   const roots=G.boss?[82.41,87.31,65.41,61.74]:[82.41,82.41,65.41,73.42];
   if(st%4===0||(hype&&st%4===2)||(st===14&&bar===3))kick(t);
   if(st===4||st===12)snare(t);
@@ -293,7 +293,7 @@ function resetRun(){
   Object.assign(G,{score:0,kills:0,wave:0,chain:0,chainT:0,maxChain:0,chainPop:0,mult:1,soul:0,
     hitstop:0,slowT:0,slowScale:1,ts:1,shake:0,zoom:0,aimer:null,shotGap:0,crests:[],cleanT:8,seenSub:{},soulReady:false,waveTime:0,flash:0,flashCol:'255,40,70',time:0,
     toSpawn:0,spawnT:0,breakT:0,addsT:0,banner:null,callout:null,boss:null,bossInfo:null,bossPending:0,isBossWave:false,
-    phase:'fight',endless:false,deathT:0,endT:0,newBest:false,tut:null,propSpot:0,mis:null,gim:null,intro:[],cards:null,cardSel:0,lastMis:null,beamT:0,cause:null});
+    phase:'fight',endless:false,deathT:0,endT:0,newBest:false,tut:null,propSpot:0,rush:0,rushT:99,res:null,mis:null,gim:null,intro:[],cards:null,cardSel:0,lastMis:null,beamT:0,cause:null});
   Object.assign(P,{x:W/2,y:540,vx:0,vy:0,kx:0,ky:0,lx:0,ly:0,lt:0,r:14,hp:100,hpLag:100,maxhp:100,face:-Math.PI/2,
     atk:null,stage:0,comboWin:0,recover:0,atkBuf:0,atkA:null,inv:0,blinkT:0,
     crit:false,walk:0,trail:[],ghostT:0,dead:false,guard:false,guardLock:false,guardFx:0});
@@ -310,7 +310,7 @@ function startWave(n){
   G.wave=n;G.phase='fight';G.spawnT=1.3;G.bossPending=0;G.bossInfo=null;G.aimer=null;G.shotGap=0;G.cleanT=rand(5,9);G.crewOut=false;G.waveTime=0;G.crests=[];
   const bk=n%5===0?(n%10===5?'kirishima':'kito'):null;
   G.isBossWave=!!bk;
-  washFloor();setTheme(n);setupGimmick();setupMission();G.mile=0;capNew=[];
+  washFloor();setTheme(n);setupGimmick();setupMission();G.mile=0;capNew=[];CAPQ=[];G.wk=0;G.wchain=0;G.wcap=0;G.rushT=rand(22,34);G.rush=0;G.rushSp=0;
   // 開始の表示が終わったら、仕掛けとお題を順に案内
   tutWave(n);if(G.gim&&!SEEN.has('gim_'+G.gim)){markSeen('gim_'+G.gim);G.propSpot=6}else G.propSpot=0;
   G.intro=[];if(G.gim)G.intro.push({t:2.5,txt:'仕掛け：'+GIMMICKS[G.gim].name,sub:GIMMICKS[G.gim].hint,col:'#7ff3ff'});
@@ -391,6 +391,9 @@ function updateWave(dt){
           const fresh=kinds.filter(k=>!G.seenSub[k]);for(const k of kinds)G.seenSub[k]=true;
           if(fresh.length){const f=CLEANER_INFO[fresh[fresh.length-1]];callout(f[0],f[1],'#5ab8ff');G.callout.dur=2.4}
           else popText(W/2,AY0+40,'掃除屋 ×'+crew,'#5ab8ff',16,1.2)}}
+      // 大群ラッシュ：WAVE2以降、WAVEの途中で一度（長引けばもう一度）、HP半分の雑魚が8秒間押し寄せる
+      if(G.wave>=2&&!G.tut){G.rushT-=dt;if(G.rushT<=0&&G.rush<=0&&painted/GN<.9){G.rush=8;G.rushT=rand(40,55);callout('大群襲来！','雑魚の群れが押し寄せる——一気に薙ぎ払え','#ff8a30');G.callout.dur=1.8;SFX.alarm()}}
+      if(G.rush>0){G.rush-=dt;G.rushSp-=dt;if(G.rushSp<=0&&alive<Math.min(5+Math.ceil(G.wave*.7),11)+8){G.rushSp=.22;queueSpawn(Math.random()<.6?'runner':'grunt');MARKS[MARKS.length-1].horde=true}}
       // 同時に出る敵の上限：WAVE1で6体〜最大11体（旧8〜15体）。まとめて薙ぎ払える集団湧きは残す
       G.spawnT-=dt;const cap=Math.min(5+Math.ceil(G.wave*.7),11)*waveEase();
       if(G.spawnT<=0&&alive<cap){let n=Math.random()<.4?(G.wave>=6&&Math.random()<.5?3:2):1;if(waveEase()<1)n=Math.max(1,Math.min(n,Math.ceil(cap-alive)));for(let i=0;i<n;i++)queueSpawn(pickType(G.wave));G.spawnT=Math.max(.45,1-G.wave*.05)*rand(.7,1.2)*(waveEase()<1?1.15:1)}
@@ -405,6 +408,9 @@ function waveClear(){
   for(const o of [...E])killEnemy(o,Math.atan2(o.y-P.y,o.x-P.x),700,{});
   MARKS.length=0;B.length=0;
   const tm=G.waveTime,rk=tm<40?'S':tm<55?'A':tm<75?'B':'C',bonus={S:3000,A:1500,B:600,C:0}[rk]*G.wave;G.score+=bonus;
+  // そのWAVEの自己ベスト（クリアタイム）を記録
+  const bk='dg_bw'+G.wave,prev=parseFloat(lsGet(bk)),isNew=!(prev>0)||tm<prev;if(isNew)lsSet(bk,tm.toFixed(1));
+  G.res={rank:rk,time:tm,kills:G.wk,chain:G.wchain,cap:G.wcap,best:isNew?tm:prev,isNew,first:!(prev>0)};
   G.banner={top:'WAVE '+pad2(G.wave)+'  —  RANK '+rk,main:'CLEAR',sub:'TIME '+tm.toFixed(1)+'s   BONUS +'+bonus+'   HP +20',t:0,dur:2.6,col:rk==='S'?'#ffd54a':'#ff2f5f'};
 }
 
@@ -534,7 +540,7 @@ function hitEnemy(e,dmg,ang,kb,o){
     if(k>=420){e.fly=.45;e.bset=new Set([e])}
   }
   e.vx=Math.cos(ang)*k;e.vy=Math.sin(ang)*k;
-  G.chain++;G.chainT=2.4;G.chainPop=1;G.maxChain=Math.max(G.maxChain,G.chain);misAdd('chain',G.chain);
+  G.chain++;G.chainT=2.4;G.chainPop=1;G.maxChain=Math.max(G.maxChain,G.chain);G.wchain=Math.max(G.wchain||0,G.chain);misAdd('chain',G.chain);
   G.mult=1+Math.min(4,Math.floor(G.chain/10)*.5);
   if([10,25,50,100,150,200,300].includes(G.chain))callout(rankOf(G.chain)+'!',G.chain+' HITS  x'+G.mult.toFixed(1));
   G.soul=Math.min(100,G.soul+soulMul()*(o.fin?3:1.6));
@@ -550,6 +556,7 @@ function killEnemy(e,ang,spd,o){
   o=o||{};if(e.dead)return;e.dead=true;
   const i=E.indexOf(e);if(i>=0)E.splice(i,1);
   if(e.boss){bossDown(e,ang);return}
+  G.wk=(G.wk||0)+1;
   if(G.tut&&G.tut.step===2&&G.tut.gap>=0&&!DONE[G.tut.gap]){const t=tileRect(G.tut.gap);if(dist(e.x,e.y,t.x+t.w/2,t.y+t.h/2)<95)fillTile(G.tut.gap)}
   // お題用：仕掛け・怨念解放中・掃除屋の撃破を数える
   const cause=G.cause||(e.smoked>0?'ext':null);if(cause&&cause===G.gim)misAdd('gim');
@@ -650,7 +657,7 @@ function bossDown(e,ang){
   dropOrbs(e.x,e.y,true);
   G.banner={top:BOSSES[e.type].name,main:'撃 破',sub:'+'+pts,t:0,dur:2.8,col:'#ff2f5f'};
   if(e.type==='kito'&&!G.endless){G.phase='ending';G.endT=3.4}
-  else{G.phase='break';G.breakT=3.4;healP(35)}
+  else{G.phase='break';G.breakT=3.4;healP(35);G.res={boss:true,kills:G.wk,chain:G.wchain}}
 }
 
 
@@ -697,7 +704,15 @@ function pickKey(k){
 }
 function drawPick(){
   const a=clamp(stateT/.35,0,1);dim(.82*a);g.globalAlpha=a;
-  txt('WAVE '+pad2(G.wave)+' CLEAR',W/2,168,30,'#ff2f5f','center',EN,['#000',5],true);
+  txt('WAVE '+pad2(G.wave)+' CLEAR',W/2,92,28,'#ff2f5f','center',EN,['#000',5],true);
+  const R=G.res;
+  if(R&&!R.boss){
+    txt('RANK '+R.rank,W/2-70,128,22,R.rank==='S'?'#ffd54a':'#fff','center',EN,['#000',4],true);
+    txt('TIME '+R.time.toFixed(1)+'s',W/2+60,126,15,'#fff','center',EN,null,true);
+    if(R.isNew&&!R.first){const fl=.6+Math.sin(stateT*8)*.4;g.globalAlpha=a*fl;txt('★ NEW RECORD ★',W/2,150,14,'#ffd54a','center',EN,['#000',3],true);g.globalAlpha=a}
+    else txt('自己ベスト '+R.best.toFixed(1)+'s',W/2,150,11,'#8b93a8','center',JP,null,false,700);
+    txt('撃破 '+R.kills+'　最大連撃 '+R.chain+'　制圧 '+R.cap+'マス',W/2,172,12,'#c9cfdc','center',JP,null,false,700);
+  }else if(R)txt('撃破 '+R.kills+'　最大連撃 '+R.chain,W/2,140,13,'#c9cfdc','center',JP,null,false,700);
   txt('強化を1つ選べ',W/2,204,18,'#fff','center',JP,null,false,900);
   txt('死ぬと、選んだ強化はすべて失う',W/2,226,11,'#8b93a8','center',JP,null,false,700);
   G.cards.forEach((c,i)=>{
@@ -899,13 +914,14 @@ function captureCheck(){
   }
   for(const r of regions){if(G.phase!=='fight')break;capture(r)}
 }
+// 制圧は、輪を閉じたマスの隣から波紋のように順番に染まっていく（中の敵は波が届いた瞬間に倒れる）
+let CAPQ=[];
 function capture(tiles){
-  const n=tiles.length,set=new Set(tiles);let sx=0,sy=0;
+  const n=tiles.length,set=new Set(tiles);let sx=0,sy=0;G.wcap=(G.wcap||0)+n;
   for(const j of tiles){const t=tileRect(j);sx+=t.x+t.w/2;sy+=t.y+t.h/2}
-  const cx=sx/n,cy=sy/n;
-  // 先に中の敵を処理（タイルを塗るとWAVEクリアで敵が消えることがあるため）
-  for(const e of [...E]){const i=tileAt(e.x,e.y);if(i<0||!set.has(i))continue;const a=Math.atan2(e.y-cy,e.x-cx);
-    if(n>=3)hitEnemy(e,e.boss?6:e.armor?6:e.hp+1,a,420,{fin:true});else hitEnemy(e,2,a,260,{})}
+  const cx=sx/n,cy=sy/n,dd=new Map([[tiles[0],0]]),q=[tiles[0]];
+  while(q.length){const j=q.shift(),x=j%GC,y=(j/GC)|0;for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){const k=(y+dy)*GC+(x+dx);if(x+dx<0||x+dx>=GC||y+dy<0||y+dy>=GR||!set.has(k)||dd.has(k))continue;dd.set(k,dd.get(j)+1);q.push(k)}}
+  for(const j of tiles){const k=dd.get(j)||0;CAPQ.push({i:j,at:G.time+k*.045,k,n,cx,cy})}
   const pts=100*n*G.wave;G.score+=pts;misAdd('capture',null,n);if(G.tut&&G.tut.step===2&&!G.tut.capQueued){G.tut.capQueued=true;setTimeout(tutNext,600)}
   if(n>=3){
     callout('制 圧 ！',n+'マスを一気に血で染めた　+'+pts,'#ff2f5f');G.callout.dur=1.6;
@@ -913,7 +929,17 @@ function capture(tiles){
     RINGS.push({x:cx,y:cy,r:10,R:Math.sqrt(n)*TS*.75+40,t:0,dur:.45,col:'255,40,70',w:12});
     for(const j of tiles){const t=tileRect(j);bloodBurst(t.x+t.w/2,t.y+t.h/2,rand(0,TAU),4,200)}
   }else popText(cx,cy,'制圧 +'+pts,'#ff6a80',14,.8);
-  capFilling=true;for(const j of tiles)if(!DONE[j])fillTile(j);capFilling=false;
+}
+function updateCapQ(){
+  if(!CAPQ.length)return;if(G.phase!=='fight'){CAPQ=[];return}
+  CAPQ=CAPQ.filter(q=>{
+    if(q.at>G.time)return true;
+    if(!DONE[q.i]){capFilling=true;fillTile(q.i);capFilling=false}
+    if(q.n>=3&&Math.random()<.5)tone(240+q.k*45,360+q.k*60,.07,'triangle',.06);
+    for(const e of [...E]){if(tileAt(e.x,e.y)!==q.i)continue;const a=Math.atan2(e.y-q.cy,e.x-q.cx);
+      if(q.n>=3)hitEnemy(e,e.boss?6:e.armor?6:e.hp+1,a,420,{fin:true});else hitEnemy(e,2,a,260,{})}
+    return false;
+  });
 }
 // 塗りの進み具合が25%・50%・75%を超えたら告知（演出のみ。75%からはBGMも激しくなる）
 function checkMilestones(){
@@ -1148,7 +1174,7 @@ function doHit(a){
   // 仕掛け（看板・ドラム缶・提灯・車・消火器）も殴れる
   for(const pr of PROPS){const d=dist(P.x,P.y,pr.x,pr.y);if(d>range+pr.r)continue;const an=Math.atan2(pr.y-P.y,pr.x-P.x);
     if(S.arc<TAU&&Math.abs(angDiff(P.face,an))>S.arc/2&&d>pr.r+P.r+4)continue;hitProp(pr,an);n++}
-  if(n>0){G.hitstop=Math.max(G.hitstop,S.stop+(a.crit?.08:0)+Math.min(n-1,4)*.012);addShake(S.shake*(a.crit?1.6:1));if(fin)G.zoom=Math.max(G.zoom,.035)}
+  if(n>0){G.hitstop=Math.max(G.hitstop,Math.min(.025,G.chain/2400)+S.stop+(a.crit?.08:0)+Math.min(n-1,4)*.012);addShake(S.shake*(a.crit?1.6:1));if(fin)G.zoom=Math.max(G.zoom,.035)}
   if(a.st===3&&lv('shock'))SHOCKS.push({x:P.x,y:P.y,r:range*.6,R:range+63,hit:new Set()});
   if(a.crit)popText(P.x,P.y-40,'CRITICAL!!','#ffd54a',20,.8);
 }
@@ -1468,11 +1494,12 @@ function update(rdt){
   updatePlayer(dt);
   if(G.aimer&&(G.aimer.dead||G.aimer.state!=='aim'))G.aimer=null;
   G.shotGap-=dt;
-  for(const m of MARKS){m.t-=dt;if(m.t<=0){const e=makeEnemy(m.type,m.ox,m.oy);if(m.sub)e.sub=m.sub;spotNew(e)}}
+  for(const m of MARKS){m.t-=dt;if(m.t<=0){const e=makeEnemy(m.type,m.ox,m.oy);if(m.sub)e.sub=m.sub;if(m.horde){e.horde=true;e.hp*=.5;e.max*=.5}spotNew(e)}}
   MARKS=MARKS.filter(m=>m.t>0);
   for(const e of [...E])updateEnemy(e,dt);
   updateGimmicks(dt);
   if(capNew.length)captureCheck();
+  updateCapQ();
   checkMilestones();
   // separation
   for(let i=0;i<E.length;i++)for(let j=i+1;j<E.length;j++){
@@ -1493,7 +1520,7 @@ function update(rdt){
     if(e.y<AY0+e.r){e.y=AY0+e.r;c.vy=Math.abs(c.vy)*.4;wall=true}else if(e.y>AY1-e.r){e.y=AY1-e.r;c.vy=-Math.abs(c.vy)*.4;wall=true}
     if(wall&&sp>320){splat(e.x,e.y,e.r*1.3,Math.atan2(c.vy,c.vx));addShake(5);SFX.wall();if(lv('quake')&&!c.boomed){c.boomed=true;explode(e.x,e.y,49,false)}}
     // 吹き飛ぶ死体は床に血の筋を引きずる
-    if(sp>110){c.sm=(c.sm||0)+sp*dt;if(c.sm>9){c.sm=0;decG.fillStyle='rgba(100,0,14,.45)';decG.beginPath();decG.arc(e.x+rand(-3,3),e.y+rand(-3,3),e.r*rand(.35,.6),0,TAU);decG.fill();paint(e.x,e.y,e.r*.6,.12)}}
+    if(sp>110){c.sm=(c.sm||0)+sp*dt;if(c.sm>9){c.sm=0;decG.fillStyle='rgba(100,0,14,.45)';decG.beginPath();decG.arc(e.x+rand(-3,3),e.y+rand(-3,3),e.r*rand(.35,.6),0,TAU);decG.fill();paint(e.x,e.y,e.r*(sp>600?.9:.6),sp>600?.3:.12)}}
     if(sp<40&&!c.landed){c.landed=true;splat(e.x,e.y,e.r,rand(0,TAU))}
   }
   CORPSES=CORPSES.filter(c=>c.t<1.2);
@@ -1951,6 +1978,9 @@ function drawControls(){
   g.restore();
 }
 function drawOverlays(){
+  // 連撃の熱：20連撃を超えると画面の縁が赤く脈打ち、伸びるほど濃くなる／大群ラッシュ中は橙色に
+  if(state==='play'&&!P.dead&&(G.chain>=20||G.rush>0)){const heat=G.rush>0?.16:Math.min(.22,(G.chain-15)/250),a=heat+Math.sin(G.time*10)*.03,col=G.rush>0?'255,120,30':'255,20,40';
+    const vg=g.createRadialGradient(W/2,H/2,H*.38,W/2,H/2,H*.72);vg.addColorStop(0,`rgba(${col},0)`);vg.addColorStop(1,`rgba(${col},${Math.max(0,a)})`);g.fillStyle=vg;g.fillRect(0,0,W,H)}
   if(G.soul>=100&&state==='play'&&!P.dead){const a=.12+Math.sin(G.time*8)*.06;const vg=g.createRadialGradient(W/2,H/2,H*.36,W/2,H/2,H*.72);vg.addColorStop(0,'rgba(255,200,40,0)');vg.addColorStop(1,`rgba(255,200,40,${a})`);g.fillStyle=vg;g.fillRect(0,0,W,H)}
   if(lowHP()&&state==='play'&&!P.dead){const a=.18+Math.sin(G.time*6)*.1;const vg=g.createRadialGradient(W/2,H/2,H*.32,W/2,H/2,H*.7);vg.addColorStop(0,'rgba(200,0,30,0)');vg.addColorStop(1,`rgba(200,0,30,${a})`);g.fillStyle=vg;g.fillRect(0,0,W,H)}
   if(G.ts<.6){g.fillStyle=`rgba(20,0,30,${(.6-G.ts)*.35})`;g.fillRect(0,0,W,H)}
