@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.10 2026-10-31';
+const VERSION='v0.12 2026-10-31';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -983,10 +983,11 @@ function tutWave(n){
 // 手順を始める（「もう一度」でも同じ準備をやり直す）。②以降は前の敵を煙とともに消し、その手順に必要な敵だけを出す
 function tutSetup(st){
   const T_=G.tut;Object.assign(T_,{t:0,foe:null,later:false,doneAt:null,gap:-1,targets:null,spawnCd:0});
+  P.hp=P.maxhp; // 各手順はライフ満タンから始める
   if(st>=2){for(const e of E){for(let k=0;k<6;k++)fx({k:'smoke',x:e.x,y:e.y,vx:rand(-60,60),vy:rand(-60,60),life:.5,max:.5,sz:rand(8,14)})}E.length=0;MARKS.length=0;B.length=0}
   if(st===1)T_.base=painted;
   else if(st===2)tutRing();
-  else if(st===3){P.hp=Math.min(P.hp,P.maxhp*.7);tutFoe('grunt',110)}
+  else if(st===3)tutFoe('grunt',110);
   else if(st===4)tutFoe('gunner',230);
   else if(st===5){G.soul=100;for(let k=0;k<3;k++){const a=k/3*TAU+.5;tutFoe('grunt',140,a)}}
   else if(st===6){G.crewOut=true;queueSpawn('cleaner','mop')}
@@ -1003,7 +1004,8 @@ function tutComplete(from,delay){const T_=G.tut;if(!T_||T_.step!==from||T_.later
 function tutChoice(next){
   const T_=G.tut;if(!T_)return;state='tutintro';stateT=0;SFX.ui();T_.rep=0;
   if(!next){tutSetup(T_.step);return}
-  if(T_.step>=TUT_STEPS){tutDone=true;lsSet('dg_tut','1');state='title';stateT=0;resetRun();return}
+  // 全手順を終えたら締めのメッセージを出し、タップでタイトルへ
+  if(T_.step>=TUT_STEPS){tutDone=true;lsSet('dg_tut','1');state='tutend';G.banner=null;G.callout=null;SFX.clear();return}
   T_.step++;tutSetup(T_.step);
 }
 // 練習用の敵を、主人公の前方（または指定の向き）に出す
@@ -1109,6 +1111,15 @@ function drawStIntro(){
   txt(last?(touchMode?'タップでスタート':'クリック / Enter でスタート'):(touchMode?'タップで次へ':'クリック / Enter で次へ'),W/2,y+h+52,22,'#fff','center',JP,['#000',5],false,900);
   g.globalAlpha=1;
 }
+// チュートリアルをすべて終えたときの締めの画面（タップでタイトルへ）
+function drawTutEnd(){
+  const a=clamp(stateT/.6,0,1);dim(.8*a);g.globalAlpha=a;glow(W/2,380,220,'#ff1030',.18);
+  txt('— チュートリアル完了 —',W/2,300,16,'#ffd54a','center',JP,null,false,900);
+  txt('これで闘う準備はできた。',W/2,370,26,'#fff','center',JP,['#000',5],false,900);
+  txt('復讐を遂げるのだ！',W/2,422,32,'#ff4d6d','center',JP,['#000',6],false,900);
+  if(stateT>.8){g.globalAlpha=.6+Math.sin(stateT*5)*.4;txt(touchMode?'タップでタイトルへ':'クリック / Enter でタイトルへ',W/2,560,20,'#fff','center',JP,['#000',5],false,900)}
+  g.globalAlpha=1;
+}
 // 手順クリアの画面：「次へ」「もう一度」（最後は「タイトルへ」「もう一度」）
 function drawTutMenu(){
   const T_=G.tut;if(!T_)return;const a=clamp(stateT/.25,0,1),last=T_.step>=TUT_STEPS;dim(.6*a);g.globalAlpha=a;
@@ -1138,6 +1149,7 @@ function pressAttack(a){P.atkBuf=.25;P.atkA=a==null?null:a}
 function screenAction(p,key){
   if(state==='pick'){if(p){const i=cardAt(p);if(i>=0)pickCard(i)}else pickCard(G.cardSel);return}
   if(state==='tutintro'){if(stateT>.3){state='play';stateT=0;SFX.ui()}return}
+  if(state==='tutend'){if(stateT>.8){state='title';stateT=0;resetRun();skipPrologue();SFX.ui()}return}
   if(state==='stintro'){if(stateT>.3){SFX.ui();stateT=0;if(++G.cardI>=G.cards.length){G.cards=null;state='play'}}return}
   if(state==='tutmenu'){if(stateT<.3)return;if(p){if(inR(p,SCR.tnext))tutChoice(true);else if(inR(p,SCR.tretry))tutChoice(false);return}tutChoice(key!=='retry');return}
   // タイトル：音がまだ鳴らせない状態なら、最初の1回は「音をONにするだけ」（BGMを聴かせるため）。2回目で開始
@@ -1242,6 +1254,7 @@ addEventListener('keydown',ev=>{
   if(state==='title'&&sndOff&&!muted&&!G.titleTap){G.titleTap=1;return}
   if(state==='pick'){pickKey(k);return}
   if(state!=='play'){
+    if(state==='tutend'){screenAction(null,'go');return}
     if(state==='tutintro'||state==='stintro'){if(k==='enter'||k===' '||k==='j'||k==='z')screenAction(null,'go');return}
     if(state==='tutmenu'){if(k==='r')screenAction(null,'retry');else if(k==='enter'||k===' '||k==='j'||k==='z')screenAction(null,'go');return}
     if(state==='title'){if(k==='t')screenAction(null,'tut');else if(k==='enter'||k===' '||k==='j'||k==='z')screenAction(null,'go');return}
@@ -2259,7 +2272,7 @@ function draw(){
   drawHUD();drawTutPanel();
   if(touchMode&&state==='play')drawControls();
   drawBanner();drawCallout();
-  if(state==='pause')drawPause();else if(state==='over')drawOver();else if(state==='clear')drawClear();else if(state==='pick')drawPick();else if(state==='tutmenu')drawTutMenu();else if(state==='tutintro')drawTutIntro();else if(state==='stintro')drawStIntro();
+  if(state==='pause')drawPause();else if(state==='over')drawOver();else if(state==='clear')drawClear();else if(state==='pick')drawPick();else if(state==='tutmenu')drawTutMenu();else if(state==='tutintro')drawTutIntro();else if(state==='stintro')drawStIntro();else if(state==='tutend')drawTutEnd();
 }
 function loop(ts){
   const rdt=Math.min(.05,(ts-last)/1000||0);last=ts;
