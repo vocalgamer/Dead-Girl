@@ -24,7 +24,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.05 2026-10-30';
+const VERSION='v0.07 2026-10-30';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -82,8 +82,10 @@ const THEMES=[
   {name:'地下駐車場',     base:'#0b2419',grid:'115,195,150',refl:['80,255,160','230,255,120'],hi:'165,240,200',tube:['#4fffa0','#d8ff5a','#4fd0ff'],mark:'出口',gim:'ext'},
   {name:'鬼頭組 本家',    base:'#21102c',grid:'210,175,95',refl:['255,200,70','170,90,255'],hi:'235,210,160',tube:['#ffd23f','#a05cff','#ff9a3f'],mark:'鬼頭組'}
 ];
+// チュートリアル専用の床（訓練場）
+const TUT_THEME={name:'訓練場',base:'#11161d',grid:'140,170,200',refl:['90,200,255','120,255,200'],hi:'190,220,245',tube:['#4fd8ff','#7fffc8','#4fd8ff'],mark:'練習'};
 let theme=THEMES[0];
-function setTheme(n){const t=THEMES[(Math.max(1,n)-1)%THEMES.length];if(t===theme)return;theme=t;renderBG()}
+function setTheme(n){const t=typeof n==='object'?n:THEMES[(Math.max(1,n)-1)%THEMES.length];if(t===theme)return;theme=t;renderBG()}
 function renderBG(){
   const b=bgG;let seed=11;const sr=()=>(seed=(seed*16807)%2147483647)/2147483647;
   const T_=theme;b.fillStyle=T_.base;b.fillRect(0,0,W,H);
@@ -311,7 +313,7 @@ function startWave(n){
   G.wave=n;G.phase='fight';G.spawnT=1.3;G.bossPending=0;G.bossInfo=null;G.aimer=null;G.shotGap=0;G.cleanT=rand(5,9);G.crewOut=false;G.waveTime=0;G.crests=[];
   const bk=n%5===0?(n%10===5?'kirishima':'kito'):null;
   G.isBossWave=!!bk;
-  washFloor();setTheme(n);setupGimmick();setupMission();G.mile=0;capNew=[];CAPQ=[];G.wk=0;G.wchain=0;G.wcap=0;G.rushT=rand(22,34);G.rush=0;G.rushSp=0;
+  washFloor();setTheme(G.tutMode?TUT_THEME:n);setupGimmick();setupMission();G.mile=0;capNew=[];CAPQ=[];G.wk=0;G.wchain=0;G.wcap=0;G.rushT=rand(22,34);G.rush=0;G.rushSp=0;
   // 開始の表示が終わったら、仕掛けとお題を順に案内
   tutWave(n);if(G.gim&&!SEEN.has('gim_'+G.gim)){markSeen('gim_'+G.gim);G.propSpot=6}else G.propSpot=0;
   G.intro=[];if(G.gim)G.intro.push({t:2.5,txt:'仕掛け：'+GIMMICKS[G.gim].name,sub:GIMMICKS[G.gim].hint,col:'#7ff3ff'});
@@ -320,8 +322,8 @@ function startWave(n){
   if(bk){G.addsT=5;G.bossPending=1.9;G.bossInfo={kind:bk,...BOSSES[bk]};
     G.banner={top:'WARNING — BOSS — '+theme.name,main:BOSSES[bk].name,sub:BOSSES[bk].sub,t:0,dur:2.6,col:'#ff2f5f'};SFX.alarm()}
   else{
-    pickCrests();
-    G.banner={top:'— '+theme.name+' —　敵の血で、画面を塗りつぶせ',main:'STAGE '+pad2(n),sub:n>10?'復讐は終わらない —— ENDLESS':STORY[n],t:0,dur:2.3,col:'#b8ff5a'}}
+    if(!G.tutMode)pickCrests(); // チュートリアルの訓練場には金の代紋を置かない
+    G.banner=G.tutMode?{top:'— 訓練場 —',main:'TUTORIAL',sub:'操作をひとつずつ体験しよう',t:0,dur:2.3,col:'#7ff3ff'}:{top:'— '+theme.name+' —　敵の血で、画面を塗りつぶせ',main:'STAGE '+pad2(n),sub:n>10?'復讐は終わらない —— ENDLESS':STORY[n],t:0,dur:2.3,col:'#b8ff5a'}}
 }
 function pickType(n){
   const pool=[['grunt',10]];
@@ -959,7 +961,7 @@ let tutDone=lsGet('dg_tut')==='1';
 const SEEN=new Set((()=>{try{return JSON.parse(lsGet('dg_seen')||'[]')}catch(e){return[]}})());
 function markSeen(k){SEEN.add(k);lsSet('dg_seen',JSON.stringify([...SEEN]))}
 // チュートリアルの手順（①〜⑦）。1つ達成するごとにゲームを止め、「次へ／もう一度」を選ばせる。操作の説明はスマホ／PCで出し分ける
-const TUT_STEPS=7;
+const TUT_STEPS=7,TUT_REPS=3; // 手順の数／各手順を何回成功したら選択画面を出すか
 const tutText=st=>({1:['① 塗る','敵を倒すと、血で床が染まる。まず3マス塗ってみよう'],2:['② 囲う','光るマスを塗って輪を閉じろ。囲んだ中が一気に染まる'],
   3:['③ ガード',(touchMode?'右半分を長押し':'U／右クリックを押したまま')+'で正面ガード。防ぐとライフが回復'],
   4:['④ 弾き返し','銃撃手の弾は、当たる直前に攻撃すると跳ね返せる'],
@@ -967,7 +969,7 @@ const tutText=st=>({1:['① 塗る','敵を倒すと、血で床が染まる。�
   6:['⑥ 掃除屋','塗った血を消しに来る。消される前に倒せ！'],7:['⑦ クリア','光るマスを塗ってBLOODを100%に。100%でステージクリア']})[st];
 function tutWave(n){
   if(!G.tutMode||n!==1){G.tut=null;return}
-  G.tut={step:1,t:0,gap:-1};G.mis=null;tutSetup(1);
+  G.tut={step:1,t:0,gap:-1,rep:0};G.mis=null;tutSetup(1);
 }
 // 手順を始める（「もう一度」でも同じ準備をやり直す）。②以降は前の敵を煙とともに消し、その手順に必要な敵だけを出す
 function tutSetup(st){
@@ -990,7 +992,7 @@ function tutSetup(st){
 // 手順の達成：少し間を置いてから止める（同じ手順で何度呼ばれても1回だけ。待ち時間はゲーム内の時間で数える）
 function tutComplete(from,delay){const T_=G.tut;if(!T_||T_.step!==from||T_.later)return;T_.later=true;T_.doneAt=T_.t+(delay||0)}
 function tutChoice(next){
-  const T_=G.tut;if(!T_)return;state='play';stateT=0;SFX.ui();
+  const T_=G.tut;if(!T_)return;state='play';stateT=0;SFX.ui();T_.rep=0;
   if(!next){tutSetup(T_.step);return}
   if(T_.step>=TUT_STEPS){tutDone=true;lsSet('dg_tut','1');state='title';stateT=0;resetRun();return}
   T_.step++;tutSetup(T_.step);
@@ -1017,7 +1019,10 @@ function tutRing(){
 }
 function updateTut(dt){
   const T_=G.tut;if(!T_)return;T_.t+=dt;
-  if(T_.doneAt!=null&&T_.t>=T_.doneAt){T_.doneAt=null;state='tutmenu';stateT=0;SFX.just();return}
+  if(T_.doneAt!=null&&T_.t>=T_.doneAt){T_.doneAt=null;T_.rep=(T_.rep||0)+1;
+    // 3回成功するまでは、その場で準備をやり直して続ける
+    if(T_.rep<TUT_REPS){callout('ナイス！','あと'+(TUT_REPS-T_.rep)+'回','#ffd54a');G.callout.dur=1.2;SFX.ui();tutSetup(T_.step);return}
+    state='tutmenu';stateT=0;SFX.just();return}
   if(T_.step===1&&painted>=T_.base+3&&T_.t>1)tutComplete(1,.3);
   // 練習相手を先に倒してしまったら出し直す
   if((T_.step===3||T_.step===4)&&T_.t>1&&!T_.later&&(!T_.foe||T_.foe.dead))tutFoe(T_.step===3?'grunt':'gunner',T_.step===3?110:230);
@@ -1057,7 +1062,7 @@ function drawTutPanel(){
   // 床の邪魔にならないよう、ヘッダーのすぐ下に半透明で表示（主人公が近づくとさらに薄くなる）
   const [h,b]=tutText(T_.step),y=AY0+6,near=P.y<AY0+130?.45:1,a=Math.min(1,T_.t*3)*.85*near;g.save();g.globalAlpha=a;
   rr(16,y,W-32,52,8,'rgba(8,8,14,.45)');g.strokeStyle='rgba(255,213,74,.4)';g.lineWidth=1.2;rrPath(16,y,W-32,52,8);g.stroke();
-  txt(h,30,y+21,15,'#ffd54a','left',JP,null,false,900);txt('チュートリアル '+T_.step+'/'+TUT_STEPS,W-30,y+21,10,'#8b93a8','right',JP,null,false,700);
+  txt(h,30,y+21,15,'#ffd54a','left',JP,null,false,900);txt('チュートリアル '+T_.step+'/'+TUT_STEPS+'　'+Math.min(TUT_REPS,(T_.rep||0)+1)+'/'+TUT_REPS+'回目',W-30,y+21,10,'#8b93a8','right',JP,null,false,700);
   txt(b,30,y+41,12,'#fff','left',JP,null,false,700);
   if(T_.step===7)pointer(66+98,27,null);
   g.restore();
@@ -1550,7 +1555,9 @@ function update(rdt){
   // HPが最大値の30%を切っている間は警告音を鳴らし続ける（回復するか、プレイ中でなくなれば止まる）
   if(state==='play'&&!P.dead&&lowHP()){G.lowT=(G.lowT||0)-rdt;if(G.lowT<=0){G.lowT=.6;SFX.alarm2()}}else G.lowT=0;
   if(state!=='play')return;
-  if(P.dead){G.deathT+=rdt;if(G.deathT>1.9){state='over';stateT=0;saveBest()}}
+  // チュートリアルで倒れたら、ゲームオーバーにせず、その場で復活して今の手順からやり直す（成功回数はそのまま）
+  if(P.dead&&G.tutMode&&G.tut){G.deathT+=rdt;if(G.deathT>1.6){Object.assign(P,{dead:false,hp:P.maxhp,inv:1.5,blinkT:0,vx:0,vy:0,kx:0,ky:0,atk:null});G.deathT=0;G.slowT=0;const r=G.tut.rep;tutSetup(G.tut.step);G.tut.rep=r;callout('再挑戦','この手順からやり直し','#ffd54a');G.callout.dur=1.5;SFX.heal()}}
+  else if(P.dead){G.deathT+=rdt;if(G.deathT>1.9){state='over';stateT=0;saveBest()}}
   if(G.hitstop>0){G.hitstop-=rdt;return}
   if(G.slowT>0){G.slowT-=rdt;G.ts=G.slowScale}else G.ts=lerp(G.ts,1,1-Math.exp(-9*rdt));
   const dt=rdt*G.ts;G.time+=dt;
@@ -1997,9 +2004,9 @@ function drawHUD(){
     if(G.mis){const m=G.mis,t=m.done?'✔ お題達成':m.fail?'✖ お題失敗':'お題：'+m.text+(m.id==='time'?'（残り'+Math.max(0,Math.ceil(m.need-G.waveTime))+'秒）':'　'+m.cnt+'/'+m.need);
       txt(t,bx,56,10,m.done?'#b8ff5a':m.fail?'#8b93a8':'#ffd54a','left',JP,null,false,700)}
   }
-  txt(G.isBossWave?'BOSS':'STAGE '+pad2(G.wave),W-50,24,15,G.isBossWave?'#ff2f5f':'#b8ff5a','right',EN,null,true);
+  txt(G.tutMode?'TUTORIAL':G.isBossWave?'BOSS':'STAGE '+pad2(G.wave),W-50,24,15,G.tutMode?'#7ff3ff':G.isBossWave?'#ff2f5f':'#b8ff5a','right',EN,null,true);
   txt(String(G.score).padStart(7,'0'),W-50,42,14,'#fff','right',EN);
-  if(!G.isBossWave)txt('TIME '+G.waveTime.toFixed(0)+'s',W-50,57,10,'rgba(220,225,240,.6)','right',EN);
+  if(!G.isBossWave&&!G.tutMode)txt('TIME '+G.waveTime.toFixed(0)+'s',W-50,57,10,'rgba(220,225,240,.6)','right',EN);
   // pause / mute
   circ(UI.pause.x,UI.pause.y,UI.pause.r,'rgba(255,255,255,.08)');g.fillStyle='#cfd6e4';g.fillRect(UI.pause.x-5,UI.pause.y-6,3.5,12);g.fillRect(UI.pause.x+1.5,UI.pause.y-6,3.5,12);
   circ(UI.mute.x,UI.mute.y,UI.mute.r,'rgba(255,255,255,.08)');
