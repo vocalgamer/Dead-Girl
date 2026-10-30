@@ -24,7 +24,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.53 2026-10-30';
+const VERSION='v0.54 2026-10-30';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -320,7 +320,7 @@ function startWave(n){
     G.banner={top:'WARNING — BOSS — '+theme.name,main:BOSSES[bk].name,sub:BOSSES[bk].sub,t:0,dur:2.6,col:'#ff2f5f'};SFX.alarm()}
   else{
     pickCrests();
-    G.banner={top:'— '+theme.name+' —　敵の血で、画面を塗りつぶせ',main:'WAVE '+pad2(n),sub:n>10?'復讐は終わらない —— ENDLESS':STORY[n],t:0,dur:2.3,col:'#b8ff5a'}}
+    G.banner={top:'— '+theme.name+' —　敵の血で、画面を塗りつぶせ',main:'STAGE '+pad2(n),sub:n>10?'復讐は終わらない —— ENDLESS':STORY[n],t:0,dur:2.3,col:'#b8ff5a'}}
 }
 function pickType(n){
   const pool=[['grunt',10]];
@@ -411,7 +411,7 @@ function waveClear(){
   // そのWAVEの自己ベスト（クリアタイム）を記録
   const bk='dg_bw'+G.wave,prev=parseFloat(lsGet(bk)),isNew=!(prev>0)||tm<prev;if(isNew)lsSet(bk,tm.toFixed(1));
   G.res={rank:rk,time:tm,kills:G.wk,chain:G.wchain,cap:G.wcap,best:isNew?tm:prev,isNew,first:!(prev>0)};
-  G.banner={top:'WAVE '+pad2(G.wave)+'  —  RANK '+rk,main:'CLEAR',sub:'TIME '+tm.toFixed(1)+'s   BONUS +'+bonus+'   HP +20',t:0,dur:2.6,col:rk==='S'?'#ffd54a':'#ff2f5f'};
+  G.banner={top:'STAGE '+pad2(G.wave)+'  —  RANK '+rk,main:'CLEAR',sub:'TIME '+tm.toFixed(1)+'s   BONUS +'+bonus+'   HP +20',t:0,dur:2.6,col:rk==='S'?'#ffd54a':'#ff2f5f'};
 }
 
 /* ---------------- helpers: fx ---------------- */
@@ -704,7 +704,7 @@ function pickKey(k){
 }
 function drawPick(){
   const a=clamp(stateT/.35,0,1);dim(.82*a);g.globalAlpha=a;
-  txt('WAVE '+pad2(G.wave)+' CLEAR',W/2,92,28,'#ff2f5f','center',EN,['#000',5],true);
+  txt('STAGE '+pad2(G.wave)+' CLEAR',W/2,92,28,'#ff2f5f','center',EN,['#000',5],true);
   const R=G.res;
   if(R&&!R.boss){
     txt('RANK '+R.rank,W/2-70,128,22,R.rank==='S'?'#ffd54a':'#fff','center',EN,['#000',4],true);
@@ -956,7 +956,7 @@ let tutDone=lsGet('dg_tut')==='1';
 const SEEN=new Set((()=>{try{return JSON.parse(lsGet('dg_seen')||'[]')}catch(e){return[]}})());
 function markSeen(k){SEEN.add(k);lsSet('dg_seen',JSON.stringify([...SEEN]))}
 const TUT={1:['① 塗る','敵を倒すと、血で床が染まる。まず3マス塗ってみよう'],2:['② 囲う','光るマスを塗って輪を閉じろ。囲んだ中が一気に染まる'],
-  3:['③ クリア','上のBLOODゲージを100%にするとWAVEクリア'],4:['④ 掃除屋','塗った血を消しに来る。消される前に倒せ！'],5:['準備完了','あとは自由に暴れろ。仕掛けとお題も活用しよう']};
+  3:['③ クリア','上のBLOODゲージを100%にするとステージクリア'],4:['④ 掃除屋','塗った血を消しに来る。消される前に倒せ！'],5:['準備完了','あとは自由に暴れろ。仕掛けとお題も活用しよう']};
 function tutWave(n){
   if(tutDone||G.endless){G.tut=null;return}
   if(n===1){G.tut={step:1,t:0,gap:-1};G.mis=null}
@@ -1926,7 +1926,7 @@ function drawHUD(){
     if(G.mis){const m=G.mis,t=m.done?'✔ お題達成':m.fail?'✖ お題失敗':'お題：'+m.text+(m.id==='time'?'（残り'+Math.max(0,Math.ceil(m.need-G.waveTime))+'秒）':'　'+m.cnt+'/'+m.need);
       txt(t,bx,56,10,m.done?'#b8ff5a':m.fail?'#8b93a8':'#ffd54a','left',JP,null,false,700)}
   }
-  txt(G.isBossWave?'BOSS':'WAVE '+pad2(G.wave),W-50,24,15,G.isBossWave?'#ff2f5f':'#b8ff5a','right',EN,null,true);
+  txt(G.isBossWave?'BOSS':'STAGE '+pad2(G.wave),W-50,24,15,G.isBossWave?'#ff2f5f':'#b8ff5a','right',EN,null,true);
   txt(String(G.score).padStart(7,'0'),W-50,42,14,'#fff','right',EN);
   if(!G.isBossWave)txt('TIME '+G.waveTime.toFixed(0)+'s',W-50,57,10,'rgba(220,225,240,.6)','right',EN);
   // pause / mute
@@ -2052,7 +2052,7 @@ function drawTitle(){
   // 操作説明（16.5px。画面幅に収まるよう1行を短く分けて7行に）
   const L=touchMode?['目的：血で床を塗りつぶせ。囲めば一気に制圧','左半分をドラッグ：移動','右半分をタップ：攻撃（連打で連撃）','右半分を長押し：ガード（1回防ぐと解除）','光る主人公をタップ：怨念解放']
     :['目的：血で床を塗りつぶせ。囲めば一気に制圧','WASD／矢印：移動','J／左クリック：攻撃（連打で連撃）','U／右クリック長押し：ガード（1回防ぐと解除）','L／E：怨念解放　P：ポーズ　パッド対応'];
-  L.push('WAVEクリアで強化を1つ選択','ステージの仕掛けとお題でボーナス');
+  L.push('ステージクリアで強化を1つ選択','ステージの仕掛けとお題でボーナス');
   L.forEach((l,i)=>txt(l,W/2,600+i*24,16.5,i>=5?'#ffd54a':'#c9cfdc','center',JP,null,false,700));
   if(best>0)txt('BEST '+best,W/2,H-8,12,'#b8ff5a','center',EN);
   g.globalAlpha=1;txt(VERSION,W-10,H-8,11,'#8b93a8','right',EN,null,false,700);
@@ -2064,7 +2064,7 @@ function drawTitle(){
 function dim(a,col){g.fillStyle=`rgba(${col||'4,4,8'},${a})`;g.fillRect(0,0,W,H)}
 const RULES=[['塗る','敵を倒すと床に血。BLOODを100%にするとクリア'],['囲う','塗ったマスで囲むと、中が一気に染まる'],['掃除屋','塗った血を消しに来る。最優先で倒せ'],
   ['弾き返し','敵の弾やロケットは、攻撃で跳ね返せる'],['ガード','正面だけ防いで回復。1回防ぐと解除（押し直し）'],['怨念解放','SOUL満タンで発動。周囲を一掃し床を染める'],
-  ['仕掛け','ステージの物を殴ると発動する'],['お題・カード','お題達成でボーナス。WAVEクリアで強化を選ぶ'],['ボス','近づくと掴んで投げてくる（ガード不能）']];
+  ['仕掛け','ステージの物を殴ると発動する'],['お題・カード','お題達成でボーナス。ステージクリアで強化を選ぶ'],['ボス','近づくと掴んで投げてくる（ガード不能）']];
 function drawPause(){
   dim(.82);txt('PAUSED',W/2,104,40,'#fff','center',EN,null,true);
   txt('遊び方',W/2,140,13,'#ffd54a','center',JP,null,false,900);
@@ -2074,7 +2074,7 @@ function drawPause(){
   button(SCR.ptut,tutDone?'導入をもう一度（次のゲームから）':'導入は次のゲームでも表示','rgba(30,32,44,.92)');
 }
 function drawStats(y){
-  const rows=[['SCORE',G.score],['KILLS',G.kills],['MAX CHAIN',G.maxChain],['WAVE',G.wave]];
+  const rows=[['SCORE',G.score],['KILLS',G.kills],['MAX CHAIN',G.maxChain],['STAGE',G.wave]];
   rows.forEach((r,i)=>{txt(r[0],W/2-120,y+i*32,14,'#8b93a8','left',EN);txt(String(r[1]),W/2+120,y+i*32,i?18:24,i?'#fff':'#b8ff5a','right',EN,null,true)});
   txt(G.newBest?'★ NEW RECORD ★':'BEST '+best,W/2,y+4*32+6,14,G.newBest?'#ffd54a':'#8b93a8','center',EN);
 }
