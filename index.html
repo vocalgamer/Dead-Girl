@@ -24,7 +24,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.01 2026-10-30';
+const VERSION='v0.02 2026-10-30';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -1045,7 +1045,7 @@ function guarding(){const held=inp.guardKey||inp.guardMouse||inp.guardTouch!=nul
 const UI={pause:{x:W-24,y:24,r:15},mute:{x:W-24,y:60,r:15}};
 // マウス：左=攻撃、右=ガード（同時押しは pointermove で来るので buttons から判定）
 function mouseBtn(ev){const a=!!(ev.buttons&1),gd=!!(ev.buttons&2);if(a&&!inp.atkMouse)pressAttack();inp.atkMouse=a;inp.guardMouse=gd}
-const SCR={endless:{x:W/2,y:612,w:260,h:52},title:{x:W/2,y:682,w:260,h:44},ptitle:{x:W/2,y:560,w:240,h:46},ptut:{x:W/2,y:620,w:300,h:40}};
+const SCR={endless:{x:W/2,y:612,w:260,h:52},title:{x:W/2,y:682,w:260,h:44},ptitle:{x:W/2,y:560,w:240,h:46},ptut:{x:W/2,y:620,w:370,h:40}};
 const inC=(p,c,pad)=>Math.hypot(p.x-c.x,p.y-c.y)<c.r+(pad||0);
 const inR=(p,r)=>Math.abs(p.x-r.x)<r.w/2&&Math.abs(p.y-r.y)<r.h/2;
 function toLocal(ev){const r=cv.getBoundingClientRect();return{x:(ev.clientX-r.left)*W/r.width,y:(ev.clientY-r.top)*H/r.height}}
@@ -1606,10 +1606,16 @@ function update(rdt){
 }
 
 /* ---------------- drawing helpers ---------------- */
-function txt(s,x,y,size,col,align,font,stroke,italic,weight){
-  g.font=(italic?'italic ':'')+(weight||900)+' '+size+'px '+(font||EN);g.textAlign=align||'left';g.textBaseline='alphabetic';
-  if(stroke){g.lineJoin='round';g.lineWidth=stroke[1];g.strokeStyle=stroke[0];g.strokeText(s,x,y)}
-  g.fillStyle=col;g.fillText(s,x,y);
+// プレイ中の文字は一段階大きく（TXT_SCALE倍）。画面からはみ出す長さの文字は、画面内に収まるよう横幅を詰めて描く
+let TXT_SCALE=1;
+function txt(s,x,y,size,col,align,font,stroke,italic,weight,fitW){
+  align=align||'left';
+  g.font=(italic?'italic ':'')+(weight||900)+' '+(size*TXT_SCALE)+'px '+(font||EN);g.textAlign=align;g.textBaseline='alphabetic';
+  // 原点を動かして描いている文字（中央の大きな告知・コンボ数など）は、x が画面の座標ではないので詰めない
+  const tf=g.getTransform(),moved=Math.abs(tf.e/(cv.width/W))>20||Math.abs(tf.f/(cv.height/H))>20;
+  const mw=fitW||(moved?undefined:align==='center'?Math.max(40,2*Math.min(x,W-x)-12):align==='right'?Math.max(40,x-6):Math.max(40,W-x-6));
+  if(stroke){g.lineJoin='round';g.lineWidth=stroke[1];g.strokeStyle=stroke[0];mw?g.strokeText(s,x,y,mw):g.strokeText(s,x,y)}
+  g.fillStyle=col;mw?g.fillText(s,x,y,mw):g.fillText(s,x,y);
 }
 function rrPath(x,y,w,h,r){g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath()}
 function rr(x,y,w,h,r,col){g.fillStyle=col;rrPath(x,y,w,h,r);g.fill()}
@@ -1961,23 +1967,23 @@ function drawHUD(){
   else{g.strokeStyle='#cfd6e4';g.lineWidth=1.5;g.beginPath();g.arc(mx+9,my,5,-.9,.9);g.stroke()}
   // HP
   const hy=78;txt('HP',16,hy+11,12,'#e6e9f0','left',EN);
-  rr(42,hy,150,13,3,'#20242f');
-  rr(42,hy,150*clamp(P.hpLag/P.maxhp,0,1),13,3,'#ffffff');
-  const low=lowHP();rr(42,hy,Math.max(0,150*clamp(P.hp/P.maxhp,0,1)),13,3,low&&Math.floor(G.time*6)%2?'#ff8090':'#ff2f5f');
-  txt(Math.ceil(P.hp)+'',198,hy+11,12,'#fff','left',EN);
+  rr(42,hy,140,13,3,'#20242f');
+  rr(42,hy,140*clamp(P.hpLag/P.maxhp,0,1),13,3,'#ffffff');
+  const low=lowHP();rr(42,hy,Math.max(0,140*clamp(P.hp/P.maxhp,0,1)),13,3,low&&Math.floor(G.time*6)%2?'#ff8090':'#ff2f5f');
+  txt(Math.ceil(P.hp)+'',186,hy+11,12,'#fff','left',EN);
   // SOUL
-  const sx=272;txt('SOUL',230,hy+11,12,'#e6e9f0','left',EN);
+  const sx=272;txt('SOUL',222,hy+11,12,'#e6e9f0','left',EN);
   rr(sx,hy,124,13,3,'#20242f');
   const v=G.soul/100;
   rr(sx,hy,Math.max(0,124*v),13,3,G.soul>=100?(Math.floor(G.time*8)%2?'#fff3b0':'#ffc72a'):'#7fd13a');
   if(G.soul>=100){glow(sx+62,hy+6,120,'#ffcc33',.5+Math.sin(G.time*8)*.2);g.strokeStyle=`rgba(255,236,160,${.6+Math.sin(G.time*8)*.4})`;g.lineWidth=2.5;rrPath(sx-3,hy-3,130,19,5);g.stroke();txt(touchMode?'TAP!':'L / E',sx+62,hy+11,10,'#3a1a00','center',EN)}
   // chain（HP・SOULの下の帯にコンパクトに。数字が増えるたびに一瞬弾む）
   if(G.chain>=3){
-    const y=103,pop=1+G.chainPop*.3,rk=rankOf(G.chain),col=G.chain>=50?'#ffd54a':G.chain>=25?'#ff2f5f':'#fff';
-    g.save();g.translate(W-150,y);g.scale(pop,pop);txt(String(G.chain),0,0,17,col,'right',EN,['#000',3],true);g.restore();
-    txt('HITS',W-146,y,10,'#cfd6e4','left',EN,null,true);
-    if(rk)txt(rk,W-108,y,12,G.chain>=50?'#ffd54a':'#ff2f5f','left',EN,null,true);
-    if(G.mult>1)txt('x'+G.mult.toFixed(1),W-14,y,11,'#b8ff5a','right',EN,null,true);
+    const y=105,pop=1+G.chainPop*.3,rk=rankOf(G.chain),col=G.chain>=50?'#ffd54a':G.chain>=25?'#ff2f5f':'#fff';
+    g.save();g.translate(W-150,y);g.scale(pop,pop);txt(String(G.chain),0,0,14,col,'right',EN,['#000',3],true);g.restore();
+    txt('HITS',W-146,y,8.5,'#cfd6e4','left',EN,null,true);
+    if(rk)txt(rk,W-112,y,10,G.chain>=50?'#ffd54a':'#ff2f5f','left',EN,null,true);
+    if(G.mult>1)txt('x'+G.mult.toFixed(1),W-14,y,9,'#b8ff5a','right',EN,null,true);
     rr(W-230,y+3,80,2.5,1,'rgba(255,255,255,.15)');rr(W-230,y+3,80*clamp(G.chainT/2.4,0,1),2.5,1,'#ff2f5f');
   }
   if(touchMode&&state==='play'&&G.wave===1)txt('左ドラッグ:移動  右タップ:攻撃  右長押し:ガード  光る主人公タップ:怨念',W/2,H-8,10,'rgba(220,225,240,.45)','center',JP,null,false,700);
@@ -2029,8 +2035,8 @@ function drawCallout(){
   const t=c.t,sc=t<.12?2-t/.12:1,a=t>c.dur-.3?(c.dur-t)/.3:1,y=H*.6;
   g.save();g.globalAlpha=clamp(a,0,1);g.translate(W/2,y);g.scale(sc,sc);
   const jp=/[ぁ-んァ-ン一-龥]/.test(c.txt);
-  txt(c.txt,0,0,jp?38:40,c.col,'center',jp?JP:EN,['#000',6],!jp);
-  if(c.sub)txt(c.sub,0,24,12,'#fff','center',JP,['#000',4],false,700);
+  txt(c.txt,0,0,jp?38:40,c.col,'center',jp?JP:EN,['#000',6],!jp,undefined,W-24);
+  if(c.sub)txt(c.sub,0,24,12,'#fff','center',JP,['#000',4],false,700,W-24);
   g.restore();
 }
 
@@ -2092,7 +2098,7 @@ const RULES=[['塗る','敵を倒すと床に血。BLOODを100%にするとク�
 function drawPause(){
   dim(.82);txt('PAUSED',W/2,104,40,'#fff','center',EN,null,true);
   txt('遊び方',W/2,140,13,'#ffd54a','center',JP,null,false,900);
-  RULES.forEach(([h,b],i)=>{const y=172+i*31;txt(h,28,y,13,'#ff4d6d','left',JP,null,false,900);txt(b,112,y,12,'#e6e9f0','left',JP,null,false,700)});
+  RULES.forEach(([h,b],i)=>{const y=172+i*31;txt(h,28,y,13,'#ff4d6d','left',JP,null,false,900);txt(b,136,y,12,'#e6e9f0','left',JP,null,false,700)});
   txt(touchMode?'タップで再開':'P / Enter で再開',W/2,478,15,'#c9cfdc','center',JP,null,false,700);
   button(SCR.ptitle,'タイトルへ戻る','rgba(60,20,30,.9)');
   button(SCR.ptut,tutDone?'導入をもう一度（次のゲームから）':'導入は次のゲームでも表示','rgba(30,32,44,.92)');
@@ -2123,7 +2129,8 @@ function drawClear(){
 /* ---------------- main draw / loop ---------------- */
 function draw(){
   g.setTransform(cv.width/W,0,0,cv.height/H,0,0);g.globalAlpha=1;g.globalCompositeOperation='source-over';
-  if(state==='title'){drawTitle();return}
+  if(state==='title'){TXT_SCALE=1;drawTitle();return}
+  TXT_SCALE=1.2;
   g.save();
   const sh=G.shake;if(sh>.3)g.translate(rand(-sh,sh),rand(-sh,sh));
   if(G.zoom>.002){g.translate(P.x,P.y);g.scale(1+G.zoom,1+G.zoom);g.translate(-P.x,-P.y)}
