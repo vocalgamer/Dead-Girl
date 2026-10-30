@@ -24,7 +24,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.50 2026-10-30';
+const VERSION='v0.51 2026-10-30';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -315,7 +315,7 @@ function startWave(n){
   tutWave(n);if(G.gim&&!SEEN.has('gim_'+G.gim)){markSeen('gim_'+G.gim);G.propSpot=6}else G.propSpot=0;
   G.intro=[];if(G.gim)G.intro.push({t:2.5,txt:'仕掛け：'+GIMMICKS[G.gim].name,sub:GIMMICKS[G.gim].hint,col:'#7ff3ff'});
   else if(n===1&&!G.tut)G.intro.push({t:2.5,txt:'囲い込み制圧',sub:'塗ったマスで囲むと、中が一気に血で染まる',col:'#ff4d6d'});
-  if(G.mis)G.intro.push({t:G.intro.length?4.7:2.5,txt:'お題',sub:G.mis.text+'（達成でボーナス）',col:'#ffd54a'});
+  if(G.mis)G.intro.push({t:G.intro.length?4.7:2.5,txt:'お題',sub:G.mis.text+'（達成でボーナス）',col:'#ffd54a',dur:4.4});
   if(bk){G.addsT=5;G.bossPending=1.9;G.bossInfo={kind:bk,...BOSSES[bk]};
     G.banner={top:'WARNING — BOSS — '+theme.name,main:BOSSES[bk].name,sub:BOSSES[bk].sub,t:0,dur:2.6,col:'#ff2f5f'};SFX.alarm()}
   else{
@@ -368,7 +368,7 @@ function spawnBoss(kind){
 function updateWave(dt){
   if(G.phase==='fight'){
     updateTut(dt);if(G.propSpot>0)G.propSpot-=dt;for(const e of E)if(e.spot>0)e.spot-=dt;
-    for(const it of G.intro){it.t-=dt;if(it.t<=0&&!it.shown){it.shown=true;callout(it.txt,it.sub,it.col);G.callout.dur=2.2}}
+    for(const it of G.intro){it.t-=dt;if(it.t<=0&&!it.shown){it.shown=true;callout(it.txt,it.sub,it.col);G.callout.dur=it.dur||2.2}}
     if(G.mis&&G.mis.id==='time'&&!G.mis.done&&!G.mis.fail&&G.waveTime>G.mis.need)G.mis.fail=true;
     if(G.bossPending>0){G.bossPending-=dt;if(G.bossPending<=0)spawnBoss(G.bossInfo.kind)}
     const alive=E.length+MARKS.length;
@@ -877,7 +877,7 @@ const MIS_GEN=[
   {id:'guard',  n:w=>4+w,              t:'ガードで%n回防げ'},
   {id:'crash',  n:w=>3+Math.floor(w/2),t:'死体をぶつけて%n回CRASHさせろ'},
   {id:'rage',   n:w=>3+Math.floor(w/3), t:'怨念解放の一撃で%n体倒せ'},
-  {id:'capture',n:w=>6+w*2,            t:'囲い込みで%nマス制圧せよ'}
+  {id:'capture',n:w=>4+w*2,            t:'囲い込みで%nマス制圧せよ'}
 ];
 function setupMission(){
   G.mis=null;if(G.isBossWave)return;const w=G.wave;let m;
