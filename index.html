@@ -24,7 +24,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.03 2026-10-30';
+const VERSION='v0.04 2026-10-30';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -397,7 +397,8 @@ function updateWave(dt){
       if(G.rush>0){G.rush-=dt;G.rushSp-=dt;if(G.rushSp<=0&&alive<Math.min(5+Math.ceil(G.wave*.7),11)+8){G.rushSp=.22;queueSpawn(Math.random()<.6?'runner':'grunt');MARKS[MARKS.length-1].horde=true}}
       // 同時に出る敵の上限：WAVE1で6体〜最大11体（旧8〜15体）。まとめて薙ぎ払える集団湧きは残す
       G.spawnT-=dt;const cap=Math.min(5+Math.ceil(G.wave*.7),11)*waveEase();
-      if(G.spawnT<=0&&alive<cap){let n=Math.random()<.4?(G.wave>=6&&Math.random()<.5?3:2):1;if(waveEase()<1)n=Math.max(1,Math.min(n,Math.ceil(cap-alive)));for(let i=0;i<n;i++)queueSpawn(pickType(G.wave));G.spawnT=Math.max(.45,1-G.wave*.05)*rand(.7,1.2)*(waveEase()<1?1.15:1)}
+      // チュートリアル中は通常の敵は出さない（各手順で必要な敵だけを出す）
+      if(G.spawnT<=0&&alive<cap&&!G.tutMode){let n=Math.random()<.4?(G.wave>=6&&Math.random()<.5?3:2):1;if(waveEase()<1)n=Math.max(1,Math.min(n,Math.ceil(cap-alive)));for(let i=0;i<n;i++)queueSpawn(pickType(G.wave));G.spawnT=Math.max(.45,1-G.wave*.05)*rand(.7,1.2)*(waveEase()<1?1.15:1)}
     }
   }else if(G.phase==='break'){G.breakT-=dt;if(G.breakT<=0)openPick()}
   else if(G.phase==='tutEnd'){G.tut&&(G.tut.t+=dt);G.endT-=dt;if(G.endT<=0){tutDone=true;lsSet('dg_tut','1');state='title';stateT=0;resetRun()}}
@@ -973,9 +974,13 @@ function tutWave(n){
   G.tut={step:1,t:0,gap:-1};G.mis=null;
 }
 function tutNext(){const T_=G.tut;if(!T_)return;T_.step++;T_.t=0;T_.foe=null;SFX.ui();
+  // ②〜⑥は、前の手順の敵を煙とともに消してから、その手順に必要な敵だけを出す
+  if(T_.step>=2&&T_.step<=6){for(const e of E){for(let k=0;k<6;k++)fx({k:'smoke',x:e.x,y:e.y,vx:rand(-60,60),vy:rand(-60,60),life:.5,max:.5,sz:rand(8,14)})}E.length=0;MARKS.length=0;B.length=0}
   if(T_.step===2)tutRing();else if(T_.step===3){P.hp=Math.min(P.hp,P.maxhp*.7);tutFoe('grunt',110)}else if(T_.step===4)tutFoe('gunner',230);
-  else if(T_.step===5){G.soul=100;for(let k=0;k<4;k++){const a=k/4*TAU+.4;tutFoe('grunt',140,a)}}
-  else if(T_.step===6){G.crewOut=true;queueSpawn('cleaner','mop');queueSpawn('cleaner','mop')}}
+  else if(T_.step===5){G.soul=100;for(let k=0;k<3;k++){const a=k/3*TAU+.5;tutFoe('grunt',140,a)}}
+  else if(T_.step===6){G.crewOut=true;queueSpawn('cleaner','mop')}
+  // ⑦：床を85%まで塗った状態にして、残りを少ない敵で塗り切ってもらう
+  else if(T_.step===7){const left=[];for(let i=0;i<GN;i++)if(!DONE[i])left.push(i);left.sort(()=>Math.random()-.5);capFilling=true;while(painted<GN*.85&&left.length)fillTile(left.pop());capFilling=false}}
 // 手順fromの達成から少し間を置いて次へ（同じ手順で何度呼ばれても1回だけ進む）
 function tutLater(from,ms){const T_=G.tut;if(!T_||T_.step!==from||T_.later===from)return;T_.later=from;setTimeout(()=>{if(G.tut&&G.tut.step===from)tutNext()},ms)}
 // 練習用の敵を、主人公の前方（または指定の向き）に出す
@@ -995,7 +1000,7 @@ function tutRing(){
   let gap=ring[0],gd=1e9;for(const i of ring){const t=tileRect(i),d=dist(t.x+t.w/2,t.y+t.h/2,P.x,P.y);if(d<gd&&!DONE[i]){gd=d;gap=i}}
   capFilling=true;for(const i of ring)if(i!==gap&&!DONE[i])fillTile(i);capFilling=false;
   G.tut.gap=gap;G.tut.ring=ring;const g_=tileRect(gap);
-  for(let k=0;k<2;k++){const e=makeEnemy('grunt',g_.x+g_.w/2+rand(-30,30),g_.y+g_.h/2+rand(-30,30));e.state='chase'}
+  {const e=makeEnemy('grunt',g_.x+g_.w/2+rand(-20,20),g_.y+g_.h/2+rand(-20,20));e.state='chase'}
 }
 function updateTut(dt){
   const T_=G.tut;if(!T_)return;T_.t+=dt;
@@ -1007,6 +1012,11 @@ function updateTut(dt){
   // 練習中は床が埋まってもクリアを待たせ、⑥に来た時点でクリアにする
   if(T_.step===6&&T_.t>1.5&&!E.some(e=>e.type==='cleaner')&&!MARKS.some(m=>m.type==='cleaner'))tutNext();
   if(T_.step===7&&painted>=GN&&G.phase==='fight')waveClear();
+  // 塗るための相手：①は1体ずつ、②は光るマスの近くに1体、⑦は同時に最大2体まで（いなくなったら補充）
+  const foes=E.filter(e=>e.type!=='cleaner').length+MARKS.length;
+  if(T_.step===1&&foes<1&&T_.t>.6)tutFoe('grunt',150,rand(0,TAU));
+  if(T_.step===2&&foes<1&&T_.gap>=0&&!DONE[T_.gap]&&T_.t>.6){const g_=tileRect(T_.gap);const e=makeEnemy('grunt',g_.x+g_.w/2+rand(-20,20),g_.y+g_.h/2+rand(-20,20));e.state='chase'}
+  if(T_.step===7&&foes<2&&(T_.spawnCd=(T_.spawnCd||0)-dt)<=0){T_.spawnCd=.8;queueSpawn('grunt')}
 }
 // 初めて出会う敵・仕掛けに、矢印と一言説明（1回きり）
 const SPOT_TXT={gunner:'銃撃手：弾は攻撃で弾き返せる',brute:'用心棒：赤い円から離れろ',bazooka:'バズーカ兵：ロケットも弾き返せる',
