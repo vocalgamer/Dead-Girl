@@ -24,7 +24,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.52 2026-10-30';
+const VERSION='v0.53 2026-10-30';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -2047,12 +2047,13 @@ function drawTitle(){
   txt('— ZOMBIE REVENGE —',W/2,324,13,'#ff4d6d','center',EN,null,false,800);
   g.globalAlpha=la*(.55+Math.sin(stateT*4)*.45);
   const sndWait=!muted&&!(AC&&AC.state==='running')&&!G.titleTap;
-  txt(sndWait?(touchMode?'TAP FOR SOUND':'CLICK / ANY KEY FOR SOUND'):(touchMode?'TAP TO START':'PRESS ENTER / CLICK'),W/2,660,19,'#fff','center',EN,null,true);
+  txt(sndWait?(touchMode?'TAP FOR SOUND':'CLICK / ANY KEY FOR SOUND'):(touchMode?'TAP TO START':'PRESS ENTER / CLICK'),W/2,566,19,'#fff','center',EN,null,true);
   g.globalAlpha=la*.85;
-  const L=touchMode?['目的：血で床を塗りつぶせ。囲めば中も一気に制圧','画面の左半分をドラッグ：移動','右半分をタップ：攻撃／長押し：ガード(1回防ぐと解除)','SOUL満タン中に光る主人公をタップ：怨念解放']
-    :['目的：血で床を塗りつぶせ。囲めば中も一気に制圧','WASD/矢印：移動　J/左クリック：攻撃(連打で連撃)','U/右クリック長押し：ガード(1回防ぐと解除)','L/E：怨念解放　P：ポーズ　ゲームパッド対応'];
-  L.push('WAVEクリアで強化を1つ選択／ステージの仕掛けとお題でボーナス');
-  L.forEach((l,i)=>txt(l,W/2,690+i*18,11,i===4?'#ffd54a':'#c9cfdc','center',JP,null,false,700));
+  // 操作説明（16.5px。画面幅に収まるよう1行を短く分けて7行に）
+  const L=touchMode?['目的：血で床を塗りつぶせ。囲めば一気に制圧','左半分をドラッグ：移動','右半分をタップ：攻撃（連打で連撃）','右半分を長押し：ガード（1回防ぐと解除）','光る主人公をタップ：怨念解放']
+    :['目的：血で床を塗りつぶせ。囲めば一気に制圧','WASD／矢印：移動','J／左クリック：攻撃（連打で連撃）','U／右クリック長押し：ガード（1回防ぐと解除）','L／E：怨念解放　P：ポーズ　パッド対応'];
+  L.push('WAVEクリアで強化を1つ選択','ステージの仕掛けとお題でボーナス');
+  L.forEach((l,i)=>txt(l,W/2,600+i*24,16.5,i>=5?'#ffd54a':'#c9cfdc','center',JP,null,false,700));
   if(best>0)txt('BEST '+best,W/2,H-8,12,'#b8ff5a','center',EN);
   g.globalAlpha=1;txt(VERSION,W-10,H-8,11,'#8b93a8','right',EN,null,false,700);
   // 音の状態（実機で鳴らない時の確認用）
