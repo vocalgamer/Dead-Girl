@@ -24,7 +24,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.02 2026-10-30';
+const VERSION='v0.03 2026-10-30';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -293,7 +293,7 @@ function resetRun(){
   Object.assign(G,{score:0,kills:0,wave:0,chain:0,chainT:0,maxChain:0,chainPop:0,mult:1,soul:0,
     hitstop:0,slowT:0,slowScale:1,ts:1,shake:0,zoom:0,aimer:null,shotGap:0,crests:[],cleanT:8,seenSub:{},soulReady:false,waveTime:0,flash:0,flashCol:'255,40,70',time:0,
     toSpawn:0,spawnT:0,breakT:0,addsT:0,banner:null,callout:null,boss:null,bossInfo:null,bossPending:0,isBossWave:false,
-    phase:'fight',endless:false,deathT:0,endT:0,newBest:false,tut:null,propSpot:0,rush:0,rushT:99,res:null,mis:null,gim:null,intro:[],cards:null,cardSel:0,lastMis:null,beamT:0,cause:null});
+    phase:'fight',tutMode:false,endless:false,deathT:0,endT:0,newBest:false,tut:null,propSpot:0,rush:0,rushT:99,res:null,mis:null,gim:null,intro:[],cards:null,cardSel:0,lastMis:null,beamT:0,cause:null});
   Object.assign(P,{x:W/2,y:540,vx:0,vy:0,kx:0,ky:0,lx:0,ly:0,lt:0,r:14,hp:100,hpLag:100,maxhp:100,face:-Math.PI/2,
     atk:null,stage:0,comboWin:0,recover:0,atkBuf:0,atkA:null,inv:0,blinkT:0,
     crit:false,walk:0,trail:[],ghostT:0,dead:false,guard:false,guardLock:false,guardFx:0});
@@ -301,7 +301,8 @@ function resetRun(){
   PROPS=[];SMOKES=[];WARNS=[];SHOCKS=[];SPILLS=[];for(const k in UP)delete UP[k];
   washFloor();setTheme(1);
 }
-function newGame(){resetRun();state='play';stateT=0;SFX.ui();startWave(1)}
+// tut=true でチュートリアル（1ステージで一通りの操作を練習し、終わったらタイトルへ）
+function newGame(tut){resetRun();G.tutMode=!!tut;state='play';stateT=0;SFX.ui();startWave(1)}
 function goEndless(){G.endless=true;state='play';stateT=0;P.hp=P.maxhp;startWave(11)}
 function saveBest(){if(G.score>best){best=G.score;G.newBest=true;try{localStorage.setItem('nb_best',best)}catch(e){}}}
 
@@ -382,7 +383,7 @@ function updateWave(dt){
         // 種類：モップ係（WAVE2〜）／高圧洗浄機（WAVE3〜）／漂白剤（WAVE4〜）。解禁済みの種類は最低1人ずつ混ざる
         const crew=Math.min(6,G.wave),kinds=['mop'].concat(G.wave>=3?['washer']:[],G.wave>=4?['bleach']:[]);
         // 全滅させた瞬間から休憩タイマーを開始（間隔はランダム）。ただし床が7割以上塗られていると早めに戻ってくる
-        if(G.crewOut&&nc===0){G.crewOut=false;const late=painted/GN>=.7;if(G.tut&&G.tut.step===7)tutNext();
+        if(G.crewOut&&nc===0){G.crewOut=false;const late=painted/GN>=.7;
           G.cleanT=late?rand(4,7):Math.max(6,rand(9,15)-G.wave*.3);
           popText(P.x,P.y-64,'掃除屋 全滅！','#5ab8ff',18,1.1);G.score+=200*crew}
         G.cleanT-=dt;
@@ -399,10 +400,13 @@ function updateWave(dt){
       if(G.spawnT<=0&&alive<cap){let n=Math.random()<.4?(G.wave>=6&&Math.random()<.5?3:2):1;if(waveEase()<1)n=Math.max(1,Math.min(n,Math.ceil(cap-alive)));for(let i=0;i<n;i++)queueSpawn(pickType(G.wave));G.spawnT=Math.max(.45,1-G.wave*.05)*rand(.7,1.2)*(waveEase()<1?1.15:1)}
     }
   }else if(G.phase==='break'){G.breakT-=dt;if(G.breakT<=0)openPick()}
+  else if(G.phase==='tutEnd'){G.tut&&(G.tut.t+=dt);G.endT-=dt;if(G.endT<=0){tutDone=true;lsSet('dg_tut','1');state='title';stateT=0;resetRun()}}
   else if(G.phase==='ending'){G.endT-=dt;if(G.endT<=0){state='clear';stateT=0;saveBest()}}
 }
 function waveClear(){
-  if(G.tut&&G.tut.step<=6)G.tut.step=6;
+  // チュートリアルはカード選択に進まず、完了の表示のあとタイトルへ戻る
+  if(G.tutMode&&G.tut){G.tut.step=8;G.tut.t=0;G.phase='tutEnd';G.endT=4.5;SFX.clear();addShake(12);G.flash=.4;G.flashCol='255,213,74';
+    for(const o of [...E])killEnemy(o,Math.atan2(o.y-P.y,o.x-P.x),700,{});MARKS.length=0;B.length=0;return}
   if(G.mis&&G.mis.id==='time'&&!G.mis.done&&!G.mis.fail&&G.waveTime<=G.mis.need)misDone();
   G.phase='break';G.breakT=3.2;healP(20);slow(.9,.2);SFX.clear();addShake(16);G.flash=.5;G.flashCol='255,20,50';
   for(const o of [...E])killEnemy(o,Math.atan2(o.y-P.y,o.x-P.x),700,{});
@@ -457,7 +461,7 @@ function fillTile(i){
   for(let k=0;k<6;k++){d.fillStyle=`rgba(${irand(90,140)},0,${irand(8,20)},${rand(.3,.55).toFixed(2)})`;d.beginPath();d.arc(t.x+rand(8,t.w-8),t.y+rand(8,Math.max(9,t.h-8)),rand(5,9),0,TAU);d.fill()}
   fx({k:'tile',x:t.x,y:t.y,w:t.w,h:t.h,life:.35,max:.35});SFX.tile();
   for(const c of G.crests)if(c.i===i&&!c.taken){c.taken=true;crestReward(c)}
-  if(!G.isBossWave&&G.phase==='fight'&&state==='play'&&!P.dead&&painted>=GN&&!(G.tut&&G.tut.step<6))waveClear();
+  if(!G.isBossWave&&G.phase==='fight'&&state==='play'&&!P.dead&&painted>=GN&&!(G.tut&&G.tut.step<7))waveClear();
 }
 function tileAt(x,y){const cx=Math.floor((x-AX0)/TS),cy=Math.floor((y-AY0)/TS);return cx<0||cy<0||cx>=GC||cy>=GR?-1:cy*GC+cx}
 // 掃除屋がタイルの血を拭き取る（塗り済みが取り消される）
@@ -962,17 +966,16 @@ const tutText=st=>({1:['① 塗る','敵を倒すと、血で床が染まる。�
   3:['③ ガード',(touchMode?'右半分を長押し':'U／右クリックを押したまま')+'で正面ガード。防ぐとライフが回復'],
   4:['④ 弾き返し','銃撃手の弾は、当たる直前に攻撃すると跳ね返せる'],
   5:['⑤ 怨念解放','SOULが満タン！'+(touchMode?'光る主人公をタップ':'L／Eキー')+'で周りを一掃'],
-  6:['⑥ クリア','上のBLOODゲージを100%にするとステージクリア'],7:['⑦ 掃除屋','塗った血を消しに来る。消される前に倒せ！'],
-  8:['準備完了','あとは自由に暴れろ。仕掛けとお題も活用しよう']})[st];
+  6:['⑥ 掃除屋','塗った血を消しに来る。消される前に倒せ！'],7:['⑦ クリア','上のBLOODゲージを100%にするとステージクリア'],
+  8:['チュートリアル完了！','これで一通りの操作はばっちり。タイトルに戻ります']})[st];
 function tutWave(n){
-  if(tutDone||G.endless){G.tut=null;return}
-  if(n===1){G.tut={step:1,t:0,gap:-1};G.mis=null}
-  else if(n===2&&G.tut){G.tut.step=7;G.tut.t=0;G.mis=null;G.cleanT=3.5}
-  else G.tut=null;
+  if(!G.tutMode||n!==1){G.tut=null;return}
+  G.tut={step:1,t:0,gap:-1};G.mis=null;
 }
 function tutNext(){const T_=G.tut;if(!T_)return;T_.step++;T_.t=0;T_.foe=null;SFX.ui();
   if(T_.step===2)tutRing();else if(T_.step===3){P.hp=Math.min(P.hp,P.maxhp*.7);tutFoe('grunt',110)}else if(T_.step===4)tutFoe('gunner',230);
-  else if(T_.step===5){G.soul=100;for(let k=0;k<4;k++){const a=k/4*TAU+.4;tutFoe('grunt',140,a)}}}
+  else if(T_.step===5){G.soul=100;for(let k=0;k<4;k++){const a=k/4*TAU+.4;tutFoe('grunt',140,a)}}
+  else if(T_.step===6){G.crewOut=true;queueSpawn('cleaner','mop');queueSpawn('cleaner','mop')}}
 // 手順fromの達成から少し間を置いて次へ（同じ手順で何度呼ばれても1回だけ進む）
 function tutLater(from,ms){const T_=G.tut;if(!T_||T_.step!==from||T_.later===from)return;T_.later=from;setTimeout(()=>{if(G.tut&&G.tut.step===from)tutNext()},ms)}
 // 練習用の敵を、主人公の前方（または指定の向き）に出す
@@ -1002,8 +1005,8 @@ function updateTut(dt){
   if((T_.step===3||T_.step===4)&&T_.t>1&&(!T_.foe||T_.foe.dead))tutFoe(T_.step===3?'grunt':'gunner',T_.step===3?110:230);
   if(T_.step===5&&G.soul<100&&T_.t>1)G.soul=100;
   // 練習中は床が埋まってもクリアを待たせ、⑥に来た時点でクリアにする
-  if(T_.step===6&&painted>=GN&&G.phase==='fight')waveClear();
-  if(T_.step===8&&T_.t>4.5){G.tut=null;tutDone=true;lsSet('dg_tut','1')}
+  if(T_.step===6&&T_.t>1.5&&!E.some(e=>e.type==='cleaner')&&!MARKS.some(m=>m.type==='cleaner'))tutNext();
+  if(T_.step===7&&painted>=GN&&G.phase==='fight')waveClear();
 }
 // 初めて出会う敵・仕掛けに、矢印と一言説明（1回きり）
 const SPOT_TXT={gunner:'銃撃手：弾は攻撃で弾き返せる',brute:'用心棒：赤い円から離れろ',bazooka:'バズーカ兵：ロケットも弾き返せる',
@@ -1020,7 +1023,7 @@ function drawTutWorld(){
   if(T_.step===2&&T_.gap>=0&&!DONE[T_.gap]){const t=tileRect(T_.gap),pl=.5+Math.sin(G.time*8)*.5;
     g.fillStyle=`rgba(255,213,74,${.15+pl*.2})`;g.fillRect(t.x,t.y,t.w,t.h);g.strokeStyle=`rgba(255,213,74,${.6+pl*.4})`;g.lineWidth=3;g.strokeRect(t.x+2,t.y+2,t.w-4,t.h-4);
     pointer(t.x+t.w/2,t.y-4,'ここを塗れ（近くで敵を倒す）')}
-  if(T_.step===7)for(const e of E)if(e.type==='cleaner'&&!(e.spot>0))pointer(e.x,e.y-e.r-22,'掃除屋','#5ab8ff');
+  if(T_.step===6)for(const e of E)if(e.type==='cleaner'&&!(e.spot>0))pointer(e.x,e.y-e.r-22,'掃除屋','#5ab8ff');
   if((T_.step===3||T_.step===4)&&T_.foe&&!T_.foe.dead&&!(T_.foe.spot>0))pointer(T_.foe.x,T_.foe.y-T_.foe.r-22,T_.step===3?'攻撃に合わせてガード':'弾を跳ね返せ');
   if(T_.step===5&&!P.dead)pointer(P.x,P.y-74,touchMode?'タップ！':'L／E');
 }
@@ -1031,7 +1034,7 @@ function drawTutPanel(){
   rr(16,y,W-32,52,8,'rgba(8,8,14,.45)');g.strokeStyle='rgba(255,213,74,.4)';g.lineWidth=1.2;rrPath(16,y,W-32,52,8);g.stroke();
   txt(h,30,y+21,15,'#ffd54a','left',JP,null,false,900);if(T_.step<=TUT_STEPS)txt('導入 '+T_.step+'/'+TUT_STEPS,W-30,y+21,10,'#8b93a8','right',JP,null,false,700);
   txt(b,30,y+41,12,'#fff','left',JP,null,false,700);
-  if(T_.step===6)pointer(66+98,27,null);
+  if(T_.step===7)pointer(66+98,27,null);
   g.restore();
 }
 
@@ -1045,7 +1048,7 @@ function guarding(){const held=inp.guardKey||inp.guardMouse||inp.guardTouch!=nul
 const UI={pause:{x:W-24,y:24,r:15},mute:{x:W-24,y:60,r:15}};
 // マウス：左=攻撃、右=ガード（同時押しは pointermove で来るので buttons から判定）
 function mouseBtn(ev){const a=!!(ev.buttons&1),gd=!!(ev.buttons&2);if(a&&!inp.atkMouse)pressAttack();inp.atkMouse=a;inp.guardMouse=gd}
-const SCR={endless:{x:W/2,y:612,w:260,h:52},title:{x:W/2,y:682,w:260,h:44},ptitle:{x:W/2,y:560,w:240,h:46},ptut:{x:W/2,y:620,w:370,h:40}};
+const SCR={endless:{x:W/2,y:612,w:260,h:52},title:{x:W/2,y:682,w:260,h:44},ptitle:{x:W/2,y:560,w:240,h:46},tstart:{x:W/2,y:522,w:250,h:46},ttut:{x:W/2,y:578,w:250,h:40}};
 const inC=(p,c,pad)=>Math.hypot(p.x-c.x,p.y-c.y)<c.r+(pad||0);
 const inR=(p,r)=>Math.abs(p.x-r.x)<r.w/2&&Math.abs(p.y-r.y)<r.h/2;
 function toLocal(ev){const r=cv.getBoundingClientRect();return{x:(ev.clientX-r.left)*W/r.width,y:(ev.clientY-r.top)*H/r.height}}
@@ -1054,11 +1057,12 @@ function pressAttack(a){P.atkBuf=.25;P.atkA=a==null?null:a}
 function screenAction(p,key){
   if(state==='pick'){if(p){const i=cardAt(p);if(i>=0)pickCard(i)}else pickCard(G.cardSel);return}
   // タイトル：音がまだ鳴らせない状態なら、最初の1回は「音をONにするだけ」（BGMを聴かせるため）。2回目で開始
-  if(state==='title'){if(!muted&&!(AC&&AC.state==='running')&&!G.titleTap){G.titleTap=1;return}newGame();return}
-  if(state==='over'){if(stateT>.9)newGame();return}
+  if(state==='title'){if(!muted&&!(AC&&AC.state==='running')&&!G.titleTap){G.titleTap=1;return}
+    if(p){if(inR(p,SCR.tstart))newGame(false);else if(inR(p,SCR.ttut))newGame(true);return}
+    newGame(key==='tut');return}
+  if(state==='over'){if(stateT>.9)newGame(G.tutMode);return}
   if(state==='pause'){
     if((p&&inR(p,SCR.ptitle))||key==='title'){state='title';stateT=0;resetRun();return}
-    if(p&&inR(p,SCR.ptut)){tutDone=false;lsSet('dg_tut','0');SEEN.clear();lsSet('dg_seen','[]');SFX.ui();return}
     state='play';return;
   }
   if(state==='clear'){
@@ -1139,6 +1143,7 @@ addEventListener('keydown',ev=>{
   if(state==='title'&&sndOff&&!muted&&!G.titleTap){G.titleTap=1;return}
   if(state==='pick'){pickKey(k);return}
   if(state!=='play'){
+    if(state==='title'){if(k==='t')screenAction(null,'tut');else if(k==='enter'||k===' '||k==='j'||k==='z')screenAction(null,'go');return}
     if(k==='escape'||k==='t')screenAction(null,state==='pause'&&k==='escape'?null:'title');
     else if(k==='enter'||k===' '||k==='j'||k==='z'||(state==='pause'&&k==='p'))screenAction(null,'go');
     return;
@@ -2077,13 +2082,21 @@ function drawTitle(){
   txt('— ZOMBIE REVENGE —',W/2,324,13,'#ff4d6d','center',EN,null,false,800);
   g.globalAlpha=la*(.55+Math.sin(stateT*4)*.45);
   const sndWait=!muted&&!(AC&&AC.state==='running')&&!G.titleTap;
-  txt(sndWait?(touchMode?'TAP FOR SOUND':'CLICK / ANY KEY FOR SOUND'):(touchMode?'TAP TO START':'PRESS ENTER / CLICK'),W/2,566,19,'#fff','center',EN,null,true);
+  if(sndWait)txt(touchMode?'TAP FOR SOUND':'CLICK / ANY KEY FOR SOUND',W/2,552,19,'#fff','center',EN,null,true);
+  else{
+    // ゲームスタート／チュートリアル（初めての人にはチュートリアルを目立たせる）
+    g.globalAlpha=la;const first=!tutDone;
+    button(SCR.tstart,'ゲームスタート','rgba(160,20,45,.92)');
+    if(first)glow(SCR.ttut.x,SCR.ttut.y,150,'#40c8ff',.18+Math.sin(stateT*4)*.08);
+    button(SCR.ttut,first?'チュートリアル（初めての方）':'チュートリアル',first?'rgba(20,80,110,.95)':'rgba(30,32,44,.92)');
+    if(!touchMode)txt('Enter：スタート　T：チュートリアル',W/2,614,11,'#8b93a8','center',JP,null,false,700);
+  }
   g.globalAlpha=la*.85;
   // 操作説明（16.5px。画面幅に収まるよう1行を短く分けて7行に）
   const L=touchMode?['目的：血で床を塗りつぶせ。囲めば一気に制圧','左半分をドラッグ：移動','右半分をタップ：攻撃（連打で連撃）','右半分を長押し：ガード（1回防ぐと解除）','光る主人公をタップ：怨念解放']
     :['目的：血で床を塗りつぶせ。囲めば一気に制圧','WASD／矢印：移動','J／左クリック：攻撃（連打で連撃）','U／右クリック長押し：ガード（1回防ぐと解除）','L／E：怨念解放　P：ポーズ　パッド対応'];
   L.push('ステージクリアで強化を1つ選択','ステージの仕掛けとお題でボーナス');
-  L.forEach((l,i)=>txt(l,W/2,600+i*24,16.5,i>=5?'#ffd54a':'#c9cfdc','center',JP,null,false,700));
+  L.forEach((l,i)=>txt(l,W/2,644+i*22,16.5,i>=5?'#ffd54a':'#c9cfdc','center',JP,null,false,700));
   if(best>0)txt('BEST '+best,W/2,H-8,12,'#b8ff5a','center',EN);
   g.globalAlpha=1;txt(VERSION,W-10,H-8,11,'#8b93a8','right',EN,null,false,700);
   // 音の状態（実機で鳴らない時の確認用）
@@ -2101,7 +2114,6 @@ function drawPause(){
   RULES.forEach(([h,b],i)=>{const y=172+i*31;txt(h,28,y,13,'#ff4d6d','left',JP,null,false,900);txt(b,136,y,12,'#e6e9f0','left',JP,null,false,700)});
   txt(touchMode?'タップで再開':'P / Enter で再開',W/2,478,15,'#c9cfdc','center',JP,null,false,700);
   button(SCR.ptitle,'タイトルへ戻る','rgba(60,20,30,.9)');
-  button(SCR.ptut,tutDone?'導入をもう一度（次のゲームから）':'導入は次のゲームでも表示','rgba(30,32,44,.92)');
 }
 function drawStats(y){
   const rows=[['SCORE',G.score],['KILLS',G.kills],['MAX CHAIN',G.maxChain],['STAGE',G.wave]];
