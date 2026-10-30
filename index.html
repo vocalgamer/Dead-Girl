@@ -24,7 +24,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.54 2026-10-30';
+const VERSION='v0.01 2026-10-30';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -382,7 +382,7 @@ function updateWave(dt){
         // 種類：モップ係（WAVE2〜）／高圧洗浄機（WAVE3〜）／漂白剤（WAVE4〜）。解禁済みの種類は最低1人ずつ混ざる
         const crew=Math.min(6,G.wave),kinds=['mop'].concat(G.wave>=3?['washer']:[],G.wave>=4?['bleach']:[]);
         // 全滅させた瞬間から休憩タイマーを開始（間隔はランダム）。ただし床が7割以上塗られていると早めに戻ってくる
-        if(G.crewOut&&nc===0){G.crewOut=false;const late=painted/GN>=.7;if(G.tut&&G.tut.step===4)tutNext();
+        if(G.crewOut&&nc===0){G.crewOut=false;const late=painted/GN>=.7;if(G.tut&&G.tut.step===7)tutNext();
           G.cleanT=late?rand(4,7):Math.max(6,rand(9,15)-G.wave*.3);
           popText(P.x,P.y-64,'掃除屋 全滅！','#5ab8ff',18,1.1);G.score+=200*crew}
         G.cleanT-=dt;
@@ -402,7 +402,7 @@ function updateWave(dt){
   else if(G.phase==='ending'){G.endT-=dt;if(G.endT<=0){state='clear';stateT=0;saveBest()}}
 }
 function waveClear(){
-  if(G.tut&&G.tut.step<=3)G.tut.step=3;
+  if(G.tut&&G.tut.step<=6)G.tut.step=6;
   if(G.mis&&G.mis.id==='time'&&!G.mis.done&&!G.mis.fail&&G.waveTime<=G.mis.need)misDone();
   G.phase='break';G.breakT=3.2;healP(20);slow(.9,.2);SFX.clear();addShake(16);G.flash=.5;G.flashCol='255,20,50';
   for(const o of [...E])killEnemy(o,Math.atan2(o.y-P.y,o.x-P.x),700,{});
@@ -457,7 +457,7 @@ function fillTile(i){
   for(let k=0;k<6;k++){d.fillStyle=`rgba(${irand(90,140)},0,${irand(8,20)},${rand(.3,.55).toFixed(2)})`;d.beginPath();d.arc(t.x+rand(8,t.w-8),t.y+rand(8,Math.max(9,t.h-8)),rand(5,9),0,TAU);d.fill()}
   fx({k:'tile',x:t.x,y:t.y,w:t.w,h:t.h,life:.35,max:.35});SFX.tile();
   for(const c of G.crests)if(c.i===i&&!c.taken){c.taken=true;crestReward(c)}
-  if(!G.isBossWave&&G.phase==='fight'&&state==='play'&&!P.dead&&painted>=GN)waveClear();
+  if(!G.isBossWave&&G.phase==='fight'&&state==='play'&&!P.dead&&painted>=GN&&!(G.tut&&G.tut.step<6))waveClear();
 }
 function tileAt(x,y){const cx=Math.floor((x-AX0)/TS),cy=Math.floor((y-AY0)/TS);return cx<0||cy<0||cx>=GC||cy>=GR?-1:cy*GC+cx}
 // 掃除屋がタイルの血を拭き取る（塗り済みが取り消される）
@@ -596,6 +596,7 @@ function fire(x,y,a,spd,dmg,big){
 // 弾き返し：ヒットストップ＋スローで「決まった」瞬間を強調。体に届く寸前で弾くとPERFECT（威力2倍・演出強化）
 // 跳ね返した弾は雑魚を貫通し続ける（装甲・ボスに当たると止まる）
 function reflect(b){
+  tutLater(4,500);
   const pf=dist(b.x,b.y,P.x,P.y)<P.r+26+15*lv('perfect');
   b.friendly=true;b.life=2;b.perfect=pf;b.kills=0;b.hits=new Set();b.trail=[];let t=null,bd=1e9;
   for(const e of E){const d=dist(b.x,b.y,e.x,e.y);if(d<bd){bd=d;t=e}}
@@ -625,7 +626,7 @@ function hurtPlayer(dmg,sx,sy){
   if(P.guard&&!front)popText(P.x,P.y-50,'背後を取られた！','#ffb44a',13,.8);
   if(P.guard&&front){
     // ガード：ダメージを完全に防ぎ、受けるはずだったダメージのGUARD_HEAL倍だけ回復。ノックバック小、連撃は途切れない
-    const heal=dmg*GUARD_HEAL;P.hp=Math.min(P.maxhp,P.hp+heal);misAdd('guard');P.guardLock=true;
+    const heal=dmg*GUARD_HEAL;P.hp=Math.min(P.maxhp,P.hp+heal);misAdd('guard');P.guardLock=true;if(G.tut&&G.tut.step===3)tutNext();
     if(lv('counter')&&!P.crit){P.crit=.7;popText(P.x,P.y-48,'COUNTER!','#7fd8ff',15,.7)}
     // 防いだ相手（近接攻撃なら攻撃元の近くの敵）を弾き飛ばして少し怯ませ、間合いを作る
     let foe=null,fd=48;for(const e of E){if(e.boss)continue;const dd=dist(e.x,e.y,sx,sy);if(dd<fd){fd=dd;foe=e}}
@@ -955,15 +956,30 @@ const lsGet=k=>{try{return localStorage.getItem(k)}catch(e){return null}},lsSet=
 let tutDone=lsGet('dg_tut')==='1';
 const SEEN=new Set((()=>{try{return JSON.parse(lsGet('dg_seen')||'[]')}catch(e){return[]}})());
 function markSeen(k){SEEN.add(k);lsSet('dg_seen',JSON.stringify([...SEEN]))}
-const TUT={1:['① 塗る','敵を倒すと、血で床が染まる。まず3マス塗ってみよう'],2:['② 囲う','光るマスを塗って輪を閉じろ。囲んだ中が一気に染まる'],
-  3:['③ クリア','上のBLOODゲージを100%にするとステージクリア'],4:['④ 掃除屋','塗った血を消しに来る。消される前に倒せ！'],5:['準備完了','あとは自由に暴れろ。仕掛けとお題も活用しよう']};
+// 導入の手順（ステージ1：①〜⑥、ステージ2：⑦）。操作の説明はスマホ／PCで出し分ける
+const TUT_STEPS=7;
+const tutText=st=>({1:['① 塗る','敵を倒すと、血で床が染まる。まず3マス塗ってみよう'],2:['② 囲う','光るマスを塗って輪を閉じろ。囲んだ中が一気に染まる'],
+  3:['③ ガード',(touchMode?'右半分を長押し':'U／右クリックを押したまま')+'で正面ガード。防ぐとライフが回復'],
+  4:['④ 弾き返し','銃撃手の弾は、当たる直前に攻撃すると跳ね返せる'],
+  5:['⑤ 怨念解放','SOULが満タン！'+(touchMode?'光る主人公をタップ':'L／Eキー')+'で周りを一掃'],
+  6:['⑥ クリア','上のBLOODゲージを100%にするとステージクリア'],7:['⑦ 掃除屋','塗った血を消しに来る。消される前に倒せ！'],
+  8:['準備完了','あとは自由に暴れろ。仕掛けとお題も活用しよう']})[st];
 function tutWave(n){
   if(tutDone||G.endless){G.tut=null;return}
   if(n===1){G.tut={step:1,t:0,gap:-1};G.mis=null}
-  else if(n===2&&G.tut){G.tut.step=4;G.tut.t=0;G.mis=null;G.cleanT=3.5}
+  else if(n===2&&G.tut){G.tut.step=7;G.tut.t=0;G.mis=null;G.cleanT=3.5}
   else G.tut=null;
 }
-function tutNext(){const T_=G.tut;if(!T_)return;T_.step++;T_.t=0;SFX.ui();if(T_.step===2)tutRing()}
+function tutNext(){const T_=G.tut;if(!T_)return;T_.step++;T_.t=0;T_.foe=null;SFX.ui();
+  if(T_.step===2)tutRing();else if(T_.step===3){P.hp=Math.min(P.hp,P.maxhp*.7);tutFoe('grunt',110)}else if(T_.step===4)tutFoe('gunner',230);
+  else if(T_.step===5){G.soul=100;for(let k=0;k<4;k++){const a=k/4*TAU+.4;tutFoe('grunt',140,a)}}}
+// 手順fromの達成から少し間を置いて次へ（同じ手順で何度呼ばれても1回だけ進む）
+function tutLater(from,ms){const T_=G.tut;if(!T_||T_.step!==from||T_.later===from)return;T_.later=from;setTimeout(()=>{if(G.tut&&G.tut.step===from)tutNext()},ms)}
+// 練習用の敵を、主人公の前方（または指定の向き）に出す
+function tutFoe(type,d,a){
+  const an=a==null?P.face:a,x=clamp(P.x+Math.cos(an)*d,AX0+30,AX1-30),y=clamp(P.y+Math.sin(an)*d,AY0+40,AY1-30);
+  const e=makeEnemy(type,x,y);e.state='chase';if(type==='gunner'){e.cd=.6;G.aimer=null;G.shotGap=0}if(a==null)G.tut.foe=e;return e;
+}
 // 囲いの練習用に、内側2×2・外周8マスのうち7マスを塗った輪を用意する（残り1マスが光る）
 function tutRing(){
   let best=null,bd=1e9;
@@ -982,7 +998,12 @@ function updateTut(dt){
   const T_=G.tut;if(!T_)return;T_.t+=dt;
   if(T_.step===1&&painted>=3&&T_.t>1)tutNext();
   if(T_.step===2&&T_.gap>=0&&DONE[T_.gap]&&!T_.ringDone){T_.ringDone=true}
-  if(T_.step===5&&T_.t>4.5){G.tut=null;tutDone=true;lsSet('dg_tut','1')}
+  // 練習相手を先に倒してしまったら出し直す
+  if((T_.step===3||T_.step===4)&&T_.t>1&&(!T_.foe||T_.foe.dead))tutFoe(T_.step===3?'grunt':'gunner',T_.step===3?110:230);
+  if(T_.step===5&&G.soul<100&&T_.t>1)G.soul=100;
+  // 練習中は床が埋まってもクリアを待たせ、⑥に来た時点でクリアにする
+  if(T_.step===6&&painted>=GN&&G.phase==='fight')waveClear();
+  if(T_.step===8&&T_.t>4.5){G.tut=null;tutDone=true;lsSet('dg_tut','1')}
 }
 // 初めて出会う敵・仕掛けに、矢印と一言説明（1回きり）
 const SPOT_TXT={gunner:'銃撃手：弾は攻撃で弾き返せる',brute:'用心棒：赤い円から離れろ',bazooka:'バズーカ兵：ロケットも弾き返せる',
@@ -999,16 +1020,18 @@ function drawTutWorld(){
   if(T_.step===2&&T_.gap>=0&&!DONE[T_.gap]){const t=tileRect(T_.gap),pl=.5+Math.sin(G.time*8)*.5;
     g.fillStyle=`rgba(255,213,74,${.15+pl*.2})`;g.fillRect(t.x,t.y,t.w,t.h);g.strokeStyle=`rgba(255,213,74,${.6+pl*.4})`;g.lineWidth=3;g.strokeRect(t.x+2,t.y+2,t.w-4,t.h-4);
     pointer(t.x+t.w/2,t.y-4,'ここを塗れ（近くで敵を倒す）')}
-  if(T_.step===4)for(const e of E)if(e.type==='cleaner'&&!(e.spot>0))pointer(e.x,e.y-e.r-22,'掃除屋','#5ab8ff');
+  if(T_.step===7)for(const e of E)if(e.type==='cleaner'&&!(e.spot>0))pointer(e.x,e.y-e.r-22,'掃除屋','#5ab8ff');
+  if((T_.step===3||T_.step===4)&&T_.foe&&!T_.foe.dead&&!(T_.foe.spot>0))pointer(T_.foe.x,T_.foe.y-T_.foe.r-22,T_.step===3?'攻撃に合わせてガード':'弾を跳ね返せ');
+  if(T_.step===5&&!P.dead)pointer(P.x,P.y-74,touchMode?'タップ！':'L／E');
 }
 function drawTutPanel(){
-  const T_=G.tut;if(!T_||state!=='play'||!TUT[T_.step])return;
+  const T_=G.tut;if(!T_||state!=='play'||!tutText(T_.step))return;
   // 床の邪魔にならないよう、ヘッダーのすぐ下に半透明で表示（主人公が近づくとさらに薄くなる）
-  const [h,b]=TUT[T_.step],y=AY0+6,near=P.y<AY0+130?.45:1,a=Math.min(1,T_.t*3)*.85*near;g.save();g.globalAlpha=a;
+  const [h,b]=tutText(T_.step),y=AY0+6,near=P.y<AY0+130?.45:1,a=Math.min(1,T_.t*3)*.85*near;g.save();g.globalAlpha=a;
   rr(16,y,W-32,52,8,'rgba(8,8,14,.45)');g.strokeStyle='rgba(255,213,74,.4)';g.lineWidth=1.2;rrPath(16,y,W-32,52,8);g.stroke();
-  txt(h,30,y+21,15,'#ffd54a','left',JP,null,false,900);if(T_.step<=4)txt('導入 '+Math.min(T_.step,4)+'/4',W-30,y+21,10,'#8b93a8','right',JP,null,false,700);
+  txt(h,30,y+21,15,'#ffd54a','left',JP,null,false,900);if(T_.step<=TUT_STEPS)txt('導入 '+T_.step+'/'+TUT_STEPS,W-30,y+21,10,'#8b93a8','right',JP,null,false,700);
   txt(b,30,y+41,12,'#fff','left',JP,null,false,700);
-  if(T_.step===3)pointer(66+98,27,null);
+  if(T_.step===6)pointer(66+98,27,null);
   g.restore();
 }
 
@@ -1182,6 +1205,7 @@ function doHit(a){
 // 怨念解放：一撃の必殺技。周囲の雑魚を一掃し、敵弾を弾き返し、足元一帯を一気に血で染める（持続する強化は無し）
 function tryRage(){
   if(G.soul<100||P.dead)return;
+  tutLater(5,800);
   const R=novaR();
   G.soul=0;SFX.rage();slow(.6,.2);G.flash=.7;G.flashCol='255,30,60';addShake(24);G.zoom=.07;G.hitstop=Math.max(G.hitstop,.1);
   P.inv=Math.max(P.inv,.9);healP(15);
