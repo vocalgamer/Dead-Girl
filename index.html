@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.12 2026-10-31';
+const VERSION='v0.15 2026-10-31';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -315,7 +315,7 @@ function saveBest(){if(G.score>best){best=G.score;G.newBest=true;try{localStorag
 
 /* ---------------- waves ---------------- */
 function startWave(n){
-  G.wave=n;G.phase='fight';G.spawnT=1.3;G.bossPending=0;G.bossInfo=null;G.aimer=null;G.shotGap=0;G.cleanT=rand(5,9);G.crewOut=false;G.waveTime=0;G.crests=[];
+  G.wave=n;G.sea=null;G.phase='fight';G.spawnT=1.3;G.bossPending=0;G.bossInfo=null;G.aimer=null;G.shotGap=0;G.cleanT=rand(5,9);G.crewOut=false;G.waveTime=0;G.crests=[];
   const bk=n%5===0?(n%10===5?'kirishima':'kito'):null;
   G.isBossWave=!!bk;
   washFloor();setTheme(G.tutMode?TUT_THEME:n);setupGimmick();setupMission();G.mile=0;capNew=[];CAPQ=[];G.wk=0;G.wchain=0;G.wcap=0;G.rushT=rand(22,34);G.rush=0;G.rushSp=0;
@@ -424,6 +424,8 @@ function waveClear(){
   const bk='dg_bw'+G.wave,prev=parseFloat(lsGet(bk)),isNew=!(prev>0)||tm<prev;if(isNew)lsSet(bk,tm.toFixed(1));
   G.res={rank:rk,time:tm,kills:G.wk,chain:G.wchain,cap:G.wcap,best:isNew?tm:prev,isNew,first:!(prev>0)};
   G.banner={top:'STAGE '+pad2(G.wave)+'  —  RANK '+rk,main:'CLEAR',sub:'TIME '+tm.toFixed(1)+'s   BONUS +'+bonus+'   HP +20',t:0,dur:2.6,col:rk==='S'?'#ffd54a':'#ff2f5f'};
+  // 床を100%塗ってのクリアは、まず「血の海」を叩きつけてから結果の帯を出す
+  if(!G.isBossWave&&painted>=GN){G.sea={t:0,drips:seaDrips()};G.banner.t=-2.1;G.breakT+=1.9;addShake(24);SFX.boom()}
 }
 
 /* ---------------- helpers: fx ---------------- */
@@ -975,7 +977,7 @@ const tutText=st=>({1:['① 塗る','敵を倒すと、血で床が染まる。�
   3:['③ ガード',(touchMode?'右半分を長押し':'U／右クリックを押したまま')+'で正面ガード。防ぐとライフが回復'],
   4:['④ 弾き返し','銃撃手の弾は、当たる直前に攻撃すると跳ね返せる'],
   5:['⑤ 怨念解放','SOULが満タン！'+(touchMode?'光る主人公をタップ':'L／Eキー')+'で周りを一掃'],
-  6:['⑥ 掃除屋','塗った血を消しに来る。消される前に倒せ！'],7:['⑦ クリア','光るマスを塗ってBLOODを100%に。100%でステージクリア']})[st];
+  6:['⑥ 掃除屋','塗った血を消しに来る。消される前に倒せ！'],7:['⑦ クリア','光るマスを塗って血溜まりを100%に。100%でステージクリア']})[st];
 function tutWave(n){
   if(!G.tutMode||n!==1){G.tut=null;return}
   G.tut={step:1,t:0,gap:-1,rep:0};G.mis=null;tutSetup(1);state='tutintro';stateT=0;
@@ -1624,6 +1626,7 @@ function update(rdt){
   if(state==='title'){G.time+=rdt;return}
   G.shake*=Math.exp(-11*rdt);G.zoom*=Math.exp(-7*rdt);G.flash=Math.max(0,G.flash-rdt*2.2);
   if(G.banner){G.banner.t+=rdt;if(G.banner.t>G.banner.dur)G.banner=null}
+  if(G.sea){G.sea.t+=rdt;if(G.sea.t>.45&&!G.sea.b){G.sea.b=1;SFX.just();addShake(10)}if(G.sea.t>2.3)G.sea=null}
   if(G.callout){G.callout.t+=rdt;if(G.callout.t>G.callout.dur)G.callout=null}
   // HPが最大値の30%を切っている間は警告音を鳴らし続ける（回復するか、プレイ中でなくなれば止まる）
   if(state==='play'&&!P.dead&&lowHP()){G.lowT=(G.lowT||0)-rdt;if(G.lowT<=0){G.lowT=.6;SFX.alarm2()}}else G.lowT=0;
@@ -2072,7 +2075,7 @@ function drawHUD(){
       rr(bx,28,bw+40,9,3,'#2a1018');rr(bx,28,(bw+40)*clamp(b.hp/b.max,0,1),9,3,b.hp<b.max*.5?'#ff2040':'#ff5a7a')}
     else{txt('DEAD GIRL',bx,36,25,'#f4f6fb','left',EN,null,true)}
   }else{
-    const pr=painted/GN;txt('BLOOD',bx,22,12,'#ff4d6d','left',EN,null,true);
+    const pr=painted/GN;txt('血溜まり',bx,22,12,'#ff4d6d','left',JP,null,false,900);
     const cm=1+Math.min(1,G.chain/40);if(cm>1.04)txt('塗り x'+cm.toFixed(1),bx+bw,22,10,'#ffd54a','right',JP,null,false,800);
     rr(bx,28,bw,10,3,'#2a1018');rr(bx,28,bw*pr,10,3,pr>.9&&Math.floor(G.time*8)%2?'#ffffff':'#d4142e');
     txt(Math.floor(pr*100)+'%',bx+bw+6,38,13,'#fff','left',EN,null,true);
@@ -2141,7 +2144,7 @@ function drawOverlays(){
   if(G.flash>0){g.fillStyle=`rgba(${G.flashCol},${Math.min(.6,G.flash*.7)})`;g.fillRect(0,0,W,H)}
 }
 function drawBanner(){
-  const b=G.banner;if(!b)return;
+  const b=G.banner;if(!b||b.t<0)return;
   const t=b.t,inT=easeOut(t/.25),out=t>b.dur-.3?easeOut((t-(b.dur-.3))/.3):0,y=H*.38;
   g.save();g.translate((1-inT)*W-out*W,0);
   // 上段・見出し・下段が重ならないよう、帯を広げて行間をとる
@@ -2152,6 +2155,25 @@ function drawBanner(){
   txt(b.main,W/2+3,y+17,jp?36:42,b.col,'center',jp?JP:EN,null,!jp);
   txt(b.main,W/2,y+14,jp?36:42,'#fff','center',jp?JP:EN,null,!jp);
   if(b.sub)txt(b.sub,W/2,y+50,14,'#d8dce8','center',JP,null,false,700);
+  g.restore();
+}
+// 血の筋を画面幅いっぱいに並べる（隙間なく覆うように少し重ねる）
+function seaDrips(){const n=30,a=[];for(let i=0;i<n;i++)a.push({x:(i+.5)*W/n+rand(-5,5),w:rand(9,30),v:rand(380,820),d:rand(0,.4)});return a}
+// 床100%のクリア演出：「血の海」を叩きつけ、続けて GOOD JOB!
+function drawSea(){
+  const s=G.sea;if(!s)return;const t=s.t,out=t>1.9?clamp(1-(t-1.9)/.4,0,1):1,y=H*.42;
+  g.save();g.globalAlpha=out;g.fillStyle='rgba(110,0,14,'+(.55*Math.min(1,t/.1))+')';g.fillRect(0,0,W,H);
+  // 上から垂れ落ちる血（太さ・速さ・出だしを1本ずつ変え、加速しながら下へ伸びる）
+  const gr=g.createLinearGradient(0,0,0,H);gr.addColorStop(0,'#3a0006');gr.addColorStop(.5,'#8a0016');gr.addColorStop(1,'#b0001e');
+  g.fillStyle=gr;g.fillRect(0,0,W,Math.min(1,t*6)*26);
+  for(const d of s.drips){const tt=Math.max(0,t-d.d);if(!tt)continue;const L=Math.min(H+40,d.v*tt*tt+30*Math.min(1,tt*6));
+    g.fillStyle=gr;g.fillRect(d.x-d.w/2,0,d.w,L);g.beginPath();g.ellipse(d.x,L,d.w*.62,d.w*.8,0,0,TAU);g.fill();
+    g.fillStyle='rgba(255,90,100,.28)';g.fillRect(d.x-d.w*.28,0,Math.max(2,d.w*.14),L-d.w*.4)}
+  glow(W/2,y-20,240,'#ff1030',.35);
+  const sc=t<.16?3-2*(t/.16):1;g.save();g.translate(W/2,y);g.rotate(-.05);g.scale(sc,sc);
+  txt('血の海',0,0,84,'#ff1a3c','center',JP,['#000',10],false,900,W-20);g.restore();
+  if(t>.45){const k=clamp((t-.45)/.15,0,1);g.save();g.globalAlpha=out*k;g.translate(W/2,y+80);g.scale(2-k,2-k);txt('GOOD JOB!',0,0,44,'#ffd54a','center',EN,['#000',7],true,undefined,W-20);g.restore()}
+  if(t>.7){g.globalAlpha=out*clamp((t-.7)/.2,0,1);txt('床をすべて血で染め上げた',W/2,y+122,16,'#fff','center',JP,['#000',4],false,700)}
   g.restore();
 }
 function drawCallout(){
@@ -2225,7 +2247,7 @@ function drawTitle(){
   g.globalAlpha=1;
 }
 function dim(a,col){g.fillStyle=`rgba(${col||'4,4,8'},${a})`;g.fillRect(0,0,W,H)}
-const RULES=[['塗る','敵を倒すと床に血。BLOODを100%にするとクリア'],['囲う','塗ったマスで囲むと、中が一気に染まる'],['掃除屋','塗った血を消しに来る。最優先で倒せ'],
+const RULES=[['塗る','敵を倒すと床に血。血溜まりを100%にするとクリア'],['囲う','塗ったマスで囲むと、中が一気に染まる'],['掃除屋','塗った血を消しに来る。最優先で倒せ'],
   ['弾き返し','敵の弾やロケットは、攻撃で跳ね返せる'],['ガード','正面だけ防いで回復。1回防ぐと解除（押し直し）'],['怨念解放','SOUL満タンで発動。周囲を一掃し床を染める'],
   ['仕掛け','ステージの物を殴ると発動する'],['お題・カード','お題達成でボーナス。ステージクリアで強化を選ぶ'],['ボス','近づくと掴んで投げてくる（ガード不能）']];
 function drawPause(){
@@ -2271,7 +2293,7 @@ function draw(){
   drawOverlays();
   drawHUD();drawTutPanel();
   if(touchMode&&state==='play')drawControls();
-  drawBanner();drawCallout();
+  drawSea();drawBanner();drawCallout();
   if(state==='pause')drawPause();else if(state==='over')drawOver();else if(state==='clear')drawClear();else if(state==='pick')drawPick();else if(state==='tutmenu')drawTutMenu();else if(state==='tutintro')drawTutIntro();else if(state==='stintro')drawStIntro();else if(state==='tutend')drawTutEnd();
 }
 function loop(ts){
