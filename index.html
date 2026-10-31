@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.16 2026-10-31';
+const VERSION='v0.18 2026-10-31';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -282,8 +282,8 @@ const STAGES=[
   {dur:.25,hitAt:.07,range:76,arc:2.7,dmg:1.6,kb:230,from:-1.6,to:1.5,stop:.05,shake:4},
   {dur:.25,hitAt:.07,range:76,arc:2.7,dmg:1.6,kb:230,from:1.6,to:-1.5,stop:.05,shake:4},
   {dur:.27,hitAt:.08,range:88,arc:3.0,dmg:2.2,kb:380,from:-2.1,to:1.9,stop:.06,shake:6},
-  // 4段目：全周の回転攻撃はやめ、正面への大振りの爪の引き裂き（範囲は前方約140°、吹き飛ばしも控えめ）
-  {dur:.36,hitAt:.13,range:98,arc:2.4,dmg:3.4,kb:480,from:-1.7,to:1.7,stop:.09,shake:8}
+  // 4段目：全周の回転攻撃（以前のものを復活。威力・範囲・吹き飛ばしは少し弱め）
+  {dur:.38,hitAt:.12,range:96,arc:TAU,dmg:3.2,kb:560,from:-.4,to:TAU+.6,stop:.1,shake:10}
 ];
 const TYPES={
   grunt:{r:13,hp:3.5,spd:82,dmg:10,val:100},
@@ -828,7 +828,7 @@ function updateGimmicks(dt){
     if(!P.dead&&dist(w.x,w.y,P.x,P.y)<w.r+P.r*.4)hurtPlayer(20,w.x,w.y-1)}}
   WARNS=WARNS.filter(w=>w.t<w.dur+1.2);
   // 衝撃波（強化カード）：広がる輪に触れた敵を吹き飛ばし、敵弾を弾き返す
-  for(const sh of SHOCKS){sh.r+=560*dt;
+  for(const sh of SHOCKS){sh.r+=560*dt;if(sh.vis)continue;
     for(const e of [...E]){if(sh.hit.has(e))continue;if(Math.abs(dist(sh.x,sh.y,e.x,e.y)-sh.r)<24+e.r){sh.hit.add(e);hitEnemy(e,1.26*powMul(),Math.atan2(e.y-sh.y,e.x-sh.x),400,{fin:true})}}
     for(const b of B)if(!b.friendly&&Math.abs(dist(sh.x,sh.y,b.x,b.y)-sh.r)<20)reflect(b)}
   SHOCKS=SHOCKS.filter(sh=>sh.r<sh.R);
@@ -1297,7 +1297,8 @@ function startAttack(ix,iy){
   const st=P.comboWin>0?P.stage:0,S=STAGES[st];
   // 自動追尾なし：入力方向（無ければ今向いている方向）へ攻撃し、その方向へ少しだけ踏み込む
   if(P.atkA!=null){P.face=P.atkA;P.atkA=null}else if(Math.hypot(ix,iy)>.3)P.face=Math.atan2(iy,ix);
-  P.lx=Math.cos(P.face)*140;P.ly=Math.sin(P.face)*140;P.lt=.1;
+  // 4段目の回転攻撃は踏み込まず、その場で回る（背後の敵にも届くように）
+  if(st===3){P.lx=P.ly=0;P.lt=0}else{P.lx=Math.cos(P.face)*140;P.ly=Math.sin(P.face)*140;P.lt=.1}
   P.atk={st,S,t:0,dur:S.dur,hitAt:S.hitAt,hit:false,queued:false,crit:P.crit};
   P.crit=false;P.stage=(st+1)%STAGES.length;P.atkBuf=0;
   SFX.swing(st);
@@ -1320,7 +1321,8 @@ function doHit(a){
   for(const pr of PROPS){const d=dist(P.x,P.y,pr.x,pr.y);if(d>range+pr.r)continue;const an=Math.atan2(pr.y-P.y,pr.x-P.x);
     if(S.arc<TAU&&Math.abs(angDiff(P.face,an))>S.arc/2&&d>pr.r+P.r+4)continue;hitProp(pr,an);n++}
   if(n>0){G.hitstop=Math.max(G.hitstop,Math.min(.025,G.chain/2400)+S.stop+(a.crit?.08:0)+Math.min(n-1,4)*.012);addShake(S.shake*(a.crit?1.6:1));if(fin)G.zoom=Math.max(G.zoom,.035)}
-  if(a.st===3&&lv('shock'))SHOCKS.push({x:P.x,y:P.y,r:range*.6,R:range+63,hit:new Set()});
+  // 4段目は見た目の衝撃波を必ず出す（当たり判定は回転攻撃のみ）。強化カード「衝撃波」があれば、さらに遠くまで届く本物の衝撃波
+  if(a.st===3)SHOCKS.push(lv('shock')?{x:P.x,y:P.y,r:range*.6,R:range+63,hit:new Set()}:{x:P.x,y:P.y,r:range*.4,R:range+14,hit:new Set(),vis:true});
   if(a.crit)popText(P.x,P.y-40,'CRITICAL!!','#ffd54a',20,.8);
 }
 // 怨念解放：一撃の必殺技。周囲の雑魚を一掃し、敵弾を弾き返し、足元一帯を一気に血で染める（持続する強化は無し）
