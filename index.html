@@ -8,7 +8,7 @@
 <title>Dead Girl</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{width:100%;height:100%;overflow:hidden;background:#05060a;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;overscroll-behavior:none;background:#05060a;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,#1a1424 0%,#05060a 70%)}
 canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
 #rot{display:none;position:fixed;inset:0;z-index:9;background:#05060a;color:#fff;flex-direction:column;align-items:center;justify-content:center;gap:12px;font:900 22px sans-serif;text-align:center;padding:16px}
@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.26 2026-11-01';
+const VERSION='v0.27 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -1231,8 +1231,20 @@ cv.addEventListener('pointerdown',ev=>{
    ・右半分を長押し   → 正面ガード（1回防ぐと解除、指を離して押し直すと再び。向きは左手の移動で変えられる）
    ・SOUL満タン中に光る主人公をタップ（または画面上部をタップ）→ 怨念解放 */
 const TOUCH=new Map(),TOUCH_HOLD=230,STICK_R=44;
-// 縦向き固定を試す（Android の一部ブラウザ・ホーム画面アプリでのみ効く。iPhone の Safari は非対応なので表示で案内する）
-let lockTried=false;function lockPortrait(){if(lockTried)return;lockTried=true;try{const o=screen.orientation;if(o&&o.lock)o.lock('portrait').catch(()=>{})}catch(e){}}
+// スマホでは全画面にして、画面端スワイプの「戻る」で裏のアプリが見えたりページを離れたりするのを防ぐ
+// ・全画面中の「戻る」は全画面の解除だけで済む（ページは離れない）。解除されたらポーズし、次のタップで全画面に戻す
+// ・全画面にできない端末（iPhone の Safari など）向けに履歴を1つ積み、「戻る」1回目はポーズで受け止める
+// 縦向き固定は Android でも全画面中しか効かないので、全画面になった後に試す。iPhone の Safari は非対応なので表示で案内する
+let fsTry=0,histTrap=false;
+function lockPortrait(){
+  try{if(!histTrap){history.pushState({dg:1},'');histTrap=true}}catch(e){}
+  const d=document.documentElement,now=performance.now();
+  if(document.fullscreenElement||!d.requestFullscreen||now-fsTry<1000)return;
+  fsTry=now;
+  try{d.requestFullscreen({navigationUI:'hide'}).then(()=>{try{const o=screen.orientation;if(o&&o.lock)o.lock('portrait').catch(()=>{})}catch(e){}}).catch(()=>{})}catch(e){}
+}
+addEventListener('popstate',()=>{histTrap=false;pauseGame('back')});
+document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement)pauseGame('back')});
 function checkTouchHold(){
   const now=performance.now();
   if(inp.stick!=null&&!TOUCH.has(inp.stick)){inp.stick=null;inp.tx=inp.ty=0}
@@ -2314,7 +2326,7 @@ function drawPause(){
   RULES.forEach(([h,b],i)=>{const y=172+i*31;txt(h,28,y,13,'#ff4d6d','left',JP,null,false,900);txt(b,136,y,12,'#e6e9f0','left',JP,null,false,700)});
   txt(touchMode?'タップで再開':'P / Enter で再開',W/2,478,15,'#c9cfdc','center',JP,null,false,700);
   button(SCR.ptitle,'タイトルへ戻る','rgba(60,20,30,.9)');
-  const why={btn:'ポーズボタン',key:'キー操作',blur:'画面のフォーカスが外れた',hidden:'アプリ切替・画面オフ',rotate:'画面の回転',pad:'コントローラー'}[G.pauseWhy];
+  const why={btn:'ポーズボタン',key:'キー操作',blur:'画面のフォーカスが外れた',hidden:'アプリ切替・画面オフ',rotate:'画面の回転',pad:'コントローラー',back:'戻る操作（画面端のスワイプ）'}[G.pauseWhy];
   if(why)txt('停止の理由：'+why,W/2,H-40,11,'#8b93a8','center',JP,null,false,700);
 }
 function drawStats(y){
