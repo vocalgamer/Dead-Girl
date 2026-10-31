@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.23 2026-11-01';
+const VERSION='v0.26 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -49,7 +49,8 @@ const decC=document.createElement('canvas'),decG=decC.getContext('2d');
 let decReady=false;
 function resize(){
   // スマホを横にしたらプレイを止める（横向きの間は「縦にして」の表示で覆う）
-  if(touchMode&&innerWidth>innerHeight&&typeof pauseGame==='function')try{pauseGame()}catch(e){}
+  // 「縦にして」の表示が実際に出る条件（スマホの横向き）と揃える。タブレット等の横長画面では止めない
+  if(touchMode&&window.matchMedia&&matchMedia('(orientation:landscape) and (pointer:coarse) and (max-height:600px)').matches&&typeof pauseGame==='function')try{pauseGame('rotate')}catch(e){}
   const s=Math.min(innerWidth/W,innerHeight/H),dpr=Math.min(window.devicePixelRatio||1,2);
   const cw=Math.round(W*s),ch=Math.round(H*s);
   cv.style.width=cw+'px';cv.style.height=ch+'px';
@@ -467,7 +468,7 @@ function paint(x,y,r,amt){
     const i=cy*GC+cx;if(DONE[i])continue;const t=tileRect(i);
     if(Math.hypot(x-clamp(x,t.x,t.x+t.w),y-clamp(y,t.y,t.y+t.h))>r)continue;
     const inT=x>=t.x&&x<t.x+t.w&&y>=t.y&&y<t.y+t.h;
-    PAINT[i]+=amt*PAINT_MUL*(inT?1:.5)*(painted/GN>=.85?2:1)*(1+Math.min(1,G.chain/40));if(PAINT[i]>=1)fillTile(i);
+    PAINT[i]+=amt*PAINT_MUL*(inT?1:.5)*(painted/GN>=.85?2:1)*(1+Math.min(1.2,G.chain/20));if(PAINT[i]>=1)fillTile(i); // 連続撃破ほど塗りが速い（20連で2倍、24連で最大2.2倍）
   }
 }
 function fillTile(i){
@@ -584,7 +585,8 @@ function killEnemy(e,ang,spd,o){
   if(G.cause==='rage')misAdd('rage');
   if(lv('drain'))P.hp=Math.min(P.maxhp,P.hp+1.4*lv('drain'));
   if(o.fall){for(let i=0;i<8;i++){const a=rand(0,TAU),v=rand(30,120),l=rand(.3,.6);fx({k:'smoke',x:e.x,y:e.y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:l,max:l,sz:rand(8,14)})}}
-  else{splat(e.x,e.y,e.r*1.5,ang);bloodBurst(e.x,e.y,ang,18,440)}
+  // 連続撃破ほど血しぶきが大きくなる（25連で最大1.8倍）
+  else{const cs=1+Math.min(.8,G.chain/25);splat(e.x,e.y,e.r*1.5*cs,ang);bloodBurst(e.x,e.y,ang,Math.round(18*cs),440*cs)}
   if(e.type==='cleaner')misAdd('cleaner');
   {
     if(!o.fall)CORPSES.push({e,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,rot:0,vr:rand(-16,16),t:0,hit:new Set()});
@@ -882,7 +884,9 @@ function drawGimmicks(){
       g.fillStyle='#fff3b0';g.fillRect(24,-12,3,5);g.fillRect(24,7,3,5);g.fillStyle='#ff3030';g.fillRect(-27,-12,3,5);g.fillRect(-27,7,3,5);g.restore()}
     else if(pr.k==='ext'){if(pr.used)continue;shadow(pr.x,pr.y+12,9);rr(pr.x-7,pr.y-14,14,28,5,'#d0201a');rr(pr.x-4,pr.y-20,8,6,2,'#222');g.strokeStyle='#222';g.lineWidth=2;g.beginPath();g.moveTo(pr.x+3,pr.y-18);g.quadraticCurveTo(pr.x+14,pr.y-16,pr.x+11,pr.y-4);g.stroke()}
   }
-  for(const sh of SHOCKS){const f=1-sh.r/sh.R;g.strokeStyle=`rgba(255,230,140,${.85*f})`;g.lineWidth=8*f+2;g.beginPath();g.arc(sh.x,sh.y,sh.r,0,TAU);g.stroke()}
+  // 4段目の見た目の衝撃波は紫の二重の輪（強化カードの本物の衝撃波は金色）
+  for(const sh of SHOCKS){const f=1-sh.r/sh.R,c=sh.vis?'200,90,255':'255,230,140';g.strokeStyle=`rgba(${c},${.85*f})`;g.lineWidth=8*f+2;g.beginPath();g.arc(sh.x,sh.y,sh.r,0,TAU);g.stroke();
+    if(sh.vis){g.strokeStyle=`rgba(255,255,255,${.6*f})`;g.lineWidth=2;g.beginPath();g.arc(sh.x,sh.y,sh.r*.82,0,TAU);g.stroke()}}
 }
 function drawSmokes(){
   for(const sm of SMOKES){const a=Math.min(1,sm.t/.8)*.5;
@@ -1196,12 +1200,13 @@ function screenAction(p,key){
 }
 // 指の状態をすべて捨てる（離した通知が届かなかった指が残って、移動できなくなるのを防ぐ）
 function resetTouch(){inp.stick=null;inp.tx=inp.ty=0;inp.atkMouse=false;inp.guardMouse=false;inp.guardTouch=null;TOUCH.clear()}
-function pauseGame(){if(state==='play'&&!P.dead){state='pause';stateT=0;resetTouch()}}
+// why：止まった理由（ポーズ画面の下に小さく出す。意図しない停止の原因を突き止めるため）
+function pauseGame(why){if(state==='play'&&!P.dead){state='pause';stateT=0;G.pauseWhy=why||'';resetTouch()}}
 cv.addEventListener('pointerdown',ev=>{
   ev.preventDefault();const p=toLocal(ev);
   if(ev.pointerType==='touch'||ev.pointerType==='pen'){touchMode=true;lockPortrait()}
   if(state!=='play'){screenAction(p);return}
-  if(inC(p,UI.pause,6)){pauseGame();return}
+  if(inC(p,UI.pause,6)){pauseGame('btn');return}
   if(inC(p,UI.mute,6)){toggleMute();return}
   try{cv.setPointerCapture(ev.pointerId)}catch(e){}
   if(ev.pointerType==='mouse'){mouseBtn(ev);return}
@@ -1287,14 +1292,16 @@ addEventListener('keydown',ev=>{
     else if(k==='enter'||k===' '||k==='j'||k==='z'||(state==='pause'&&k==='p'))screenAction(null,'go');
     return;
   }
-  if(k==='p'||k==='escape'){pauseGame();return}
+  if(k==='p'||k==='escape'){pauseGame('key');return}
   if(k==='m')toggleMute();
   if(K_ATK.includes(k))pressAttack();
   if(K_RAGE.includes(k))inp.ragePress=true;
 });
 addEventListener('keyup',ev=>{keys.delete(ev.key.toLowerCase());updKeys()});
-addEventListener('blur',()=>{keys.clear();updKeys();pauseGame()});
-document.addEventListener('visibilitychange',()=>{if(document.hidden)pauseGame()});
+// スマホでは画面端からのスワイプ（戻る操作など）でもフォーカスが外れるため、タッチ操作中はフォーカス外れでは止めない
+// （本当にアプリを切り替えた・画面を消したときは visibilitychange で止まる）
+addEventListener('blur',()=>{keys.clear();updKeys();if(!touchMode)pauseGame('blur')});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)pauseGame('hidden')});
 addEventListener('resize',resize);
 let padPrev={};
 function pollPad(){
@@ -1311,7 +1318,7 @@ function pollPad(){
   inp.padAtk=cur.atk;inp.padGuard=b(4)||b(6);
   if(cur.atk&&!padPrev.atk){touchMode=false;if(state==='play')pressAttack();else screenAction(null,'go')}
   if(cur.rage&&!padPrev.rage&&state==='play')inp.ragePress=true;
-  if(cur.start&&!padPrev.start){if(state==='play')pauseGame();else if(state==='pause')state='play'}
+  if(cur.start&&!padPrev.start){if(state==='play')pauseGame('pad');else if(state==='pause')state='play'}
   padPrev=cur;
 }
 
@@ -1347,6 +1354,7 @@ function doHit(a){
   // 4段目は見た目の衝撃波を必ず出す（当たり判定は回転攻撃のみ）。強化カード「衝撃波」があれば、さらに遠くまで届く本物の衝撃波
   if(a.st===3)SHOCKS.push(lv('shock')?{x:P.x,y:P.y,r:range*.6,R:range+63,hit:new Set()}:{x:P.x,y:P.y,r:range*.4,R:range+14,hit:new Set(),vis:true});
   if(a.crit)popText(P.x,P.y-40,'CRITICAL!!','#ffd54a',20,.8);
+  if(a.st===3){G.flash=Math.max(G.flash,n?.22:.12);G.flashCol='170,60,255'} // 4段目は画面が一瞬紫に光る
 }
 // 怨念解放：一撃の必殺技。周囲の雑魚を一掃し、敵弾を弾き返し、足元一帯を一気に血で染める（持続する強化は無し）
 function tryRage(){
@@ -1688,15 +1696,18 @@ function update(rdt){
   }
   // corpses (bowling)
   for(const c of CORPSES){
-    c.t+=dt;const e=c.e;e.x+=c.vx*dt;e.y+=c.vy*dt;const f=Math.exp(-4.2*dt);c.vx*=f;c.vy*=f;
+    c.t+=dt;const e=c.e;e.x+=c.vx*dt;e.y+=c.vy*dt;const f=Math.exp(-3*dt);c.vx*=f;c.vy*=f; // 死体は遠くまで滑る
     const sp=Math.hypot(c.vx,c.vy);c.rot+=c.vr*dt*Math.min(1,sp/300);
-    if(sp>260)for(const o of [...E]){if(c.hit.has(o))continue;if(dist(e.x,e.y,o.x,o.y)<e.r+o.r){c.hit.add(o);G.score+=Math.round(50*G.mult);popText(o.x,o.y-26,'CRASH!','#ffd54a',13,.6);misAdd('crash');hitEnemy(o,2.5,Math.atan2(o.y-e.y,o.x-e.x),sp*.85,{fin:sp>550});c.vx*=.6;c.vy*=.6}}
+    // ビリヤード：滑る死体が敵に当たると吹き飛ばす。勢いがあれば雑魚は一撃で倒れ、さらに次の敵へ連鎖する
+    if(sp>220)for(const o of [...E]){if(c.hit.has(o))continue;if(dist(e.x,e.y,o.x,o.y)<e.r+o.r+6){c.hit.add(o);G.score+=Math.round(50*G.mult);popText(o.x,o.y-26,'CRASH!','#ffd54a',13,.6);misAdd('crash');hitEnemy(o,sp>450?3.8:2.5,Math.atan2(o.y-e.y,o.x-e.x),sp*.85,{fin:sp>550});c.vx*=.6;c.vy*=.6}}
     let wall=false;
     if(e.x<AX0+e.r){e.x=AX0+e.r;c.vx=Math.abs(c.vx)*.4;wall=true}else if(e.x>AX1-e.r){e.x=AX1-e.r;c.vx=-Math.abs(c.vx)*.4;wall=true}
     if(e.y<AY0+e.r){e.y=AY0+e.r;c.vy=Math.abs(c.vy)*.4;wall=true}else if(e.y>AY1-e.r){e.y=AY1-e.r;c.vy=-Math.abs(c.vy)*.4;wall=true}
-    if(wall&&sp>320){splat(e.x,e.y,e.r*1.3,Math.atan2(c.vy,c.vx));addShake(5);SFX.wall();if(lv('quake')&&!c.boomed){c.boomed=true;explode(e.x,e.y,49,false)}}
+    if(wall&&sp>320){splat(e.x,e.y,e.r*2.1,Math.atan2(c.vy,c.vx));addShake(7);SFX.wall();popText(e.x,e.y-24,'SPLASH!','#ff4d6d',14,.6);if(lv('quake')&&!c.boomed){c.boomed=true;explode(e.x,e.y,49,false)}}
     // 吹き飛ぶ死体は床に血の筋を引きずる
-    if(sp>110){c.sm=(c.sm||0)+sp*dt;if(c.sm>9){c.sm=0;decG.fillStyle='rgba(100,0,14,.45)';decG.beginPath();decG.arc(e.x+rand(-3,3),e.y+rand(-3,3),e.r*rand(.35,.6),0,TAU);decG.fill();paint(e.x,e.y,e.r*(sp>600?.9:.6),sp>600?.3:.12)}}
+    // 途切れない太い血の筋を描き、通ったマスをしっかり塗る（倒す向きで塗る場所を狙える）
+    if(sp>110){if(c.lx!=null){decG.strokeStyle='rgba(105,0,15,.5)';decG.lineCap='round';decG.lineWidth=e.r*(sp>500?1.1:.8);decG.beginPath();decG.moveTo(c.lx,c.ly);decG.lineTo(e.x,e.y);decG.stroke()}
+      c.lx=e.x;c.ly=e.y;c.sm=(c.sm||0)+sp*dt;if(c.sm>9){c.sm=0;paint(e.x,e.y,e.r*.7,sp>500?.36:.2)}}else c.lx=null;
     if(sp<40&&!c.landed){c.landed=true;splat(e.x,e.y,e.r,rand(0,TAU))}
   }
   CORPSES=CORPSES.filter(c=>c.t<1.2);
@@ -2081,6 +2092,7 @@ function drawSlash(){
   const S=a.S,p=clamp(a.t/a.dur,0,1),e=1-Math.pow(1-Math.min(1,p*1.6),3);
   const a0=P.face+S.from,a1=P.face+S.from+(S.to-S.from)*e,R=S.range*(1+.105*lv('reach'));
   const alpha=p<.6?1:1-(p-.6)/.4,dir=Math.sign(S.to-S.from)||1,tail=a1-dir*Math.min(Math.abs(a1-a0),2.6);
+  if(a.st===3){drawSpin(a,p,a0,a1,R,alpha);return}
   const col=a.crit?'255,210,80':'255,70,100';
   g.save();g.globalCompositeOperation='lighter';
   g.fillStyle=`rgba(${col},${.38*alpha})`;g.beginPath();g.arc(P.x,P.y,R,tail,a1,dir<0);g.arc(P.x,P.y,R*.42,a1,tail,dir>0);g.closePath();g.fill();
@@ -2088,6 +2100,24 @@ function drawSlash(){
   // 爪痕：3本の平行な斬撃
   const span=Math.min(Math.abs(a1-a0),1.5);
   for(const k of [.62,.78,.94]){g.strokeStyle=`rgba(255,255,255,${.85*alpha})`;g.lineWidth=k===.78?3.5:2.2;g.beginPath();g.arc(P.x,P.y,R*k,a1-dir*span,a1,dir<0);g.stroke()}
+  g.restore();
+}
+
+// 4段目の回転斬り：紫の怨念の渦＋残像の輪＋白熱した刃先＋金の爪痕＋外へ飛ぶ棘
+function drawSpin(a,p,a0,a1,R,alpha){
+  const sweep=Math.min(a1-a0,TAU*.98),tail=a1-sweep;
+  g.save();g.globalCompositeOperation='lighter';
+  glow(P.x,P.y,R*1.15,'#b040ff',.32*alpha);
+  // 残像の輪：紫→赤の3層を少しずつ遅らせて重ねる
+  for(let k=0;k<3;k++){const rr_=R*(1-k*.13),t0=Math.min(a1,tail+k*.35);g.fillStyle=`rgba(${k===1?'255,40,90':'180,60,255'},${alpha*(.42-k*.1)})`;
+    g.beginPath();g.arc(P.x,P.y,rr_,t0,a1);g.arc(P.x,P.y,rr_*.45,a1,t0,true);g.closePath();g.fill()}
+  // 刃先（白熱）
+  const lead=Math.min(sweep,.8);g.fillStyle=`rgba(255,240,255,${.55*alpha})`;g.beginPath();g.arc(P.x,P.y,R*1.02,a1-lead,a1);g.arc(P.x,P.y,R*.72,a1,a1-lead,true);g.closePath();g.fill();
+  // 金の爪痕（3本）
+  const span=Math.min(sweep,2.2);for(const k of [.6,.78,.96]){g.strokeStyle=`rgba(255,215,90,${.9*alpha})`;g.lineWidth=k===.78?4:2.5;g.beginPath();g.arc(P.x,P.y,R*k,a1-span,a1);g.stroke()}
+  // 振り切る瞬間、外側へ棘が飛び散る
+  if(p>.2&&p<.75){const q=(p-.2)/.55,n=14;g.strokeStyle=`rgba(220,150,255,${(1-q)*.9})`;g.lineWidth=3*(1-q)+1;g.beginPath();
+    for(let i=0;i<n;i++){const an=i/n*TAU+a0*.5,r0=R*(.95+q*.2),r1=R*(1.1+q*.45);g.moveTo(P.x+Math.cos(an)*r0,P.y+Math.sin(an)*r0);g.lineTo(P.x+Math.cos(an)*r1,P.y+Math.sin(an)*r1)}g.stroke()}
   g.restore();
 }
 
@@ -2284,6 +2314,8 @@ function drawPause(){
   RULES.forEach(([h,b],i)=>{const y=172+i*31;txt(h,28,y,13,'#ff4d6d','left',JP,null,false,900);txt(b,136,y,12,'#e6e9f0','left',JP,null,false,700)});
   txt(touchMode?'タップで再開':'P / Enter で再開',W/2,478,15,'#c9cfdc','center',JP,null,false,700);
   button(SCR.ptitle,'タイトルへ戻る','rgba(60,20,30,.9)');
+  const why={btn:'ポーズボタン',key:'キー操作',blur:'画面のフォーカスが外れた',hidden:'アプリ切替・画面オフ',rotate:'画面の回転',pad:'コントローラー'}[G.pauseWhy];
+  if(why)txt('停止の理由：'+why,W/2,H-40,11,'#8b93a8','center',JP,null,false,700);
 }
 function drawStats(y){
   const rows=[['SCORE',G.score],['KILLS',G.kills],['MAX CHAIN',G.maxChain],['STAGE',G.wave]];
