@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.22 2026-10-31';
+const VERSION='v0.23 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -1056,6 +1056,8 @@ function updateTut(dt){
   if(T_.doneAt!=null&&T_.t>=T_.doneAt){T_.doneAt=null;T_.rep=(T_.rep||0)+1;
     // 3回成功するまでは、その場で準備をやり直して続ける
     if(T_.rep<TUT_REPS){callout('ナイス！','あと'+(TUT_REPS-T_.rep)+'回','#ffd54a');G.callout.dur=1.2;SFX.ui();tutSetup(T_.step);return}
+    // 最後の手順は「タイトルへ／もう一度」を出さず、そのまま締めのメッセージへ
+    if(T_.step>=TUT_STEPS){tutChoice(true);return}
     state='tutmenu';stateT=0;SFX.just();return}
   if(T_.step===1&&painted>=T_.base+3&&T_.t>1)tutComplete(1,.3);
   // 練習相手を先に倒してしまったら出し直す
