@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.18 2026-10-31';
+const VERSION='v0.19 2026-10-31';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -1777,6 +1777,8 @@ function girlPose(face){
   const a=P.atk,sp=Math.hypot(P.vx,P.vy);
   if(P.dead){anim='die';idx=G.deathT<.35?0:1}
   else if(a){anim='atk';idx=Math.min(2,Math.floor(clamp(a.t/a.dur,0,.999)*3.4));
+    // 4段目の回転攻撃：斬撃の軌跡と同じ速さで体の向きを一周させる
+    if(a.st===3){const p=clamp(a.t/a.dur,0,1),e=1-Math.pow(1-Math.min(1,p*1.6),3);face=P.face+a.S.from+(a.S.to-a.S.from)*e;dir=dirOf(face)}
     // 素材の攻撃モーションはどの行も右向きなので、左は反転、上下は専用行を使う
     if(dir==='left'){dir='right';flip=true}else if(dir==='down'||dir==='up')flip=Math.cos(face)<0}
   else if(sp>30&&!P.guard){anim='run';idx=Math.floor(P.walk*.55)}
