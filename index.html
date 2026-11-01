@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.88 2026-11-02';
+const VERSION='v0.89 2026-11-02';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -347,6 +347,9 @@ function initAudio(){
   noiseBuf=AC.createBuffer(1,AC.sampleRate*2,AC.sampleRate);const d=noiseBuf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
   nextNote=AC.currentTime+.1;setInterval(scheduler,25);
 }
+// 残響つきの通り道：素の音はそのまま、同時に0.13秒ずつ遅れて小さくなるこだまを返す（銃声・弾き返しの余韻用）
+function echoBus(){if(!AC)return null;if(AC._echo)return AC._echo;const bus=AC.createGain(),d=AC.createDelay(1),fb=AC.createGain(),lp=AC.createBiquadFilter(),wet=AC.createGain();
+  d.delayTime.value=.13;fb.gain.value=.36;lp.type='lowpass';lp.frequency.value=2600;wet.gain.value=.45;bus.connect(sfxG);bus.connect(d);d.connect(lp);lp.connect(fb);fb.connect(d);lp.connect(wet);wet.connect(sfxG);return AC._echo=bus}
 function tone(f0,f1,dur,type,vol,at,out){
   if(!AC)return;const t0=at||AC.currentTime,o=AC.createOscillator(),gn=AC.createGain();
   o.type=type||'sine';o.frequency.setValueAtTime(f0,t0);if(f1&&f1!==f0)o.frequency.exponentialRampToValueAtTime(f1,t0+dur);
@@ -366,11 +369,16 @@ const SFX={
   hit(big){if(!can('hit',28))return;const hp_=Math.min(G.chain,60)*3;tone((big?170:200)+hp_,42,big?.24:.13,'sine',big?1:.7);noise(.05,big?.5:.35,'highpass',2600);if(big)noise(.2,.45,'lowpass',2200,250)},
   kill(c){if(!can('kill',30))return;tone(120,32,.32,'triangle',.7);noise(.24,.5,'lowpass',2800,300);noise(.08,.3,'bandpass',900,0,0,0,3);tone(500+Math.min(c,60)*18,0,.06,'square',.05)},
   dash(){noise(.18,.28,'highpass',1000,5200);tone(300,1100,.12,'sine',.07)}, // 突進ボスの溜め音
-  // 銃声：「パン！」と鋭く割れる音（高い破裂）＋胴鳴り（低い衝撃）＋短い残響。big（狙撃・散弾など）は重く長く
-  gun(big){if(!can('gun',45))return;const t=now(),k=big?1.3:1;
-    noise(.035,1*k,'highpass',3000,1600,t,0,.7);noise(.17*k,.85,'lowpass',2600,280,t,0,.9);tone(160,42,.2*k,'sine',.75*k,t);
-    noise(.35*k,.24,'bandpass',950,300,t+.07,0,.6);noise(.25*k,.11,'bandpass',750,260,t+.2,0,.6)},
-  // バズーカの発射：「シュポッ」という低い発射音と、噴射の「シューッ」
+  // 銃声：「ばきゅーーん！」。鋭い破裂（ば）＋低い衝撃（きゅ）のあと、弾がうなりながら遠ざかる高い音（ーーん）が下がっていく。
+  // 残響つきの通り道（echoBus）に流して、少し余韻を残す。heavy（狙撃・散弾）は重く長く
+  gun(big){if(!can('gun',45))return;const t=now(),k=big?1.3:1,bus=echoBus();
+    noise(.03,1*k,'highpass',3200,1700,t,bus,.7);noise(.16*k,.85,'lowpass',2600,260,t,bus,.9);tone(170,42,.2*k,'sine',.7*k,t,bus);
+    // 「きゅーーん」：高い音がビブラートしながら下がる
+    const o=AC.createOscillator(),lf=AC.createOscillator(),lg=AC.createGain(),gn=AC.createGain(),d=.55*k,f0=rand(2300,2700)/(big?1.25:1);
+    o.type='triangle';o.frequency.setValueAtTime(f0,t+.02);o.frequency.exponentialRampToValueAtTime(f0*.3,t+.02+d);
+    lf.frequency.value=rand(22,30);lg.gain.value=f0*.02;lf.connect(lg);lg.connect(o.frequency);
+    gn.gain.setValueAtTime(.0001,t);gn.gain.exponentialRampToValueAtTime(.12*k,t+.04);gn.gain.exponentialRampToValueAtTime(.0001,t+.02+d);
+    o.connect(gn);gn.connect(bus);o.start(t);lf.start(t);o.stop(t+d+.1);lf.stop(t+d+.1)},  // バズーカの発射：「シュポッ」という低い発射音と、噴射の「シューッ」
   rocket(){if(!can('rocket',80))return;const t=now();noise(.09,.7,'lowpass',1400,200,t,0,1);tone(110,45,.25,'sine',.6,t);noise(.7,.32,'highpass',2600,1100,t+.03,0,.7);noise(.5,.16,'bandpass',800,400,t+.05,0,.8)},
   // 物を投げる音：「ヒュッ」と風を切る
   toss(){if(!can('toss',60))return;noise(.16,.28,'bandpass',2400,700,0,0,1.6)},
@@ -401,12 +409,12 @@ const SFX={
     [[440,.4],[392,1.0],[349.23,1.6],[329.63,2.2]].forEach(([f,at],i)=>{tone(f,f,i===3?2.8:1.4,'triangle',.12,now(at));tone(f*2,f*2,.9,'sine',.025,now(at))});
   },
   // 弾き返し：短い金属音のあと、ジェット機が通り過ぎるような風切り音（控えめ）
-  // 弾き返し：「シャキーン！」。刃が弾をこする「シャッ」（高く駆け上がる擦れ音）のあとに、金属が鳴る「キーン」という余韻。
-  // 余韻は少しずつずらした高い音を重ねて、うなりのある金属らしい響きにする。PERFECTは明るく、長く響かせる
-  reflect(pf){if(!can('rf',30))return;const t=now(),L=pf?1.25:.85;
-    noise(.11,.55,'highpass',1800,7500,t,0,1.2);noise(.06,.3,'bandpass',5200,3000,t+.02,0,2);tone(2400,1800,.05,'square',.05,t);
-    for(const [fq,v] of [[2650,.13],[2680,.1],[3980,.08],[5310,.05]].concat(pf?[[6620,.04],[1325,.05]]:[]))tone(fq,fq*.995,L,'sine',v,t+.06);
-    noise(.4,.1,'lowpass',500,150,t+.03)},
+  // 弾き返し：「シャキーン！」を金属寄りに。刃と弾がぶつかる硬い打撃音（カキッ）と擦れ（シャッ）のあと、
+  // 打たれた鉄の棒のように、整数倍でない高さの音（1：1.57：2.76：5.40）が重なって長く鳴る。高い音ほど早く消え、少し揺らいでうなる。PERFECTは長く明るく
+  reflect(pf){if(!can('rf',30))return;const t=now(),L=pf?1.4:1,bus=echoBus(),f=pf?1750:1500;
+    noise(.02,.9,'highpass',5000,3500,t,bus,1);tone(3200,2600,.03,'square',.09,t,bus);noise(.1,.4,'highpass',2500,8000,t+.01,bus,1.4);
+    for(const [r,v,dl] of [[1,.16,1],[1.57,.09,.8],[2.76,.08,.6],[5.4,.05,.35],[1.006,.12,1]])tone(f*r,f*r*.997,L*dl,'sine',v,t+.012,bus);
+    if(pf)tone(f*.5,f*.5,L*.9,'sine',.07,t+.012,bus)},
   alarm(){for(let i=0;i<3;i++){tone(880,880,.13,'square',.08,now(i*.3));tone(587,587,.13,'square',.08,now(i*.3+.15))}},
   wall(){if(!can('wall',40))return;tone(70,40,.2,'sine',.8);noise(.12,.5,'lowpass',900)},
   ui(){tone(660,990,.08,'triangle',.12)},
