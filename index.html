@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.66 2026-11-01';
+const VERSION='v0.67 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -491,7 +491,7 @@ function resetRun(){
     hitstop:0,slowT:0,slowScale:1,ts:1,shake:0,zoom:0,aimer:null,shotGap:0,crests:[],cleanT:8,seenSub:{},soulReady:false,waveTime:0,flash:0,flashCol:'255,40,70',time:0,
     toSpawn:0,spawnT:0,breakT:0,addsT:0,banner:null,callout:null,boss:null,bossInfo:null,bossPending:0,isBossWave:false,
     phase:'fight',tutMode:false,endless:false,deathT:0,endT:0,newBest:false,tut:null,propSpot:0,rush:0,rushT:99,res:null,gim:null,intro:[],cards:null,cardSel:0,beamT:0,cause:null,
-    runSeed:1,revived:false,bonus:null,bonusFor:0,pickBonus:false,metaPaid:0,metaGain:0,pickAgain:false,pickAdUsed:false});
+    runSeed:1,revived:false,bonus:null,bonusFor:0,pickBonus:false,metaPaid:0,metaGain:0,pickAdUsed:false,lastPick:null});
   Object.assign(P,{x:W/2,y:540,vx:0,vy:0,kx:0,ky:0,lx:0,ly:0,lt:0,r:14,hp:100,hpLag:100,maxhp:100,face:-Math.PI/2,
     atk:null,stage:0,comboWin:0,recover:0,atkBuf:0,atkA:null,inv:0,blinkT:0,
     crit:false,walk:0,trail:[],ghostT:0,dead:false,guard:false,guardLock:false,guardFx:0});
@@ -1192,10 +1192,26 @@ function pickCard(i){
   if(state!=='pick'||stateT<.5)return;const c=G.cards[i];if(!c)return;
   UP[c.id]=lv(c.id)+1;if(c.id==='vital'){P.maxhp+=18;P.hp=Math.min(P.maxhp,P.hp+18)}
   if(c.id==='r_heal')P.hp=P.maxhp;if(c.id==='r_soul')G.soul=Math.min(100,G.soul+60);
-  if(G.pickAgain){G.pickAgain=false;SFX.just();popText(W/2,AY0+60,c.name+' 獲得','#ffd54a',16,1.2);openPick(true);return}
-  // 中ボスを倒した後は、次のステージの前にボーナス面を1回挟む
-  if(!G.tutMode&&bossFor(G.wave)&&G.bonusFor!==G.wave){G.bonusFor=G.wave;SFX.just();startBonus(bonusKind(G.wave));return}
-  G.pickBonus=false;state='play';stateT=0;SFX.just();startWave(G.wave+1);popText(P.x,P.y-50,c.name+' 獲得','#ffd54a',16,1.2);
+  G.lastPick=c;SFX.just();
+  // 1枚選んだあとで「動画を見てもう1枚選ぶか」を聞く（ステージクリアごとに1回だけ）
+  if(!G.pickAdUsed&&!G.tutMode){state='offer';stateT=0;return}
+  afterPick();
+}
+// カード選びを終えて先へ進む。中ボスを倒した後は、次のステージの前にボーナス面を1回挟む
+function afterPick(){
+  const c=G.lastPick;
+  if(!G.tutMode&&bossFor(G.wave)&&G.bonusFor!==G.wave){G.bonusFor=G.wave;startBonus(bonusKind(G.wave));return}
+  G.pickBonus=false;state='play';stateT=0;startWave(G.wave+1);if(c)popText(P.x,P.y-50,c.name+' 獲得','#ffd54a',16,1.2);
+}
+// 「もう1枚」の確認：獲得したカードを見せ、動画を見るか、そのまま次へ進むかを選ぶ
+function drawOffer(){
+  const a=clamp(stateT/.3,0,1),c=G.lastPick;dim(.86*a);g.globalAlpha=a;
+  txt('獲 得',W/2,236,16,'#ffd54a','center',JP,null,false,900);
+  if(c){const x=35,w=W-70,y=258;rr(x,y,w,104,10,'rgba(20,20,30,.95)');g.strokeStyle=c.col;g.lineWidth=2.5;rrPath(x,y,w,104,10);g.stroke();
+    txt(c.name,x+22,y+40,22,c.col,'left',JP,['#000',4],false,900);txt(c.desc,x+22,y+76,13,'#e6e9f0','left',JP,null,false,700)}
+  txt('動画を見ると、強化をもう1枚選べる',W/2,430,14,'#fff','center',JP,null,false,800);
+  if(stateT>.4){button(SCR.oad,'▶ 動画を見てもう1枚選ぶ','rgba(20,80,110,.95)');button(SCR.onext,touchMode?'次へ進む':'次へ進む（Enter）','rgba(30,32,44,.92)')}
+  g.globalAlpha=1;
 }
 const CARD_R=i=>({x:W/2,y:300+i*128,w:380,h:112});
 function cardAt(p){for(let i=0;i<(G.cards||[]).length;i++)if(inR(p,CARD_R(i)))return i;return -1}
@@ -1236,8 +1252,6 @@ function drawPick(){
     if(i<own.length)cur+=' ほか'+(own.length-i)+'枚';lines.push(cur);
     lines.forEach((l,k)=>txt(l,W/2,688+k*15,11,'#c9cfdc','center',JP,null,false,700))}
   txt(touchMode?'カードをタップして決定':'1・2・3キー ／ 矢印で選んでEnter',W/2,740,12,'#8b93a8','center',JP,null,false,700);
-  if(G.pickAgain)txt('このあと、もう1枚選べる',W/2,650,15,'#ffd54a','center',JP,['#000',3],false,900);
-  else if(!G.pickAdUsed)button(SCR.pextra,'▶ 動画でもう1枚選ぶ','rgba(20,80,110,.95)');
   g.globalAlpha=1;
 }
 
@@ -1930,7 +1944,7 @@ const inR=(p,r)=>Math.abs(p.x-r.x)<r.w/2&&Math.abs(p.y-r.y)<r.h/2;
 function toLocal(ev){const r=cv.getBoundingClientRect();return{x:(ev.clientX-r.left)*W/r.width,y:(ev.clientY-r.top)*H/r.height}}
 Object.assign(SCR,{tendless:{x:W/2-66,y:628,w:124,h:38},tshop:{x:W/2+66,y:628,w:124,h:38},
   orevive:{x:W/2,y:556,w:290,h:50},oretry:{x:W/2,y:614,w:240,h:44},oshare:{x:W/2-64,y:668,w:120,h:38},otitle:{x:W/2+64,y:668,w:120,h:38},
-  pextra:{x:W/2,y:650,w:300,h:40},cshare:{x:W/2,y:552,w:200,h:40},sback:{x:W/2,y:716,w:220,h:44}});
+  oad:{x:W/2,y:490,w:310,h:52},onext:{x:W/2,y:560,w:240,h:44},cshare:{x:W/2,y:552,w:200,h:40},sback:{x:W/2,y:716,w:220,h:44}});
 
 /* ---------------- ごほうび広告の受け口 ----------------
    投稿サイト（Poki / CrazyGames）のSDKが読み込まれていれば、その動画広告を最後まで見た時にごほうびを渡す。
@@ -2003,7 +2017,8 @@ function screenAction(p,key){
   if(state==='ad')return;
   // ボーナス集計：並べている途中なら一気に全部出す。出し終わっていれば次へ
   if(state==='bres'){const r=G.bres;if(r.doneT<0){r.n=r.items.length;r.tick=0}else if(r.doneT>.6)finishBonus();return}
-  if(state==='pick'){if(p){if(!G.pickAdUsed&&stateT>.5&&inR(p,SCR.pextra)){rewardAd(()=>{G.pickAdUsed=true;G.pickAgain=true;state='pick';stateT=.6});return}const i=cardAt(p);if(i>=0)pickCard(i)}else pickCard(G.cardSel);return}
+  if(state==='pick'){if(p){const i=cardAt(p);if(i>=0)pickCard(i)}else pickCard(G.cardSel);return}
+  if(state==='offer'){if(stateT<.4)return;if(p&&inR(p,SCR.oad)){rewardAd(()=>{G.pickAdUsed=true;openPick(true)});return}if(!p||inR(p,SCR.onext)){SFX.ui();afterPick()}return}
   if(state==='shop'){if(p){for(let i=0;i<SHOP.length;i++)if(inR(p,SHOP_R(i))){buyShop(i);return}if(!inR(p,SCR.sback))return}state='title';stateT=LOGO_T+.9;SFX.ui();return}
   if(state==='tutintro'){if(stateT>.3){state='play';stateT=0;SFX.ui()}return}
   if(state==='tutend'){if(stateT>.8){state='title';stateT=0;resetRun();skipPrologue();SFX.ui()}return}
@@ -2129,6 +2144,7 @@ addEventListener('keydown',ev=>{
   if(state==='title'&&stateT<LOGO_T+.6){skipPrologue();return}
   if(state==='title'&&sndOff&&!muted&&!G.titleTap){G.titleTap=1;return}
   if(state==='pick'){pickKey(k);return}
+  if(state==='offer'){if(['enter',' ','j','z'].includes(k))screenAction(null,'go');return}
   if(state!=='play'){
     if(state==='tutend'){screenAction(null,'go');return}
     if(state==='tutintro'||state==='stintro'){if(k==='enter'||k===' '||k==='j'||k==='z')screenAction(null,'go');return}
@@ -3402,7 +3418,7 @@ function draw(){
   drawHUD();drawTutPanel();
   if(touchMode&&state==='play')drawControls();
   drawBonusHUD();drawSea();drawBanner();drawCallout();
-  if(state==='pause')drawPause();else if(state==='over')drawOver();else if(state==='clear')drawClear();else if(state==='pick')drawPick();else if(state==='tutmenu')drawTutMenu();else if(state==='tutintro')drawTutIntro();else if(state==='stintro')drawStIntro();else if(state==='tutend')drawTutEnd();else if(state==='ad')drawAd();else if(state==='bres')drawBres();
+  if(state==='pause')drawPause();else if(state==='over')drawOver();else if(state==='clear')drawClear();else if(state==='pick')drawPick();else if(state==='offer')drawOffer();else if(state==='tutmenu')drawTutMenu();else if(state==='tutintro')drawTutIntro();else if(state==='stintro')drawStIntro();else if(state==='tutend')drawTutEnd();else if(state==='ad')drawAd();else if(state==='bres')drawBres();
 }
 function loop(ts){
   const rdt=Math.min(.05,(ts-last)/1000||0);last=ts;
