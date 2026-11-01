@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.27 2026-11-01';
+const VERSION='v0.29 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -458,8 +458,8 @@ function splat(x,y,r,ang){
    全タイルが塗られたら通常ウェーブはクリア（ボス戦はボス撃破でクリア）。 */
 const TS=46,GC=Math.ceil((AX1-AX0)/TS),GR=Math.ceil((AY1-AY0)/TS),GN=GC*GR;
 const PAINT_MUL=.85; // 1撃破あたりの塗り量の倍率（囲い込み制圧を主役にするため、普通に倒すだけの塗りはやや厳しめ）
-const PAINT=new Float32Array(GN),DONE=new Uint8Array(GN);let painted=0;
-function washFloor(){PAINT.fill(0);DONE.fill(0);painted=0;if(decReady){decG.save();decG.setTransform(1,0,0,1,0,0);decG.clearRect(0,0,decC.width,decC.height);decG.restore()}}
+const PAINT=new Float32Array(GN),DONE=new Uint8Array(GN);let painted=0,paintVer=0; // paintVer：塗りの状態が変わるたびに増える（囲い予告の再計算用）
+function washFloor(){PAINT.fill(0);DONE.fill(0);painted=0;paintVer++;if(decReady){decG.save();decG.setTransform(1,0,0,1,0,0);decG.clearRect(0,0,decC.width,decC.height);decG.restore()}}
 function tileRect(i){const x=AX0+(i%GC)*TS,y=AY0+Math.floor(i/GC)*TS;return{x,y,w:Math.min(TS,AX1-x),h:Math.min(TS,AY1-y)}}
 function paint(x,y,r,amt){
   const c0=clamp(Math.floor((x-r-AX0)/TS),0,GC-1),c1=clamp(Math.floor((x+r-AX0)/TS),0,GC-1);
@@ -473,17 +473,18 @@ function paint(x,y,r,amt){
 }
 function fillTile(i){
   if(DONE[i])return;
-  DONE[i]=1;painted++;if(!capFilling)capNew.push(i);const t=tileRect(i),d=decG;
+  DONE[i]=1;painted++;paintVer++;if(!capFilling)capNew.push(i);const t=tileRect(i),d=decG;
   d.fillStyle='rgba(85,0,10,.5)';d.fillRect(t.x,t.y,t.w,t.h);
   for(let k=0;k<6;k++){d.fillStyle=`rgba(${irand(90,140)},0,${irand(8,20)},${rand(.3,.55).toFixed(2)})`;d.beginPath();d.arc(t.x+rand(8,t.w-8),t.y+rand(8,Math.max(9,t.h-8)),rand(5,9),0,TAU);d.fill()}
-  fx({k:'tile',x:t.x,y:t.y,w:t.w,h:t.h,life:.35,max:.35});SFX.tile();
+  // 塗り切った瞬間はマスの枠を白く光らせ、「今ここが塗れた」と分かるようにする（制圧の波で埋まる分は控えめ）
+  fx({k:'tile',x:t.x,y:t.y,w:t.w,h:t.h,life:capFilling?.35:.6,max:capFilling?.35:.6,cap:capFilling});SFX.tile();
   for(const c of G.crests)if(c.i===i&&!c.taken){c.taken=true;crestReward(c)}
   if(!G.isBossWave&&G.phase==='fight'&&state==='play'&&!P.dead&&painted>=GN&&!G.tutMode)waveClear();
 }
 function tileAt(x,y){const cx=Math.floor((x-AX0)/TS),cy=Math.floor((y-AY0)/TS);return cx<0||cy<0||cx>=GC||cy>=GR?-1:cy*GC+cx}
 // 掃除屋がタイルの血を拭き取る（塗り済みが取り消される）
 function cleanTile(i,quiet){
-  const t=tileRect(i);if(DONE[i]){DONE[i]=0;painted--}PAINT[i]=.15;
+  const t=tileRect(i);if(DONE[i]){DONE[i]=0;painted--;paintVer++}PAINT[i]=.15;
   decG.clearRect(t.x,t.y,t.w,t.h);
   fx({k:'wash',x:t.x,y:t.y,w:t.w,h:t.h,life:.5,max:.5});SFX.wash();
   if(!quiet)popText(t.x+t.w/2,t.y+t.h/2,'証拠隠滅','#7fc8ff',12,.8);
@@ -931,6 +932,10 @@ let capNew=[],capFilling=false;
 const EDGE_CAP=8;
 function captureCheck(){
   const starts=capNew;capNew=[];if(G.isBossWave||G.phase!=='fight'||state!=='play')return;
+  for(const r of enclosed(starts)){if(G.phase!=='fight')break;capture(r)}
+}
+// starts（塗られたマス）の隣から始まる未塗り領域のうち、囲いが成立しているものを返す
+function enclosed(starts){
   const seen=new Uint8Array(GN),regions=[],from=[];
   for(const i of starts){const cx=i%GC,cy=(i/GC)|0;for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){const nx=cx+dx,ny=cy+dy;if(nx>=0&&ny>=0&&nx<GC&&ny<GR)from.push(ny*GC+nx)}}
   for(const i of from){if(DONE[i]||seen[i])continue;
@@ -940,7 +945,49 @@ function captureCheck(){
     // 壁に接する範囲も、小さければ（EDGE_CAPマス以下）壁を囲いの一部として制圧できる
     if(!edge||comp.length<=EDGE_CAP)regions.push(comp);
   }
-  for(const r of regions){if(G.phase!=='fight')break;capture(r)}
+  return regions;
+}
+// 「あと1マスで囲える」予告：未塗りのマスを1つ塗ったと仮定して囲いが成立するかを試し、取れるマスの多い順に最大2か所を光らせる
+// 偶然の制圧を「狙って取る」ものにするため。塗りの状態が変わった時だけ計算し直す
+let CAPPV=[],pvVer=-1,pvT=0;
+function updateCapPreview(dt){
+  pvT-=dt;
+  if(G.isBossWave||G.tutMode||G.phase!=='fight'){CAPPV=[];return}
+  if(pvVer===paintVer||pvT>0||CAPQ.length)return;
+  pvVer=paintVer;pvT=.15;const c=[];
+  for(let i=0;i<GN;i++){if(DONE[i])continue;
+    DONE[i]=1;const rs=enclosed([i]);DONE[i]=0;
+    const tiles=[].concat(...rs);if(tiles.length>=2)c.push({i,tiles,n:tiles.length+1})}
+  // 同じ囲いを別のマスから閉じる候補は、取れる数の多い方だけ残す
+  c.sort((a,b)=>b.n-a.n);CAPPV=[];const used=new Set();
+  for(const v of c){if(CAPPV.length>=2)break;if(v.tiles.some(j=>used.has(j))||used.has(v.i))continue;CAPPV.push(v);for(const j of v.tiles)used.add(j);used.add(v.i)}
+}
+// マスの集まりの外周だけを線で描く
+function tileOutline(set){
+  g.beginPath();
+  for(const j of set){const t=tileRect(j),cx=j%GC,cy=(j/GC)|0;
+    if(cy===0||!set.has(j-GC)){g.moveTo(t.x,t.y);g.lineTo(t.x+t.w,t.y)}
+    if(cy===GR-1||!set.has(j+GC)){g.moveTo(t.x,t.y+t.h);g.lineTo(t.x+t.w,t.y+t.h)}
+    if(cx===0||!set.has(j-1)){g.moveTo(t.x,t.y);g.lineTo(t.x,t.y+t.h)}
+    if(cx===GC-1||!set.has(j+1)){g.moveTo(t.x+t.w,t.y);g.lineTo(t.x+t.w,t.y+t.h)}}
+  g.stroke();
+}
+function drawCapPreview(){
+  const pl=.5+Math.sin(G.time*6)*.5;
+  for(const c of CAPPV){if(DONE[c.i])continue;
+    const set=new Set(c.tiles);
+    // 囲える範囲：薄い赤＋点線の外周
+    g.fillStyle=`rgba(255,30,60,${.07+pl*.07})`;for(const j of c.tiles){const t=tileRect(j);g.fillRect(t.x,t.y,t.w,t.h)}
+    g.setLineDash([6,5]);g.lineDashOffset=-G.time*20;g.strokeStyle=`rgba(255,80,110,${.45+pl*.3})`;g.lineWidth=2;tileOutline(set);g.setLineDash([]);
+    // ここを塗れば囲える
+    const t=tileRect(c.i),x=t.x+t.w/2,y=t.y+t.h/2;
+    glow(x,y,40,'#ff2848',.25+pl*.2);
+    g.fillStyle=`rgba(255,40,70,${.18+pl*.15})`;g.fillRect(t.x+2,t.y+2,t.w-4,t.h-4);
+    g.strokeStyle=`rgba(255,${150+pl*105|0},${170+pl*85|0},${.75+pl*.25})`;g.lineWidth=3;g.strokeRect(t.x+3,t.y+3,t.w-6,t.h-6);
+    if(PAINT[c.i]>0){g.fillStyle='rgba(255,230,235,.85)';g.fillRect(t.x+6,t.y+t.h-9,(t.w-12)*clamp(PAINT[c.i],0,1),3)}
+    txt('囲える',x,y-2,11,'#fff','center',JP,['#5a0010',3],false,900);
+    txt('+'+c.n,x,y+13,12,'#ffd0da','center',EN,['#5a0010',3],false,900);
+  }
 }
 // 制圧は、輪を閉じたマスの隣から波紋のように順番に染まっていく（中の敵は波が届いた瞬間に倒れる）
 let CAPQ=[];
@@ -951,12 +998,14 @@ function capture(tiles){
   while(q.length){const j=q.shift(),x=j%GC,y=(j/GC)|0;for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){const k=(y+dy)*GC+(x+dx);if(x+dx<0||x+dx>=GC||y+dy<0||y+dy>=GR||!set.has(k)||dd.has(k))continue;dd.set(k,dd.get(j)+1);q.push(k)}}
   for(const j of tiles){const k=dd.get(j)||0;CAPQ.push({i:j,at:G.time+k*.045,k,n,cx,cy})}
   const pts=100*n*G.wave;G.score+=pts;misAdd('capture',null,n);tutComplete(2,.7);
+  // 囲った範囲の外周を光らせて、「どこを・なぜ取れたか」を見せる
+  fx({k:'capline',set,cx,cy,R:Math.sqrt(n)*TS*.8+30,life:1,max:1});
   if(n>=3){
     callout('制 圧 ！',n+'マスを一気に血で染めた　+'+pts,'#ff2f5f');G.callout.dur=1.6;
     SFX.boom();SFX.tile();addShake(Math.min(22,8+n));G.flash=Math.max(G.flash,.3);G.flashCol='255,20,50';G.hitstop=Math.max(G.hitstop,.06);
     RINGS.push({x:cx,y:cy,r:10,R:Math.sqrt(n)*TS*.75+40,t:0,dur:.45,col:'255,40,70',w:12});
     for(const j of tiles){const t=tileRect(j);bloodBurst(t.x+t.w/2,t.y+t.h/2,rand(0,TAU),4,200)}
-  }else popText(cx,cy,'制圧 +'+pts,'#ff6a80',14,.8);
+  }else{popText(cx,cy,'囲った！ +'+n+'マス','#ff8aa0',16,1);SFX.tile();addShake(5)}
 }
 function updateCapQ(){
   if(!CAPQ.length)return;if(G.phase!=='fight'){CAPQ=[];return}
@@ -1400,7 +1449,7 @@ function updatePlayer(dt){
   let ix=inp.kx+inp.tx+inp.px,iy=inp.ky+inp.ty+inp.py;const il=Math.hypot(ix,iy);if(il>1){ix/=il;iy/=il}
   if(inp.ragePress){inp.ragePress=false;tryRage()}
   // ガード中は攻撃不可・移動は遅い
-  P.guard=guarding();P.guardFx-=dt;
+  P.guard=guarding();P.guardFx-=dt;P.gT=P.guard?Math.min(1,(P.gT||0)+dt*9):0;
   if(P.guard){
     P.atk=null;P.atkBuf=0;P.lt=0;
     // 向き：移動入力の方向。入力が無いときだけ最寄りの敵へゆっくり向く
@@ -1695,6 +1744,7 @@ function update(rdt){
   for(const e of [...E])updateEnemy(e,dt);
   updateGimmicks(dt);
   if(capNew.length)captureCheck();
+  updateCapPreview(dt);
   updateCapQ();
   checkMilestones();
   // separation
@@ -1834,6 +1884,34 @@ function girlPose(face){
   return{anim,idx,dir,flip};
 }
 // SOUL満タン中の金色のオーラ（炎のように揺らめく光＋立ちのぼる光の粒＋ときどき走る稲妻）
+// ガードの盾：厚みのある弧の刃。両端は尖らせ、中は区切り線でパネル状に。光の筋が左右に走り、防いだ瞬間は白く光って波紋が出る
+// fx：防いだ直後の残り時間（P.guardFx）、k：構えた瞬間の広がり（0→1）
+function drawShield(x,y,f,A,fx,k){
+  const hit=fx>0,h=hit?fx/.25:0,e=1-Math.pow(1-k,3),aA=A*(.55+.45*e);
+  const r0=25,r1=r0+5+8*e,rm=(r0+r1)/2,a0=f-aA,a1=f+aA,tip=.17,al=hit?1:.82+Math.sin(G.time*9)*.12;
+  const band=()=>{g.beginPath();g.arc(x,y,r1,a0,a1);g.lineTo(x+Math.cos(a1+tip)*rm,y+Math.sin(a1+tip)*rm);g.arc(x,y,r0,a1,a0,true);g.lineTo(x+Math.cos(a0-tip)*rm,y+Math.sin(a0-tip)*rm);g.closePath()};
+  g.save();g.globalCompositeOperation='lighter';g.lineCap='round';g.lineJoin='round';
+  // 本体：内側は透け、外側ほど明るい
+  const gr=g.createRadialGradient(x,y,r0,x,y,r1);
+  gr.addColorStop(0,`rgba(30,110,255,${.18*al})`);gr.addColorStop(.6,`rgba(60,200,255,${.34*al})`);gr.addColorStop(1,`rgba(170,250,255,${.62*al})`);
+  g.fillStyle=gr;band();g.fill();
+  // パネルの区切り
+  g.strokeStyle=`rgba(190,250,255,${.35*al})`;g.lineWidth=1.2;g.beginPath();
+  for(let i=1;i<6;i++){const a=a0+(a1-a0)*i/6;g.moveTo(x+Math.cos(a)*(r0+2),y+Math.sin(a)*(r0+2));g.lineTo(x+Math.cos(a)*(r1-2),y+Math.sin(a)*(r1-2))}
+  g.stroke();
+  // 縁取り：外は太く明るく、内は細く
+  g.strokeStyle=hit?'#ffffff':`rgba(140,245,255,${al})`;g.lineWidth=hit?3+2*h:2.6;band();g.stroke();
+  g.strokeStyle=`rgba(255,255,255,${.75*al})`;g.lineWidth=1.6;g.beginPath();g.arc(x,y,r1+3,a0+.12,a1-.12);g.stroke();
+  // 走る光の筋（端から端へ往復）
+  const s=a0+(a1-a0)*(.5-.5*Math.cos(G.time*3.2));
+  g.strokeStyle=`rgba(255,255,255,${.85*al})`;g.lineWidth=4;g.beginPath();g.arc(x,y,r1-1,Math.max(a0,s-.16),Math.min(a1,s+.16));g.stroke();
+  // 防いだ瞬間：全体を白く塗り、外へ広がる波紋
+  if(hit){
+    g.fillStyle=`rgba(255,255,255,${.55*h})`;band();g.fill();
+    const rr=r1+4+(1-h)*26;g.strokeStyle=`rgba(150,245,255,${h})`;g.lineWidth=2+3*h;g.beginPath();g.arc(x,y,rr,a0-.1,a1+.1);g.stroke();
+  }
+  g.restore();
+}
 function drawGoldAura(x,y){
   const t=G.time,cy=y-16;
   g.save();g.globalCompositeOperation='lighter';
@@ -2011,6 +2089,7 @@ function drawWorld(){
       g.moveTo(t.x+m,t.y+m+L);g.lineTo(t.x+m,t.y+m);g.lineTo(t.x+m+L,t.y+m);
       g.moveTo(t.x+t.w-m-L,t.y+t.h-m);g.lineTo(t.x+t.w-m,t.y+t.h-m);g.lineTo(t.x+t.w-m,t.y+t.h-m-L)}
     g.stroke();
+    drawCapPreview();
   }
   // 代紋タイル
   for(const c of G.crests){
@@ -2049,10 +2128,8 @@ function drawWorld(){
         if(rdy){const pl=.5+Math.sin(G.time*8)*.5;g.globalAlpha=.75+pl*.25;txt(touchMode?'タップで怨念解放！':'怨念解放 OK!',P.x,P.y-70-pl*3,15,'#ffe27a','center',JP,['#3a1a00',4],false,900);g.globalAlpha=1}
       }
       if(P.guard&&!P.dead){
-        const hit=P.guardFx>0,al=hit?.95:.55+Math.sin(G.time*10)*.1;
-        glow(P.x,P.y,44,'#40d8ff',hit?.45:.2);
-        g.fillStyle=`rgba(120,240,255,${al*.18})`;g.beginPath();g.moveTo(P.x,P.y);g.arc(P.x,P.y,30,P.face-guardArc(),P.face+guardArc());g.closePath();g.fill();
-        g.strokeStyle=`rgba(${hit?'255,255,255':'120,240,255'},${al})`;g.lineWidth=hit?6:4;g.lineCap='round';g.beginPath();g.arc(P.x,P.y,30,P.face-guardArc(),P.face+guardArc());g.stroke();
+        glow(P.x+Math.cos(P.face)*24,P.y+Math.sin(P.face)*24,46,'#40d8ff',P.guardFx>0?.5:.22);
+        drawShield(P.x,P.y,P.face,guardArc(),P.guardFx,P.gT||0);
       }
     }else{
       if(e.boss)glow(e.x,e.y,e.r*2.6,e.type==='kito'?'#8a3cff':'#ff3355',.18);
@@ -2085,7 +2162,9 @@ function drawWorld(){
     else if(f.k==='oild'){g.globalAlpha=a;circ(f.x,f.y,2.4,'#24160c')}
     else if(f.k==='suds'){g.globalAlpha=a*.8;g.strokeStyle='#f2f8ff';g.lineWidth=1.3;g.beginPath();g.arc(f.x,f.y,f.sz*(1.4-a*.4),0,TAU);g.stroke();g.globalAlpha=a*.25;circ(f.x,f.y,f.sz*(1.4-a*.4),'#ffffff')}
     else if(f.k==='mist'){glow(f.x,f.y,8,'#ff1838',a*.5)}
-    else if(f.k==='tile'){g.fillStyle=`rgba(255,40,70,${a*.5})`;g.fillRect(f.x,f.y,f.w,f.h)}
+    else if(f.k==='tile'){g.fillStyle=`rgba(255,40,70,${a*.5})`;g.fillRect(f.x,f.y,f.w,f.h);
+      if(!f.cap){const e=(1-a)*5;g.strokeStyle=`rgba(255,235,240,${a})`;g.lineWidth=3*a+1;g.strokeRect(f.x+3-e,f.y+3-e,f.w-6+e*2,f.h-6+e*2)}}
+    else if(f.k==='capline'){g.strokeStyle=`rgba(255,${200*a|0},${210*a|0},${a})`;g.lineWidth=2+4*a;glow(f.cx,f.cy,f.R,'#ff2848',a*.35);tileOutline(f.set)}
     else if(f.k==='smoke'){g.globalAlpha=a*.45;circ(f.x,f.y,f.sz*(1.6-a*.6),'#2a2a30')}
     g.globalAlpha=1;
   }
@@ -2317,13 +2396,13 @@ function drawTitle(){
   g.globalAlpha=1;
 }
 function dim(a,col){g.fillStyle=`rgba(${col||'4,4,8'},${a})`;g.fillRect(0,0,W,H)}
-const RULES=[['塗る','敵を倒すと床に血。血溜まりを100%にするとクリア'],['囲う','塗ったマスで囲むと、中が一気に染まる（壁際の小さな範囲も囲める）'],['掃除屋','塗った血を消しに来る。最優先で倒せ'],
+const RULES=[['塗る','敵を倒すと床に血。血溜まりを100%にするとクリア'],['囲う','囲むと中が一気に染まる。光る「囲える」マスを狙え（壁際も可）'],['掃除屋','塗った血を消しに来る。最優先で倒せ'],
   ['弾き返し','敵の弾やロケットは、攻撃で跳ね返せる'],['ガード','正面だけ防いで回復。1回防ぐと解除（押し直し）'],['怨念解放','SOUL満タンで発動。周囲を一掃し床を染める'],
   ['仕掛け','ステージの物を殴ると発動する'],['お題・カード','お題達成でボーナス。ステージクリアで強化を選ぶ'],['ボス','近づくと掴んで投げてくる（ガード不能）']];
 function drawPause(){
   dim(.82);txt('PAUSED',W/2,104,40,'#fff','center',EN,null,true);
   txt('遊び方',W/2,140,13,'#ffd54a','center',JP,null,false,900);
-  RULES.forEach(([h,b],i)=>{const y=172+i*31;txt(h,28,y,13,'#ff4d6d','left',JP,null,false,900);txt(b,136,y,12,'#e6e9f0','left',JP,null,false,700)});
+  RULES.forEach(([h,b],i)=>{const y=172+i*31;txt(h,28,y,13,'#ff4d6d','left',JP,null,false,900);txt(b,136,y,12,'#e6e9f0','left',JP,null,false,700,W-150)});
   txt(touchMode?'タップで再開':'P / Enter で再開',W/2,478,15,'#c9cfdc','center',JP,null,false,700);
   button(SCR.ptitle,'タイトルへ戻る','rgba(60,20,30,.9)');
   const why={btn:'ポーズボタン',key:'キー操作',blur:'画面のフォーカスが外れた',hidden:'アプリ切替・画面オフ',rotate:'画面の回転',pad:'コントローラー',back:'戻る操作（画面端のスワイプ）'}[G.pauseWhy];
