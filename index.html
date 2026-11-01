@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.75 2026-11-01';
+const VERSION='v0.77 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -403,7 +403,14 @@ const SFX={
   crackle(){if(!can('ck',300))return;noise(.06,.09,'highpass',5000);tone(1800,900,.05,'square',.02)},
   glass(){noise(.25,.5,'highpass',3500,7000);tone(2400,1400,.12,'triangle',.08);tone(3100,2100,.1,'triangle',.06,now(.04))},
   // 怨霊の手：低いうめき声と、床へ引きずり込む湿った音
-  hands(){const t=now();tone(70,45,1.2,'sawtooth',.18,t);tone(110,70,1.1,'sine',.3,t+.05);noise(1,.3,'lowpass',500,120,t+.1,0,1.2);noise(.5,.25,'bandpass',300,90,t+.6,0,2)},
+  hands(){const t=now();tone(62,38,1.8,'sawtooth',.2,t);tone(93,58,1.7,'sawtooth',.12,t+.04);tone(124,70,1.5,'sine',.3,t+.08);
+    noise(1.6,.32,'lowpass',420,90,t+.05,0,1.4);noise(1.2,.14,'bandpass',2600,1400,t+.1,0,6);noise(.9,.1,'bandpass',3400,2000,t+.5,0,7);noise(.6,.28,'bandpass',260,80,t+.7,0,2.5)},
+  // 引きずり込まれる者の短い悲鳴（音程が落ちながら震える）
+  scream(d){const t=now(d||0),o=AC&&AC.createOscillator();if(!o)return;const gn=AC.createGain(),lf=AC.createOscillator(),lg=AC.createGain();
+    o.type='sawtooth';o.frequency.setValueAtTime(rand(620,820),t);o.frequency.exponentialRampToValueAtTime(rand(160,220),t+.75);
+    lf.frequency.value=rand(9,13);lg.gain.value=28;lf.connect(lg);lg.connect(o.frequency);
+    gn.gain.setValueAtTime(.0001,t);gn.gain.exponentialRampToValueAtTime(.07,t+.05);gn.gain.exponentialRampToValueAtTime(.0001,t+.8);
+    const bp=AC.createBiquadFilter();bp.type='bandpass';bp.frequency.value=1200;bp.Q.value=1.2;o.connect(bp);bp.connect(gn);gn.connect(sfxG);o.start(t);lf.start(t);o.stop(t+.85);lf.stop(t+.85)},
   handGet(){tone(330,660,.25,'triangle',.12);tone(495,990,.3,'sine',.08,now(.08))},
   // 消火器の噴射：「ブシャーッ」。最初に圧が抜ける強い音、続く粉の噴射は途中で少し息継ぎしながら弱まっていく
   spray(){const t=now();noise(.12,.55,'lowpass',900,300,t);noise(1.5,.5,'highpass',2400,1200,t+.02,0,.6);noise(1.4,.32,'bandpass',4200,2200,t+.05,0,.8);
@@ -479,7 +486,10 @@ const TYPES={
   bazooka:{r:15,hp:5,spd:50,dmg:22,val:350},
   cleaner:{r:12,hp:2.5,spd:105,dmg:0,val:300},
   brute:{r:20,hp:12,spd:48,dmg:20,val:400,armor:true},
-  onmyo:{r:13,hp:6,spd:70,dmg:10,val:600}
+  onmyo:{r:13,hp:6,spd:70,dmg:10,val:600},
+  shield:{r:14,hp:6,spd:60,dmg:12,val:320},   // 盾持ち：防弾盾で正面の攻撃を防ぐ
+  sniper:{r:12,hp:2.5,spd:55,dmg:24,val:360},  // 狙撃手：遠くから、予告線のあとに強烈な一発
+  slasher:{r:12,hp:4,spd:118,dmg:8,val:320}    // ナイフ使い：素早い3連撃。連撃中は怯まない
 };
 const STORY=['','あの夜の借りを、返しに来た。','鬼頭ビル。あの男たちの巣だ。','地下から入る。一人残らず、地獄へ送る。','銃なんて怖くない。もう死んでるから。','',
   'まだ足りない。全然足りない。','熱い？ 痛い？ もう何も感じない。','綺麗な庭。血の色が、よく映える。','帳簿も書類も、全部血で汚してやる。','',
@@ -606,7 +616,7 @@ function startWave(n){
   if(!G.tutMode&&lv('seed'))G.soul=Math.min(SOUL_MAX,G.soul+25*lv('seed')); // 怨念の種
   // 床の形：STAGE1・ボス・チュートリアルは素の長方形。ストーリーはステージごとに決まった形、ENDLESSは自動生成
   makeLayout(G.tutMode||bk||n===1?null:n<=20?n*7919:(G.runSeed*7919+n*104729),n<=20?STORY_TPL[n]:null);
-  washFloor();setTheme(G.tutMode?TUT_THEME:themeFor(n));setupWindows();setupGimmick();G.mile=0;capNew=[];CAPQ=[];G.wk=0;G.wchain=0;G.wcap=0;G.rushT=rand(22,34);G.rush=0;G.rushSp=0;
+  washFloor();setTheme(G.tutMode?TUT_THEME:themeFor(n));setupWindows();setupGimmick();G.mile=0;capNew=[];CAPQ=[];G.wk=0;G.wchain=0;G.wcap=0;G.wpf=0;G.wjg=0;G.rushT=rand(22,34);G.rush=0;G.rushSp=0;
   // 開始の表示が終わったら、仕掛けを案内
   tutWave(n);if(G.gim&&!SEEN.has('gim_'+G.gim)){markSeen('gim_'+G.gim);G.propSpot=6}else G.propSpot=0;
   // ステージ名の帯のあと、ゲームを止めて「ルール／仕掛け」のカードを見せる（タップで閉じる）
@@ -632,6 +642,10 @@ function pickType(n){
   pool.push(['gunner',Math.min(8,1.1+(n-1)*.7)]); // 銃撃手はWAVE1から少しだけ（約9%）出て、WAVEごとに増える
   if(n>=4)pool.push(['brute',1.2+n*.15]);
   if(n>=6)pool.push(['bazooka',1.2+(n-6)*.25]); // バズーカ兵は後半から
+  // 技が要る敵：盾持ち（6面〜）、狙撃手（8面〜）、ナイフ使い（9面〜）
+  if(n>=6)pool.push(['shield',1.5+(n-6)*.2]);
+  if(n>=8)pool.push(['sniper',1+(n-8)*.15]);
+  if(n>=9)pool.push(['slasher',1.5+(n-9)*.2]);
   let r=Math.random()*pool.reduce((s,p)=>s+p[1],0);
   for(const p of pool){r-=p[1];if(r<=0)return p[0]}
   return 'grunt';
@@ -672,7 +686,7 @@ function makeEnemy(type,x,y){
   const T=TYPES[type],k=1+(G.wave-1)*.09;
   const e={type,x,y,vx:0,vy:0,r:T.r,hp:T.hp*k,max:T.hp*k,spd:T.spd*(1+Math.min(G.wave,15)*.015),dmg:T.dmg,val:T.val,armor:!!T.armor,
     ang:Math.atan2(P.y-y,P.x-x),aim:0,state:'enter',st:0,flash:0,stun:0,fly:0,bset:null,walk:rand(0,6),cd:rand(.8,1.8),
-    hitDone:false,v:Math.random()<.5?0:1,boss:false,dead:false,id:++uid,combo:0,special:0,vol:0,summoned:false,tx:0,ty:0,tgt:-1};
+    hitDone:false,v:Math.random()<.5?0:1,boss:false,dead:false,id:++uid,combo:0,shieldUp:type==='shield',special:0,vol:0,summoned:false,tx:0,ty:0,tgt:-1};
   E.push(e);return e;
 }
 function spawnBoss(kind){
@@ -730,10 +744,11 @@ function waveClear(){
   G.phase='break';G.breakT=3.2;healP(20+15*lv('mend'));slow(.9,.2);SFX.clear();addShake(16);G.flash=.5;G.flashCol='255,20,50';
   for(const o of [...E])killEnemy(o,Math.atan2(o.y-P.y,o.x-P.x),700,{});
   MARKS.length=0;B.length=0;
-  const tm=G.waveTime,rk=tm<40?'S':tm<55?'A':tm<75?'B':'C',bonus={S:3000,A:1500,B:600,C:0}[rk]*G.wave;G.score+=bonus;
+  // ランクはクリアの速さで決まる。PERFECT反射とジャストガードは1回につき2秒速かったことにする（最大16秒）＋技ボーナス
+  const tech=(G.wpf||0)+(G.wjg||0),tm=G.waveTime,et=tm-Math.min(16,tech*2),rk=et<40?'S':et<55?'A':et<75?'B':'C',bonus={S:3000,A:1500,B:600,C:0}[rk]*G.wave+tech*400;G.score+=bonus;
   // そのWAVEの自己ベスト（クリアタイム）を記録
   const bk='dg_bw'+G.wave,prev=parseFloat(lsGet(bk)),isNew=!(prev>0)||tm<prev;if(isNew)lsSet(bk,tm.toFixed(1));
-  G.res={rank:rk,time:tm,kills:G.wk,chain:G.wchain,cap:G.wcap,best:isNew?tm:prev,isNew,first:!(prev>0)};
+  G.res={rank:rk,time:tm,kills:G.wk,chain:G.wchain,cap:G.wcap,best:isNew?tm:prev,isNew,first:!(prev>0),pf:G.wpf||0,jg:G.wjg||0};
   G.banner={top:'STAGE '+pad2(G.wave)+'  —  RANK '+rk,main:'CLEAR',sub:'TIME '+tm.toFixed(1)+'s   BONUS +'+bonus+'   HP +20',t:0,dur:2.6,col:rk==='S'?'#ffd54a':'#ff2f5f'};
   // 床を100%塗ってのクリアは「血の海達成！」がクリア表示を兼ねる（CLEARの帯は出さず、結果はこの演出の中に出す）
   if(!G.isBossWave&&painted>=GN){G.sea={t:-SEA_FOCUS,drips:seaDrips(),info:'RANK '+rk+'　TIME '+tm.toFixed(1)+'s　BONUS +'+bonus+'　HP +20',col:rk==='S'?'#ffd54a':'#fff'};G.banner=null;G.breakT=3.8+SEA_FOCUS;addShake(24);SFX.boom();
@@ -1017,6 +1032,15 @@ function rankOf(c){return c>=150?'UNDEAD GOD':c>=100?'MASSACRE':c>=50?'SAVAGE':c
 /* ---------------- combat ---------------- */
 function hitEnemy(e,dmg,ang,kb,o){
   o=o||{};if(e.dead)return;
+  if(e.type==='shield'&&e.shieldUp){
+    const fromFront=Math.abs(angDiff(e.ang,Math.atan2(P.y-e.y,P.x-e.x)))<1.25;
+    if(o.melee&&fromFront){ // 正面からの斬撃は盾に弾かれ、主人公がよろける
+      if(!can('clang',90))return;const ka=Math.atan2(P.y-e.y,P.x-e.x);P.kx=Math.cos(ka)*240;P.ky=Math.sin(ka)*240;P.recover=Math.max(P.recover,.28);P.atk=null;
+      spark(e.x+Math.cos(e.ang)*16,e.y+Math.sin(e.ang)*16,ka,true);tone(1800,900,.12,'square',.08);noise(.08,.3,'highpass',3000);addShake(4);popText(e.x,e.y-32,'ガキン！','#cfd6e4',14,.6);return}
+    if(!o.melee)breakShield(e)}
+  // 連撃中は怯まない敵（ナイフ使い・盾の体当たり中）：普通の斬撃では止まらない（大技・クリティカル・ジャストガード後は止まる）
+  if((e.type==='slasher'||e.type==='shield')&&(e.state==='windup'||e.state==='strike')&&o.melee&&!o.fin&&!o.crit){e.hp-=dmg;e.flash=.11;G.chain++;G.chainT=chainWin();G.chainPop=1;SFX.hit(false);
+    spark(e.x-Math.cos(ang)*e.r*.5,e.y-Math.sin(ang)*e.r*.5,ang,false);bloodBurst(e.x,e.y,ang,6,200);if(e.hp<=0)killEnemy(e,ang,480,o);return}
   if(e.boss&&e.state==='dizzy')dmg*=1.6;
   // ボスは血溜まりの上だと弱る（白鷺は潔癖なのでさらに弱る）
   if(e.boss&&e.onBlood)dmg*=e.type==='shirasagi'?2:1.5;
@@ -1036,7 +1060,7 @@ function hitEnemy(e,dmg,ang,kb,o){
   G.chain++;G.chainT=chainWin();G.chainPop=1;G.maxChain=Math.max(G.maxChain,G.chain);G.wchain=Math.max(G.wchain||0,G.chain);
   G.mult=1+Math.min(4,Math.floor(G.chain/10)*.5);
   if([10,25,50,100,150,200,300].includes(G.chain))callout(rankOf(G.chain)+'!',G.chain+' HITS  x'+G.mult.toFixed(1));
-  G.soul=Math.min(SOUL_MAX,G.soul+soulMul()*(o.fin?3:1.6));
+  G.soul=Math.min(SOUL_MAX,G.soul+soulMul()*(o.fin?2:1)); // 普通に殴った分は少なめ（技で多くたまる）
   const big=o.fin||o.crit||dmg>=3;
   if(e.shiki)paperBurst(e.x,e.y,ang,big?6:4);else if(G.cause!=='rage'&&!e.burning)bloodBurst(e.x,e.y,ang,big?14:8,big?340:230);
   spark(e.x-Math.cos(ang)*e.r*.5,e.y-Math.sin(ang)*e.r*.5,ang,big);
@@ -1053,7 +1077,7 @@ function killEnemy(e,ang,spd,o){
   // まとめ倒しの記録（ほぼ同時の撃破を数える。怨念解放・囲い込みの撃破は数えない）
   if(G.phase==='fight'&&G.cause!=='rage'&&G.cause!=='cap'){if(G.time-(G.mkT||0)>MK_GAP)G.mk=[];G.mk.push({x:e.x,y:e.y});G.mkT=G.time}
   G.wk=(G.wk||0)+1;
-  if(G.tut){const gl=G.tut.step===2&&G.tut.gap>=0?[G.tut.gap]:G.tut.step===8&&G.tut.targets?G.tut.targets:[];
+  if(G.tut){const gl=G.tut.step===2&&G.tut.gap>=0?[G.tut.gap]:G.tut.step===9&&G.tut.targets?G.tut.targets:[];
     for(const i of gl)if(!DONE[i]){const t=tileRect(i);if(dist(e.x,e.y,t.x+t.w/2,t.y+t.h/2)<95)fillTile(i)}}
   if(lv('drain'))P.hp=Math.min(P.maxhp,P.hp+1.4*lv('drain'));
   // 怨念解放で倒した敵（ボス以外）は、怨念の炎で燃え尽きて灰になる。血は出ず、死体も残らない（床は塗れない）
@@ -1070,7 +1094,7 @@ function killEnemy(e,ang,spd,o){
     if(!G.firstBlood&&!G.tutMode&&!o.fall){G.firstBlood=true;slow(1.1,.18);G.zc={x:e.x,y:e.y};G.zoom=Math.max(G.zoom,.14);G.zHold=.45;addShake(22);G.flash=Math.max(G.flash,.5);G.flashCol='255,0,30';
       callout('FIRST BLOOD','','#ff1a3c');bloodBurst(e.x,e.y,ang,46,620);splat(e.x,e.y,e.r*3.2,ang);SFX.boom()}
     G.kills++;const pts=Math.round(e.val*G.mult*(1+.25*lv('greed')));G.score+=pts;
-    G.soul=Math.min(SOUL_MAX,G.soul+soulMul()*(e.type==='brute'?20:10));
+    G.soul=Math.min(SOUL_MAX,G.soul+soulMul()*(e.type==='brute'?12:6));
     SFX.kill(G.chain);G.hitstop=Math.max(G.hitstop,.06);addShake(6);
   }
 }
@@ -1097,7 +1121,7 @@ function fire(x,y,a,spd,dmg,big){
 // 弾き返し：ヒットストップ＋スローで「決まった」瞬間を強調。体に届く寸前で弾くとPERFECT（威力2倍・演出強化）
 // 跳ね返した弾は雑魚を貫通し続ける（装甲・ボスに当たると止まる）
 function reflect(b){
-  tutComplete(4,.6);
+  tutComplete(5,.6);
   if(G.bonus&&!G.bonus.end&&!b.friendly&&G.bonus.kind!=='shiki'){G.bonus.ref++;G.bonus.got.push(b.axe?'axe':'bullet');if(G.bonus.ref>=G.bonus.need)bonusEnd(true)}
   const pf=dist(b.x,b.y,P.x,P.y)<P.r+26+15*lv('perfect');
   b.friendly=true;b.life=2;b.perfect=pf;b.kills=0;b.hits=new Set();b.trail=[];let t=null,bd=1e9;
@@ -1112,8 +1136,23 @@ function reflect(b){
   G.flash=Math.max(G.flash,pf?.45:.25);G.flashCol=pf?'255,230,140':'150,240,255';G.zoom=Math.max(G.zoom,pf?.06:.04);addShake(pf?13:8);
   popText(b.x,b.y-18,pf?'PERFECT REFLECT!!':'REFLECT!!',pf?'#ffd54a':'#7ff3ff',pf?22:19,.85);
   G.score+=pf?300:100;
-  G.chain++;G.chainT=chainWin();G.chainPop=1;G.soul=Math.min(SOUL_MAX,G.soul+soulMul()*(pf?8:4));
+  G.chain++;G.chainT=chainWin();G.chainPop=1;G.soul=Math.min(SOUL_MAX,G.soul+soulMul()*(pf?18:6));G.wpf=(G.wpf||0)+(pf?1:0);
 }
+/* ---------------- ジャストガード ----------------
+   攻撃が当たる直前にガードを押すと成功。相手は大きくよろけ（盾持ちは盾が壊れる）、次の一撃は必ずクリティカル。SOULも多くたまる */
+const JG_WIN=.2;
+function justGuard(foe,a){
+  tutComplete(4,.6);G.wjg=(G.wjg||0)+1;P.crit=true;P.inv=Math.max(P.inv,.45);
+  G.soul=Math.min(SOUL_MAX,G.soul+soulMul()*40);G.chain++;G.chainT=chainWin();G.chainPop=1;G.score+=Math.round(250*G.mult);
+  if(foe&&!foe.boss){foe.stun=Math.max(foe.stun,1.4);foe.state='chase';foe.combo=0;if(foe.type==='shield'&&foe.shieldUp)breakShield(foe)}
+  if(foe&&foe.boss)foe.stun=Math.max(foe.stun,.6);
+  slow(.5,.25);G.hitstop=Math.max(G.hitstop,.1);addShake(10);G.flash=Math.max(G.flash,.4);G.flashCol='255,230,140';G.zoom=Math.max(G.zoom,.05);
+  RINGS.push({x:P.x,y:P.y,r:10,R:80,t:0,dur:.3,col:'255,220,110',w:9});spark(P.x-Math.cos(a)*18,P.y-Math.sin(a)*18,a+Math.PI,true);spark(P.x-Math.cos(a)*18,P.y-Math.sin(a)*18,a+Math.PI+.5,true);
+  popText(P.x,P.y-64,'JUST GUARD!','#ffd54a',20,.9);SFX.just();
+}
+// 盾持ちの盾が壊れる（反射弾・爆発・仕掛け・ジャストガード）
+function breakShield(e){e.shieldUp=false;addShake(8);SFX.glass();popText(e.x,e.y-34,'盾破壊！','#ffd54a',16,.9);
+  for(let i=0;i<10;i++){const a=rand(0,TAU),v=rand(80,240),l=rand(.3,.6);fx({k:'s',x:e.x+Math.cos(e.ang)*14,y:e.y+Math.sin(e.ang)*14,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:l,max:l})}}
 function hurtPlayer(dmg,sx,sy){
   if(P.dead||state!=='play'||DEV.god)return; // 開発者モードの無敵
   if(P.inv>0)return;
@@ -1125,10 +1164,13 @@ function hurtPlayer(dmg,sx,sy){
   if(P.guard&&front){
     // ガード：ダメージを完全に防ぎ、受けるはずだったダメージのGUARD_HEAL倍だけ回復。ノックバック小、連撃は途切れない
     const heal=dmg*GUARD_HEAL*(1+.5*lv('guardh'));P.hp=Math.min(P.maxhp,P.hp+heal);P.guardLock=true;tutComplete(3,.6);
+    // ジャストガード：攻撃が当たる直前（JG_WIN秒以内）にガードを押していた。相手を大きくよろけさせ、次の一撃は必ずクリティカル
+    const just=G.time-(P.gStart||-9)<JG_WIN;
     if(lv('counter')&&!P.crit){P.crit=.7;popText(P.x,P.y-48,'COUNTER!','#7fd8ff',15,.7)}
     // 防いだ相手（近接攻撃なら攻撃元の近くの敵）を弾き飛ばして少し怯ませ、間合いを作る
     let foe=null,fd=48;for(const e of E){if(e.boss)continue;const dd=dist(e.x,e.y,sx,sy);if(dd<fd){fd=dd;foe=e}}
     if(foe){const ka=Math.atan2(foe.y-P.y,foe.x-P.x);foe.vx+=Math.cos(ka)*(foe.armor?220:380);foe.vy+=Math.sin(ka)*(foe.armor?220:380);foe.stun=Math.max(foe.stun,foe.armor?.25:.45);if(foe.state!=='enter')foe.state='chase';foe.wait=false}P.inv=.3;P.guardFx=.25;P.kx=Math.cos(a)*150;P.ky=Math.sin(a)*150;
+    if(just)justGuard(foe,a);
     spark(P.x-Math.cos(a)*18,P.y-Math.sin(a)*18,a+Math.PI,true);
     RINGS.push({x:P.x,y:P.y,r:14,R:46,t:0,dur:.22,col:'110,240,255',w:5});
     addShake(5);G.hitstop=Math.max(G.hitstop,.05);SFX.guard();
@@ -1254,7 +1296,8 @@ function drawPick(){
     txt('TIME '+R.time.toFixed(1)+'s',W/2+60,126,15,'#fff','center',EN,null,true);
     if(R.isNew&&!R.first){const fl=.6+Math.sin(stateT*8)*.4;g.globalAlpha=a*fl;txt('★ NEW RECORD ★',W/2,150,14,'#ffd54a','center',EN,['#000',3],true);g.globalAlpha=a}
     else txt('自己ベスト '+R.best.toFixed(1)+'s',W/2,150,11,'#8b93a8','center',JP,null,false,700);
-    txt('撃破 '+R.kills+'　最大連撃 '+R.chain+'　制圧 '+R.cap+'マス',W/2,172,12,'#c9cfdc','center',JP,null,false,700);
+    txt('撃破 '+R.kills+'　最大連撃 '+R.chain+'　制圧 '+R.cap+'マス',W/2,168,12,'#c9cfdc','center',JP,null,false,700);
+    txt('技　PERFECT反射 '+R.pf+'　ジャストガード '+R.jg,W/2,184,11,R.pf+R.jg?'#ffd54a':'#8b93a8','center',JP,null,false,800);
   }else if(R)txt('撃破 '+R.kills+'　最大連撃 '+R.chain,W/2,140,13,'#c9cfdc','center',JP,null,false,700);
   txt('強化を1つ選べ',W/2,204,18,'#fff','center',JP,null,false,900);
   txt('死ぬと、選んだ強化はすべて失う',W/2,226,11,'#8b93a8','center',JP,null,false,700);
@@ -1628,17 +1671,21 @@ function drawExt(pr){
    使うと、血で塗った床の上に立っている敵すべての足元から怨霊の手が伸び、床の中へ引きずり込む。
    引きずり込まれた敵は血を流さず死体も残らない（床は塗れない）。ボスは引きずり込めないが、大ダメージを受けて動きが止まる。
    怨念解放（主人公の周り）とは逆に、画面のどこにいても「血の床の上」なら届く。床を塗るほど強い */
-const HAND_T=1.0;let HANDS=[],handGlow=0;
+const HAND_T=1.0;let HANDS=[],handGlow=0,handDark=0;
 const onBloodTile=e=>{const i=tileAt(e.x,e.y);return i>=0&&DONE[i]&&!BLOCK[i]};
 function useHands(){
   if(state!=='play'||P.dead||G.soul<SOUL_MAX)return;
   const tg=E.filter(e=>!e.dead&&e.state!=='enter'&&e.drag==null&&e.ashT==null&&onBloodTile(e));
   if(!tg.length){popText(P.x,P.y-62,'血の床の上に敵がいない','#c890ff',14,1);SFX.wall();return} // 空振りでは使わない
-  G.soul=0;healP(Math.round(15*1.25));SFX.hands();tutComplete(6,1.4); // 2段分をすべて使う。回復は怨念解放（15）の1.25倍
- handGlow=1;slow(.7,.35);addShake(16);G.flash=Math.max(G.flash,.45);G.flashCol='70,0,110';G.zoom=Math.max(G.zoom,.05);
+  G.soul=0;healP(Math.round(15*1.25));SFX.hands();tutComplete(7,1.4); // 2段分をすべて使う。回復は怨念解放（15）の1.25倍
+  handGlow=1;handDark=1;slow(1.1,.3);addShake(20);G.flash=Math.max(G.flash,.55);G.flashCol='20,0,30';G.zoom=Math.max(G.zoom,.07);
+  // 血の床のあちこちからも、獲物を探す手が何本も突き出す（飾り）
+  const fl=[];for(let i=0;i<GN;i++)if(DONE[i]&&!BLOCK[i])fl.push(i);
+  for(let k=0;k<Math.min(14,fl.length);k++){const t=tileRect(pick(fl));HANDS.push({e:null,x:t.x+rand(8,t.w-8),y:t.y+rand(8,t.h-8),t:-rand(0,.4),dur:1.1,n:1+((Math.random()*2)|0),seed:Math.random()*9,deco:true})}
+  tg.slice(0,5).forEach((e,i)=>{if(!e.boss&&!e.shiki)SFX.scream(i*.12+rand(0,.08))});
   popText(W/2,AY0+80,'怨 霊 の 手','#c890ff',30,1.3);
   for(const e of tg){
-    HANDS.push({e,x:e.x,y:e.y,t:0,dur:HAND_T+.3,n:e.boss?6:3+((Math.random()*2)|0),seed:Math.random()*9});
+    HANDS.push({e,x:e.x,y:e.y,t:0,dur:HAND_T+.3,n:e.boss?9:5+((Math.random()*3)|0),seed:Math.random()*9});
     if(e.boss){hitEnemy(e,e.max*.12,-Math.PI/2,0,{});e.stun=Math.max(e.stun,1.6)}
     else{e.drag=0;G.chain++;G.chainT=chainWin();G.chainPop=1}}
   if(tg.length>=3)callout(tg.length+'体 引きずり込み','血の床は、怨霊の巣だ','#c890ff');
@@ -1649,23 +1696,42 @@ function handVanish(e){
   for(let i=0;i<10;i++){const a=rand(0,TAU),v=rand(30,110),l=rand(.3,.6);fx({k:'smoke',x:e.x,y:e.y,vx:Math.cos(a)*v,vy:Math.sin(a)*v*.5,life:l,max:l,sz:rand(5,10)})}
   tone(90,40,.35,'sine',.35);
 }
-function updateHands(rdt){for(const h of HANDS){h.t+=rdt;if(h.e&&!h.e.dead){h.x=h.e.x;h.y=h.e.y}}HANDS=HANDS.filter(h=>h.t<h.dur);handGlow=Math.max(0,handGlow-rdt*1.2)}
+function updateHands(rdt){for(const h of HANDS){h.t+=rdt;if(h.e&&!h.e.dead){h.x=h.e.x;h.y=h.e.y}}HANDS=HANDS.filter(h=>h.t<h.dur);handGlow=Math.max(0,handGlow-rdt*1.2);handDark=Math.max(0,handDark-rdt*.55)}
 function drawHands(){
-  // 使った瞬間、血の床全体が紫に脈打つ
-  if(handGlow>0){g.fillStyle=`rgba(150,60,255,${handGlow*.22})`;for(let i=0;i<GN;i++)if(DONE[i]&&!BLOCK[i]){const t=tileRect(i);g.fillRect(t.x,t.y,t.w,t.h)}}
-  for(const h of HANDS){const p=clamp(h.t/h.dur,0,1),grow=easeOut(Math.min(1,h.t/.35)),fade=p>.8?(1-p)/.2:1;
+  // 使った瞬間、血の床全体がどす黒い紫に脈打つ
+  if(handGlow>0){const pl=.6+Math.sin(G.time*30)*.4;g.fillStyle=`rgba(90,0,140,${handGlow*.3*pl})`;for(let i=0;i<GN;i++)if(DONE[i]&&!BLOCK[i]){const t=tileRect(i);g.fillRect(t.x,t.y,t.w,t.h)}}
+  for(const h of HANDS){if(h.t<0)continue;const p=clamp(h.t/h.dur,0,1),grow=easeOut(Math.min(1,h.t/.3)),fade=p>.82?(1-p)/.18:1,R=h.deco?.7:1;
     g.save();g.globalAlpha=fade;
-    // 足元の黒い沼
-    g.fillStyle='rgba(12,0,20,.75)';g.beginPath();g.ellipse(h.x,h.y+4,22*grow+6,9*grow+3,0,0,TAU);g.fill();glow(h.x,h.y,40,'#8a3cff',.35*fade);
-    for(let k=0;k<h.n;k++){const a=k/h.n*TAU+h.seed,bx=h.x+Math.cos(a)*16,by=h.y+4+Math.sin(a)*6,L=(26+((k*7+h.seed*3)%10))*grow,
-      sw=Math.sin(h.t*14+k)*3,tx=h.x+Math.cos(a)*6+sw,ty=h.y-6-L*.55+(1-grow)*20;
-      // 腕：根元が太く先が細い、黒紫の影
-      g.strokeStyle='#1a0626';g.lineCap='round';g.lineWidth=7;g.beginPath();g.moveTo(bx,by);g.quadraticCurveTo((bx+tx)/2+sw,by-L*.4,tx,ty);g.stroke();
-      g.strokeStyle='rgba(190,120,255,.5)';g.lineWidth=1.5;g.beginPath();g.moveTo(bx,by);g.quadraticCurveTo((bx+tx)/2+sw,by-L*.4,tx,ty);g.stroke();
-      // 指：つかみかかる5本
-      g.strokeStyle='#1a0626';g.lineWidth=2.2;for(let j=0;j<5;j++){const fa=-Math.PI/2+(j-2)*.38+Math.cos(a)*.3;g.beginPath();g.moveTo(tx,ty);g.lineTo(tx+Math.cos(fa)*7,ty+Math.sin(fa)*7);g.stroke()}}
+    // 足元に開く黒い沼（縁が紫に揺らめく）
+    const pr=(22*grow+6)*R;g.fillStyle='rgba(6,0,12,.88)';g.beginPath();g.ellipse(h.x,h.y+4,pr,pr*.42,0,0,TAU);g.fill();
+    g.strokeStyle=`rgba(170,80,255,${.55*fade})`;g.lineWidth=1.5;g.beginPath();g.ellipse(h.x,h.y+4,pr*(1+Math.sin(h.t*20)*.06),pr*.42,0,0,TAU);g.stroke();
+    if(!h.deco){glow(h.x,h.y,46,'#6a20d0',.4*fade);
+      // 沼の底から見上げる、白い亡者の顔（目と口は黒い穴）
+      if(h.t>.15){const fa=Math.min(1,(h.t-.15)/.25)*fade,fy=h.y+5;g.globalAlpha=fa*.85;g.fillStyle='#c9c4d6';g.beginPath();g.ellipse(h.x,fy,9,6,0,0,TAU);g.fill();
+        g.fillStyle='#08000e';g.beginPath();g.ellipse(h.x-3.5,fy-1.5,2,1.6,0,0,TAU);g.ellipse(h.x+3.5,fy-1.5,2,1.6,0,0,TAU);g.fill();
+        g.beginPath();g.ellipse(h.x,fy+2.6,2.2,1.6+Math.sin(h.t*25)*.6,0,0,TAU);g.fill();g.globalAlpha=fade}}
+    for(let k=0;k<h.n;k++){
+      const a=k/h.n*TAU+h.seed,bx=h.x+Math.cos(a)*(h.deco?4:15)*R,by=h.y+4+Math.sin(a)*6*R,L=(30+((k*7+h.seed*3)%14))*grow*R,
+        tw=Math.sin(h.t*18+k*1.7)*4,tx=h.x+Math.cos(a)*(h.deco?10:5)*R+tw,ty=h.y-8*R-L*.6+(1-grow)*24,
+        mx=(bx+tx)/2+Math.cos(a)*10*R+tw,my=by-L*.45;
+      // 腕：死人の青白い肌、骨ばった輪郭、黒い血管
+      g.lineCap='round';g.strokeStyle='#14051e';g.lineWidth=8*R;g.beginPath();g.moveTo(bx,by);g.quadraticCurveTo(mx,my,tx,ty);g.stroke();
+      g.strokeStyle='#a9a2bb';g.lineWidth=5*R;g.beginPath();g.moveTo(bx,by);g.quadraticCurveTo(mx,my,tx,ty);g.stroke();
+      g.strokeStyle='rgba(60,20,80,.7)';g.lineWidth=1;g.beginPath();g.moveTo(bx,by);g.quadraticCurveTo(mx-2,my,tx-1,ty+2);g.stroke();
+      // 手のひらと、獲物をつかもうと曲がる長い指（先に黒い爪）
+      circ(tx,ty,3.4*R,'#a9a2bb');const curl=Math.min(1,h.t/.6)*(h.deco?.4:1);
+      for(let j=0;j<5;j++){const fa=-Math.PI/2+(j-2)*.42+Math.cos(a)*.25,l1=(j===0||j===4?6:9)*R;
+        const jx=tx+Math.cos(fa)*l1,jy=ty+Math.sin(fa)*l1,fb=fa+(Math.PI*.55)*curl*(j<2?-1:j>2?1:.2),ex=jx+Math.cos(fb)*6*R,ey=jy+Math.sin(fb)*6*R;
+        g.strokeStyle='#14051e';g.lineWidth=3.2*R;g.beginPath();g.moveTo(tx,ty);g.lineTo(jx,jy);g.lineTo(ex,ey);g.stroke();
+        g.strokeStyle='#bdb6cf';g.lineWidth=1.6*R;g.beginPath();g.moveTo(tx,ty);g.lineTo(jx,jy);g.lineTo(ex,ey);g.stroke();
+        circ(ex,ey,1.1*R,'#050008')}}
+    // 立ちのぼる紫の瘴気
+    if(Math.random()<.3)fx({k:'powder',x:h.x+rand(-12,12),y:h.y,vx:rand(-10,10),vy:rand(-70,-30),life:.6,max:.6,sz:rand(2,4),col:'#7a30c0'});
     g.restore()}
 }
+// 怨霊の手の間は、画面の縁から闇が迫る
+function drawHandDark(){if(handDark<=0)return;const a=Math.min(1,handDark*1.4);
+  const vg=g.createRadialGradient(W/2,H/2,H*.18,W/2,H/2,H*.7);vg.addColorStop(0,`rgba(10,0,18,${.12*a})`);vg.addColorStop(1,`rgba(8,0,14,${.78*a})`);g.fillStyle=vg;g.fillRect(0,0,W,H)}
 function drawGimmicks(){
   drawWindows();
   for(const w of WARNS){
@@ -1846,14 +1912,15 @@ const lsGet=k=>{try{return localStorage.getItem(k)}catch(e){return null}},lsSet=
 let tutDone=lsGet('dg_tut')==='1';
 const SEEN=new Set((()=>{try{return JSON.parse(lsGet('dg_seen')||'[]')}catch(e){return[]}})());
 function markSeen(k){SEEN.add(k);lsSet('dg_seen',JSON.stringify([...SEEN]))}
-// チュートリアルの手順（①〜⑧）。1つ達成するごとにゲームを止め、「次へ／もう一度」を選ばせる。操作の説明はスマホ／PCで出し分ける
-const TUT_STEPS=8,TUT_REPS=3; // 手順の数／各手順を何回成功したら選択画面を出すか
+// チュートリアルの手順（①〜⑨）。1つ達成するごとにゲームを止め、「次へ／もう一度」を選ばせる。操作の説明はスマホ／PCで出し分ける
+const TUT_STEPS=9,TUT_REPS=3; // 手順の数／各手順を何回成功したら選択画面を出すか
 const tutText=st=>({1:['① 塗る','敵を倒すと、血で床が染まる。まず3マス塗ってみよう'],2:G.tut&&G.tut.rep>=2?['② 囲う（壁際）','壁も囲いになる。光るマスを塗って角を切り取れ']:['② 囲う','光るマスを塗って輪を閉じろ。囲んだ中が一気に染まる'],
   3:['③ ガード',(touchMode?'右半分を長押し':'U／右クリックを押したまま')+'で正面ガード。防ぐとライフが回復'],
-  4:['④ 弾き返し','銃撃手の弾は、当たる直前に攻撃すると跳ね返せる'],
-  5:['⑤ 怨念解放','SOULが満タン！'+(touchMode?'光る主人公をタップ':'L／Eキー')+'で周りを一掃'],
-  6:['⑥ 怨霊の手','SOULが紫まで満タン！'+(touchMode?'右側を下スワイプ':'Q／Kキー')+'で血の床の敵を一掃'],
-  7:['⑦ 掃除屋','塗った血を消しに来る。消される前に倒せ！'],8:['⑧ クリア','光るマスを塗れ。床をすべて血で塗るとステージクリア']})[st];
+  4:['④ ジャストガード','攻撃が当たる直前にガード！相手がよろけ、次の一撃がクリティカル'],
+  5:['⑤ 弾き返し','銃撃手の弾は、当たる直前に攻撃すると跳ね返せる'],
+  6:['⑥ 怨念解放','SOULが満タン！'+(touchMode?'光る主人公をタップ':'L／Eキー')+'で周りを一掃'],
+  7:['⑦ 怨霊の手','紫のSOUL満タン！'+(touchMode?'光る主人公をタップ':'Q／Kキー')+'で血の床の敵を一掃'],
+  8:['⑧ 掃除屋','塗った血を消しに来る。消される前に倒せ！'],9:['⑨ クリア','光るマスを塗れ。床をすべて血で塗るとステージクリア']})[st];
 function tutWave(n){
   if(!G.tutMode||n!==1){G.tut=null;return}
   G.tut={step:1,t:0,gap:-1,rep:0};tutSetup(1);state='tutintro';stateT=0;
@@ -1865,15 +1932,15 @@ function tutSetup(st){
   if(st>=2){for(const e of E){for(let k=0;k<6;k++)fx({k:'smoke',x:e.x,y:e.y,vx:rand(-60,60),vy:rand(-60,60),life:.5,max:.5,sz:rand(8,14)})}E.length=0;MARKS.length=0;B.length=0}
   if(st===1)T_.base=painted;
   else if(st===2){if(T_.rep>=2)tutCorner();else tutRing()} // 3回目は壁際の角で練習
-  else if(st===3)tutFoe('grunt',110);
-  else if(st===4)tutFoe('gunner',230);
-  else if(st===5){G.soul=100;for(let k=0;k<3;k++){const a=k/3*TAU+.5;tutFoe('grunt',140,a)}}
-  else if(st===6){
+  else if(st===3||st===4)tutFoe('grunt',110);
+  else if(st===5)tutFoe('gunner',230);
+  else if(st===6){G.soul=100;for(let k=0;k<3;k++){const a=k/3*TAU+.5;tutFoe('grunt',140,a)}}
+  else if(st===7){
     // ⑥ 怨霊の手：SOULを2段目まで満タンにし、主人公のまわり一帯を血で塗っておく（寄ってくる敵が血の床に乗る）
     G.soul=SOUL_MAX;capFilling=true;for(let i=0;i<GN;i++){const t=tileRect(i);if(!BLOCK[i]&&!DONE[i]&&dist(t.x+t.w/2,t.y+t.h/2,P.x,P.y)<230)fillTile(i)}capFilling=false;
     for(let k=0;k<4;k++){const a=k/4*TAU+.4;tutFoe('grunt',150,a)}}
-  else if(st===7){G.crewOut=true;queueSpawn('cleaner','mop')}
-  else if(st===8){
+  else if(st===8){G.crewOut=true;queueSpawn('cleaner','mop')}
+  else if(st===9){
     // ⑧：床をほぼ全部塗った状態にして、残り2マスだけを光らせる（近くに敵を多めに出す）
     const cand=[];for(let i=0;i<GN;i++){const cx=i%GC,cy=(i/GC)|0,t=tileRect(i);if(cx>0&&cy>=3&&cx<GC-1&&cy<GR-1&&dist(t.x+t.w/2,t.y+t.h/2,P.x,P.y)>140)cand.push(i)}
     cand.sort(()=>Math.random()-.5);T_.targets=cand.slice(0,2);
@@ -1933,21 +2000,21 @@ function updateTut(dt){
     state='tutmenu';stateT=0;SFX.just();return}
   if(T_.step===1&&painted>=T_.base+3&&T_.t>1)tutComplete(1,.3);
   // 練習相手を先に倒してしまったら出し直す
-  if((T_.step===3||T_.step===4)&&T_.t>1&&!T_.later&&(!T_.foe||T_.foe.dead))tutFoe(T_.step===3?'grunt':'gunner',T_.step===3?110:230);
-  if(T_.step===5&&G.soul<100&&T_.t>1&&!T_.later)G.soul=100;
-  if(T_.step===6&&G.soul<SOUL_MAX&&T_.t>1&&!T_.later&&!HANDS.length)G.soul=SOUL_MAX;
-  if(T_.step===6&&T_.t>1&&!T_.later&&!E.length&&!MARKS.length)for(let k=0;k<4;k++){const a=k/4*TAU+.4;tutFoe('grunt',150,a)}
-  if(T_.step===7&&T_.t>1.5&&!E.some(e=>e.type==='cleaner')&&!MARKS.some(m=>m.type==='cleaner'))tutComplete(7,.3);
-  if(T_.step===8&&T_.targets&&T_.targets.every(i=>DONE[i]))tutComplete(8,.6);
+  if((T_.step===3||T_.step===4||T_.step===5)&&T_.t>1&&!T_.later&&(!T_.foe||T_.foe.dead))tutFoe(T_.step===5?'gunner':'grunt',T_.step===5?230:110);
+  if(T_.step===6&&G.soul<100&&T_.t>1&&!T_.later)G.soul=100;
+  if(T_.step===7&&G.soul<SOUL_MAX&&T_.t>1&&!T_.later&&!HANDS.length)G.soul=SOUL_MAX;
+  if(T_.step===7&&T_.t>1&&!T_.later&&!E.length&&!MARKS.length)for(let k=0;k<4;k++){const a=k/4*TAU+.4;tutFoe('grunt',150,a)}
+  if(T_.step===8&&T_.t>1.5&&!E.some(e=>e.type==='cleaner')&&!MARKS.some(m=>m.type==='cleaner'))tutComplete(8,.3);
+  if(T_.step===9&&T_.targets&&T_.targets.every(i=>DONE[i]))tutComplete(9,.6);
   // 塗るための相手：①は1体ずつ、②は光るマスの近くに1体、⑦は光るマスの近くに同時に最大5体
   const foes=E.filter(e=>e.type!=='cleaner').length+MARKS.length;
   if(T_.step===1&&foes<1&&T_.t>.6)tutFoe('grunt',150,rand(0,TAU));
   if(T_.step===2&&foes<1&&T_.gap>=0&&!DONE[T_.gap]&&T_.t>.6){const g_=tileRect(T_.gap);const e=makeEnemy('grunt',g_.x+g_.w/2+rand(-20,20),g_.y+g_.h/2+rand(-20,20));e.state='chase'}
-  if(T_.step===8&&!T_.later&&foes<5&&(T_.spawnCd-=dt)<=0){T_.spawnCd=.45;const tg=(T_.targets||[]).filter(i=>!DONE[i]);
+  if(T_.step===9&&!T_.later&&foes<5&&(T_.spawnCd-=dt)<=0){T_.spawnCd=.45;const tg=(T_.targets||[]).filter(i=>!DONE[i]);
     if(tg.length){const t=tileRect(pick(tg)),a=rand(0,TAU),r=rand(40,90);const e=makeEnemy('grunt',clamp(t.x+t.w/2+Math.cos(a)*r,AX0+20,AX1-20),clamp(t.y+t.h/2+Math.sin(a)*r,AY0+30,AY1-20));e.state='chase'}}
 }
 // 初めて出会う敵・仕掛けに、矢印と一言説明（1回きり）
-const SPOT_TXT={onmyo:'陰陽師：式神を呼ぶ。斬れば術が解ける',gunner:'銃撃手：弾は攻撃で弾き返せる',brute:'用心棒：赤い円から離れろ',bazooka:'バズーカ兵：ロケットも弾き返せる',
+const SPOT_TXT={shield:'盾持ち：正面は斬れない。反射弾・背後・ジャストガードで崩せ',sniper:'狙撃手：赤い線のあとに強烈な一発。弾き返せ',slasher:'ナイフ使い：連撃中は怯まない。ジャストガードで崩せ',onmyo:'陰陽師：式神を呼ぶ。斬れば術が解ける',gunner:'銃撃手：弾は攻撃で弾き返せる',brute:'用心棒：赤い円から離れろ',bazooka:'バズーカ兵：ロケットも弾き返せる',
   cl_mop:'掃除屋：血を消す。先に倒せ',cl_washer:'高圧洗浄機：射線上の血を消す',cl_bleach:'漂白剤：周りの血を消す'};
 function spotNew(e){const k=e.type==='cleaner'?'cl_'+(e.sub||'mop'):e.type;if(SPOT_TXT[k]&&!SEEN.has(k)){markSeen(k);e.spot=4.5;e.spotTxt=SPOT_TXT[k]}}
 function pointer(x,y,label,col){
@@ -1962,11 +2029,11 @@ function drawTutWorld(){
   if(G.propSpot>0){g.globalAlpha=Math.min(1,G.propSpot);for(const pr of PROPS)if(!pr.used)pointer(pr.x,pr.y-pr.r-20,'殴れ！','#7ff3ff');g.globalAlpha=1}
   const T_=G.tut;if(!T_||(state!=='play'&&state!=='tutmenu'&&state!=='tutintro'))return;
   if(T_.step===2&&T_.gap>=0&&!DONE[T_.gap])glowTile(T_.gap,'ここを塗れ（近くで敵を倒す）');
-  if(T_.step===8&&T_.targets)T_.targets.forEach((i,k)=>{if(!DONE[i])glowTile(i,k?null:'ここを塗れ（近くで敵を倒す）')});
-  if(T_.step===7)for(const e of E)if(e.type==='cleaner'&&!(e.spot>0))pointer(e.x,e.y-e.r-22,'消される前に倒せ！','#5ab8ff');
-  if((T_.step===3||T_.step===4)&&T_.foe&&!T_.foe.dead&&!(T_.foe.spot>0))pointer(T_.foe.x,T_.foe.y-T_.foe.r-22,T_.step===3?'攻撃に合わせてガード':'弾を跳ね返せ');
-  if(T_.step===5&&!P.dead)pointer(P.x,P.y-74,touchMode?'タップ！':'L／E');
-  if(T_.step===6&&!P.dead&&!T_.later)pointer(P.x,P.y-74,touchMode?'右側を下へスワイプ！':'Q／K');
+  if(T_.step===9&&T_.targets)T_.targets.forEach((i,k)=>{if(!DONE[i])glowTile(i,k?null:'ここを塗れ（近くで敵を倒す）')});
+  if(T_.step===8)for(const e of E)if(e.type==='cleaner'&&!(e.spot>0))pointer(e.x,e.y-e.r-22,'消される前に倒せ！','#5ab8ff');
+  if((T_.step===3||T_.step===4||T_.step===5)&&T_.foe&&!T_.foe.dead&&!(T_.foe.spot>0))pointer(T_.foe.x,T_.foe.y-T_.foe.r-22,T_.step===3?'攻撃に合わせてガード':T_.step===4?'斬られる直前にガード！':'弾を跳ね返せ');
+  if(T_.step===6&&!P.dead)pointer(P.x,P.y-74,touchMode?'タップ！':'L／E');
+  if(T_.step===7&&!P.dead&&!T_.later)pointer(P.x,P.y-74,touchMode?'タップ！':'Q／K');
 }
 function drawTutPanel(){
   const T_=G.tut,intro=state==='tutintro';if(!T_||(state!=='play'&&!intro)||!tutText(T_.step))return;
@@ -2233,9 +2300,10 @@ cv.addEventListener('pointermove',ev=>{
 });
 function pUp(ev){
   const tt=TOUCH.get(ev.pointerId);
-  if(tt&&tt.mode==='rage'&&ev.type==='pointerup'&&state==='play')inp.ragePress=true;
-  // 右半分を素早く下へスワイプ（0.5秒以内に70px以上）：怨霊の手
-  if(tt&&tt.sy!=null&&ev.type==='pointerup'&&state==='play'&&tt.y-tt.sy>70&&Math.abs(tt.x-tt.sx)<tt.y-tt.sy&&performance.now()-tt.t<500)useHands();
+  // 光る主人公のタップ：金なら怨念解放、紫（2段目まで満タン）なら怨霊の手
+  if(tt&&tt.mode==='rage'&&ev.type==='pointerup'&&state==='play'){if(G.soul>=SOUL_MAX)useHands();else inp.ragePress=true}
+  // 右半分を素早く下へスワイプ（0.7秒以内に50px以上）：怨霊の手
+  else if(tt&&tt.sy!=null&&ev.type==='pointerup'&&state==='play'&&tt.y-tt.sy>50&&Math.abs(tt.x-tt.sx)<tt.y-tt.sy&&performance.now()-tt.t<700)useHands();
   if(ev.type==='lostpointercapture'&&ev.pointerType==='mouse')return;
   if(tt)TOUCH.delete(ev.pointerId);
   if(ev.pointerId===inp.stick){inp.stick=null;inp.tx=inp.ty=0}
@@ -2325,7 +2393,7 @@ function doHit(a){
     const d=dist(P.x,P.y,e.x,e.y);if(d>range+e.r)continue;
     const an=Math.atan2(e.y-P.y,e.x-P.x);
     if(S.arc<TAU&&Math.abs(angDiff(P.face,an))>S.arc/2&&d>e.r+P.r+4)continue;
-    hitEnemy(e,dmg,an,S.kb*(a.crit?1.4:1),{fin,crit:a.crit,spin:a.st===3});n++;
+    hitEnemy(e,dmg,an,S.kb*(a.crit?1.4:1),{fin,crit:a.crit,spin:a.st===3,melee:true});n++;
   }
   for(const b of B){
     if(b.friendly)continue;const d=dist(P.x,P.y,b.x,b.y);if(d>range+14)continue;
@@ -2344,7 +2412,7 @@ function doHit(a){
 // 怨念解放：一撃の必殺技。周囲の雑魚を一掃し、敵弾を弾き返し、足元一帯を一気に血で染める（持続する強化は無し）
 function tryRage(){
   if(G.soul<100||P.dead)return;
-  tutComplete(5,1);
+  tutComplete(6,1);
   const R=novaR();
   // 弾き返しと同じくらいのスローで、範囲（床の赤い円）と、波が届いて敵が燃え上がっていく様子を見せる
   G.soul=Math.max(0,G.soul-SOUL1)+(lv('ember')?30:0);SFX.rage(); // 1段分を使う（2段目まで満タンなら1段目の満タンに戻る）slow(1.1,.22);G.rageFx={t:0,dur:1.3,R};G.flash=.7;G.flashCol='255,30,60';addShake(24);G.zoom=.07;G.hitstop=Math.max(G.hitstop,.1);
@@ -2370,8 +2438,8 @@ function updatePlayer(dt){
     G.flash=Math.max(G.flash,.45);G.flashCol='255,215,80';addShake(10);slow(.35,.3);G.zoom=Math.max(G.zoom,.04);
     for(let i=0;i<30;i++){const a=rand(-Math.PI*.95,-Math.PI*.05),v=rand(120,380),l=rand(.4,.8);fx({k:'gold',x:P.x+rand(-10,10),y:P.y+rand(-6,10),vx:Math.cos(a)*v*.5,vy:Math.sin(a)*v,life:l,max:l,sz:rand(6,12)})}}
   if(G.soul>=SOUL_MAX&&!G.soulReady2&&!P.dead){G.soulReady2=true;SFX.powerup();SFX.handGet();
-    if(!SEEN.has('hands')){markSeen('hands');callout('怨霊 MAX','怨霊の手：血の床の上の敵を、すべて引きずり込む——'+(touchMode?'右側を下へスワイプ':'Q／Kキー'),'#c890ff');G.callout.dur=2.8}
-    else callout('怨霊 MAX',touchMode?'右側を下へスワイプで「怨霊の手」':'Q／Kキーで「怨霊の手」','#c890ff');
+    if(!SEEN.has('hands')){markSeen('hands');callout('怨霊 MAX','怨霊の手：血の床の上の敵を、すべて引きずり込む——'+(touchMode?'紫に光る主人公をタップ':'Q／Kキー'),'#c890ff');G.callout.dur=2.8}
+    else callout('怨霊 MAX',touchMode?'紫に光る主人公をタップで「怨霊の手」':'Q／Kキーで「怨霊の手」','#c890ff');
     RINGS.push({x:P.x,y:P.y,r:12,R:150,t:0,dur:.55,col:'190,110,255',w:12});RINGS.push({x:P.x,y:P.y,r:8,R:95,t:-.12,dur:.45,col:'235,210,255',w:6});
     G.flash=Math.max(G.flash,.45);G.flashCol='170,90,255';addShake(12);slow(.35,.3);G.zoom=Math.max(G.zoom,.05);
     for(let i=0;i<30;i++){const a=rand(-Math.PI*.95,-Math.PI*.05),v=rand(120,380),l=rand(.4,.8);fx({k:'powder',x:P.x+rand(-10,10),y:P.y+rand(-6,10),vx:Math.cos(a)*v*.5,vy:Math.sin(a)*v,life:l,max:l,sz:rand(4,8),col:'#c890ff'})}}
@@ -2386,6 +2454,7 @@ function updatePlayer(dt){
   // ガード中は攻撃不可・移動は遅い
   P.guard=guarding()&&!(G.bonus&&G.bonus.kind!=='shiki'); // 弾丸返しのボーナス面ではガードは使えない（攻撃で弾き返すのが目的）
  P.guardFx-=dt;P.gT=P.guard?Math.min(1,(P.gT||0)+dt*9):0;
+  if(P.guard&&!P.wasGuard)P.gStart=G.time;P.wasGuard=P.guard; // ガードを押した瞬間（ジャストガードの判定用）
   if(P.guard){
     P.atk=null;P.atkBuf=0;P.lt=0;
     // 向き：移動入力の方向。入力が無いときだけ最寄りの敵へゆっくり向く
@@ -2422,7 +2491,7 @@ const inside=e=>e.x>AX0+e.r&&e.x<AX1-e.r&&e.y>AY0+e.r&&e.y<AY1-e.r;
 const MAX_MELEE=3;
 // WAVE1だけ易しく：敵の出現数と攻撃の頻度を75%に（同時に出る数の上限×0.75と出現間隔×1.15で、画面上の数が約75%に。攻撃は1サイクル全体が÷0.75の長さになるよう休みを延ばす）
 const waveEase=()=>G.wave===1?.75:1;
-function meleeBusy(){let n=0;for(const o of E)if((o.type==='grunt'||o.type==='runner')&&(o.state==='windup'||o.state==='strike'))n++;return n}
+function meleeBusy(){let n=0;for(const o of E)if((o.type==='grunt'||o.type==='runner'||o.type==='shield'||o.type==='slasher')&&(o.state==='windup'||o.state==='strike'))n++;return n}
 function mv(e,a,s,dt){if(e.boss&&e.onBlood)s*=.75; // 血溜まりの上のボスは足を取られて遅い
 if(!e.boss&&lv('mire')){const i=tileAt(e.x,e.y);if(i>=0&&DONE[i]&&!BLOCK[i])s*=1-.18*lv('mire')} // 血の沼（強化カード）：塗った床の上の雑魚も遅くなる
 e.x+=Math.cos(a)*s*dt;e.y+=Math.sin(a)*s*dt;e.walk+=s*dt*.13}
@@ -2482,8 +2551,8 @@ function updateEnemy(e,dt){
   if(P.dead){if(e.state!=='chase'){e.state='chase'}e.ang=turn(e.ang,toP+Math.PI,3*dt);return}
   if(e.boss){updateBoss(e,dt,d,toP);return}
   switch(e.type){
-    case 'grunt':case 'runner':{
-      const run=e.type==='runner',reach=run?56:50;
+    case 'grunt':case 'runner':case 'shield':{
+      const run=e.type==='runner',sh=e.type==='shield',reach=run?56:sh?52:50,wu=run?.26:sh?.55:.32;
       if(e.state==='chase'){e.ang=turn(e.ang,toP,10*dt);
         if(d>reach+(e.wait?22:0))mv(e,toP,e.spd,dt);
         else if(meleeBusy()<MAX_MELEE){e.state='windup';e.st=0;e.wait=false}
@@ -2492,9 +2561,9 @@ function updateEnemy(e,dt){
           e.wait=true;const sa=toP+Math.PI/2*(e.v?1:-1);mv(e,sa,e.spd*.45,dt);if(d<reach+14)mv(e,toP+Math.PI,e.spd*.5,dt);
           if(Math.random()<dt*.4)e.v^=1;
         }}
-      else if(e.state==='windup'){e.ang=turn(e.ang,toP,6*dt);e.aim=e.ang;if(e.st>(run?.26:.32)){e.state='strike';e.st=0;e.hitDone=false;const ls=run?470:380;e.vx=Math.cos(e.aim)*ls;e.vy=Math.sin(e.aim)*ls}}
+      else if(e.state==='windup'){e.ang=turn(e.ang,toP,6*dt);e.aim=e.ang;if(e.st>wu){e.state='strike';e.st=0;e.hitDone=false;const ls=run?470:sh?440:380;e.vx=Math.cos(e.aim)*ls;e.vy=Math.sin(e.aim)*ls}}
       else if(e.state==='strike'){if(!e.hitDone&&d<e.r+P.r+16&&Math.abs(angDiff(e.aim,toP))<1.4){e.hitDone=true;hurtPlayer(e.dmg,e.x,e.y)}if(e.st>.2){e.state='recover';e.st=0}}
-      else if(e.state==='recover'){const rc=run?.35:.5;if(e.st>rc+((run?.26:.32)+.2+rc)*(1/waveEase()-1))e.state='chase'}
+      else if(e.state==='recover'){const rc=run?.35:sh?.7:.5;if(e.st>rc+(wu+.2+rc)*(1/waveEase()-1))e.state='chase'}
       break;
     }
     case 'onmyo':{
@@ -2514,6 +2583,32 @@ function updateEnemy(e,dt){
       else if(e.state==='ofudaAim'){e.aim=turn(e.aim,toP,8*dt);e.ang=e.aim;if(e.st>.6){for(let i=-1;i<=1;i++){const b=fire(e.x+Math.cos(e.aim)*20,e.y+Math.sin(e.aim)*20,e.aim+i*.25,260,9);b.ofuda=true}
         SFX.swing(1);e.state='recover';e.st=0;e.cd=rand(1,1.5)}}
       else if(e.state==='recover'){if(e.st>.4)e.state='chase'}
+      else e.state='chase';
+      break;
+    }
+    case 'slasher':{
+      // ナイフ使い：素早く間合いに入り、短い構えから3連撃。連撃の間は殴られても怯まない（ジャストガードでよろける）
+      if(e.state==='chase'){e.ang=turn(e.ang,toP,12*dt);
+        if(d>46)mv(e,toP,e.spd,dt);else if(meleeBusy()<MAX_MELEE){e.state='windup';e.st=0;e.combo=0}else{const sa=toP+Math.PI/2*(e.v?1:-1);mv(e,sa,e.spd*.5,dt)}}
+      else if(e.state==='windup'){e.ang=turn(e.ang,toP,10*dt);e.aim=e.ang;if(e.st>(e.combo?.12:.24)){e.state='strike';e.st=0;e.hitDone=false;e.vx=Math.cos(e.aim)*300;e.vy=Math.sin(e.aim)*300;SFX.swing(0)}}
+      else if(e.state==='strike'){if(!e.hitDone&&d<e.r+P.r+14&&Math.abs(angDiff(e.aim,toP))<1.4){e.hitDone=true;hurtPlayer(e.dmg,e.x,e.y)}
+        if(e.st>.13){if(e.combo<2){e.combo++;e.state='windup';e.st=0}else{e.state='recover';e.st=0}}}
+      else if(e.state==='recover'){if(e.st>.6/waveEase())e.state='chase'}
+      else e.state='chase';
+      break;
+    }
+    case 'sniper':{
+      // 狙撃手：遠くに陣取り、近寄られると下がる。1.35秒かけて狙い（赤い線が太くなっていく）、速く重い一発を撃つ。弾き返せる
+      if(e.state==='chase'){
+        e.ang=turn(e.ang,toP,6*dt);
+        const want=340,m=d>want+40?1:d<want-80?-1.6:0,sa=toP+Math.PI/2*(e.v?1:-1);
+        e.x+=(Math.cos(toP)*m*e.spd+Math.cos(sa)*e.spd*.3)*dt;e.y+=(Math.sin(toP)*m*e.spd+Math.sin(sa)*e.spd*.3)*dt;e.walk+=e.spd*dt*.13;
+        const los=losClear(e.x,e.y,P.x,P.y);if(!los){e.nolos=(e.nolos||0)+dt;if(e.nolos>1.4){e.nolos=0;e.v^=1}}else e.nolos=0;
+        e.cd-=dt;if(e.cd<=0&&los&&d<620&&!G.aimer&&G.shotGap<=0){e.state='aim';e.st=0;e.aim=toP;G.aimer=e;tone(1400,1400,.06,'square',.05)}
+      }else if(e.state==='aim'){
+        if(e.st<1.05)e.aim=turn(e.aim,toP,5*dt);e.ang=e.aim;
+        if(e.st>1.35){const b=fire(e.x+Math.cos(e.aim)*30,e.y+Math.sin(e.aim)*30,e.aim,640,e.dmg,true);b.snipe=true;SFX.boom();addShake(5);G.aimer=null;G.shotGap=.6/waveEase();e.state='recover';e.st=0}
+      }else if(e.state==='recover'){if(e.st>.6){e.state='chase';e.cd=rand(2.4,3.4)/waveEase()}}
       else e.state='chase';
       break;
     }
@@ -2882,7 +2977,7 @@ function update(rdt){
       for(const e of [...E]){
         if(b.hits&&b.hits.has(e))continue;if(dist(b.x,b.y,e.x,e.y)>=e.r+8)continue;
         const kill=!e.armor&&!e.boss;if(b.hits)b.hits.add(e);
-        hitEnemy(e,kill?e.hp+1:(b.big?16:4)*(b.perfect?2:1)*(1+.5*lv('payback')),Math.atan2(b.vy,b.vx),520,{fin:true});
+        hitEnemy(e,kill?e.hp+1:(b.big?16:4)*(b.perfect?2:1)*(1+.5*lv('payback')),Math.atan2(b.vy,b.vx),520,{fin:true,shot:true});
         if(!kill||b.noPierce){b.life=0;if(kill)popText(e.x,e.y-28,'SHOT KILL',b.perfect?'#ffd54a':'#7ff3ff',15,.8);break}
         b.kills=(b.kills||0)+1;G.score+=150*b.kills;G.hitstop=Math.max(G.hitstop,.06);G.zoom=Math.max(G.zoom,.03);addShake(9);
         popText(e.x,e.y-28,b.kills>1?'PIERCE ×'+b.kills:'SHOT KILL',b.perfect?'#ffd54a':'#7ff3ff',b.kills>1?19:15,.8);
@@ -3033,7 +3128,10 @@ const STY={
   kirishima:{j:'#e8e4dc',skin:'#dcae8a',hair:'#b9bec6',wpn:'katana',shirt:'#8b1020'},
   kito:{j:'#2a1f35',skin:'#c4906c',hair:'#3a3a3a',wpn:'shotgun',shades:true,crest:true,chain:'#e2b43c'},
   onmyo:{j:'#1a1226',skin:'#d8b08c',hair:'#111',wpn:'ofuda',shirt:'#7a2ab0'},
-  shirasagi:{j:'#f2f4f6',skin:'#e0b090',hair:'#dcdcdc',cap:'#f8f8f8',wpn:'gun',shirt:'#2f6fae',shades:true}
+  shirasagi:{j:'#f2f4f6',skin:'#e0b090',hair:'#dcdcdc',cap:'#f8f8f8',wpn:'gun',shirt:'#2f6fae',shades:true},
+  shield:{j:'#262a30',skin:'#d0a07a',hair:'#111',wpn:'knife',cap:'#1a1d22'},
+  sniper:{j:'#1d2420',skin:'#cf9a74',hair:'#111',wpn:'rifle',cap:'#121612',shades:true},
+  slasher:{j:'#4a0c16',skin:'#d4a07a',hair:'#d8c8a0',wpn:'knife',emb:'kanji'}
 };
 // 顔写真の頭（チンピラ／銃撃手／若頭・霧島）。体は今までの絵のまま、頭だけ丸く切り抜いた写真を大きめに重ねる
 const FACEIMG={};
@@ -3091,13 +3189,15 @@ function drawThug(e,rot,alpha){
   if(s.crest){g.strokeStyle=C('#d8b04a');g.lineWidth=1.2;g.beginPath();g.arc(-4,0,4,0,TAU);g.stroke();g.beginPath();g.moveTo(-8,0);g.lineTo(0,0);g.stroke()}
   // arms + weapon
   const arm=s.bare?'#cf9a74':s.j;
+  if(e.type==='shield'&&e.shieldUp){const bash=e.state==='strike'?4:0;rr(12+bash,-15,6,30,2,C('#2c3038'));g.fillStyle=C('rgba(150,190,230,.55)');g.fillRect(13+bash,-6,4,7);g.strokeStyle=C('#5a606c');g.lineWidth=1;g.strokeRect(12.5+bash,-14.5,5,29)}
   g.lineCap='round';
   if(s.wpn==='bazooka'){
     g.strokeStyle=C(s.j);g.lineWidth=4;g.beginPath();g.moveTo(1,-10);g.lineTo(9,-4);g.moveTo(1,10);g.lineTo(9,4);g.stroke();
     rr(-10,-5,40,10,3,C('#4b5a30'));rr(26,-6,6,12,2,C('#2a3018'));rr(4,4,4,6,1,C('#222'));
     if(e.state==='aim'){const on=Math.floor(e.st*10)%2===0;circ(32,0,on?3.5:2.5,on?'#ffb040':'#ff3020')}
-  }else if(s.wpn==='gun'||s.wpn==='shotgun'){
-    const L=s.wpn==='shotgun'?26:12;
+  }else if(s.wpn==='gun'||s.wpn==='shotgun'||s.wpn==='rifle'){
+    const L=s.wpn==='shotgun'?26:s.wpn==='rifle'?36:12;
+    if(s.wpn==='rifle'){rr(16,-4.5,9,3,1,C('#0c0c0c'));circ(20,-6,2.2,C('#2a3a4a'))} // 狙撃銃のスコープ
     g.strokeStyle=C(arm);g.lineWidth=4;g.beginPath();g.moveTo(1,-10);g.lineTo(11,-2);g.moveTo(1,10);g.lineTo(11,2);g.stroke();
     if(s.bare){g.strokeStyle=C('#2a3a5a');g.lineWidth=1.2;g.beginPath();g.moveTo(3,-9);g.lineTo(7,-6);g.moveTo(3,9);g.lineTo(7,6);g.stroke()}
     rr(9,-2.5,L,5,1.5,C(s.wpn==='shotgun'?'#2d2220':'#151515'));
@@ -3150,6 +3250,10 @@ function drawTele(e){
     const p=clamp(t/1.3,0,1),L=520;g.strokeStyle=`rgba(255,140,40,${.25+p*.6})`;g.lineWidth=p>.8?5:2.5;g.setLineDash(p>.8?[]:[10,6]);g.beginPath();g.moveTo(e.x,e.y);g.lineTo(e.x+Math.cos(e.aim)*L,e.y+Math.sin(e.aim)*L);g.stroke();g.setLineDash([]);
     txt('ROCKET',e.x,e.y-e.r-16,10,'#ffb060','center',EN,['#000',3]);
   }
+  if(e.type==='shield'&&e.state==='windup'){const p=clamp(t/.55,0,1);g.fillStyle=`rgba(255,40,60,${.15+p*.2})`;g.beginPath();g.moveTo(e.x,e.y);g.arc(e.x,e.y,70,e.aim-.5,e.aim+.5);g.closePath();g.fill();txt('体当たり',e.x,e.y-e.r-16,10,'#ff8090','center',JP,['#000',3],false,900)}
+  if(e.type==='slasher'&&(e.state==='windup'||e.state==='strike')){g.strokeStyle='rgba(255,60,80,.6)';g.lineWidth=2;g.beginPath();g.arc(e.x,e.y,52,e.aim-.8,e.aim+.8);g.stroke();for(let k=0;k<=e.combo;k++)circ(e.x-8+k*8,e.y-e.r-12,2.4,'#ff4060')}
+  if(e.type==='sniper'&&e.state==='aim'){const p=clamp(t/1.35,0,1),blink=p>.8&&Math.floor(G.time*20)%2;g.strokeStyle=`rgba(255,20,40,${.3+p*.6})`;g.lineWidth=.8+p*3.5;g.beginPath();g.moveTo(e.x,e.y);g.lineTo(e.x+Math.cos(e.aim)*900,e.y+Math.sin(e.aim)*900);g.stroke();
+    if(blink){g.strokeStyle='rgba(255,255,255,.7)';g.lineWidth=1;g.stroke()}circ(e.x+Math.cos(e.aim)*30,e.y+Math.sin(e.aim)*30,2+p*2,'#ff2040');txt('狙撃',e.x,e.y-e.r-16,10,'#ff6070','center',JP,['#000',3],false,900)}
   if(e.type==='gunner'&&e.state==='aim'){
     const p=clamp(t/.78,0,1);g.strokeStyle=`rgba(255,30,60,${.25+p*.6})`;g.lineWidth=p>.85?3:1.2;g.beginPath();g.moveTo(e.x,e.y);g.lineTo(e.x+Math.cos(e.aim)*700,e.y+Math.sin(e.aim)*700);g.stroke();
   }
@@ -3233,7 +3337,7 @@ function drawWorld(){
         if(rdy)drawGoldAura(P.x,P.y,G.soul>=SOUL_MAX);
         const blink=P.blinkT>0&&Math.floor(G.time*30)%2===0;drawGirl(P.x,P.y,P.face,blink?.35:1);
         if(P.guardLock&&(inp.guardKey||inp.guardMouse||inp.guardTouch!=null||inp.padGuard))txt('離して押し直し',P.x,P.y-56,12,'#7ff3ff','center',JP,['#000',4],false,900);
-        if(rdy){const pl=.5+Math.sin(G.time*8)*.5,p2=G.soul>=SOUL_MAX;g.globalAlpha=.75+pl*.25;txt(p2?(touchMode?'下スワイプで怨霊の手！':'怨霊の手 OK!（Q）'):(touchMode?'タップで怨念解放！':'怨念解放 OK!'),P.x,P.y-70-pl*3,15,p2?'#e0c0ff':'#ffe27a','center',JP,[p2?'#2a0040':'#3a1a00',4],false,900);g.globalAlpha=1}
+        if(rdy){const pl=.5+Math.sin(G.time*8)*.5,p2=G.soul>=SOUL_MAX;g.globalAlpha=.75+pl*.25;txt(p2?(touchMode?'タップで怨霊の手！':'怨霊の手 OK!（Q）'):(touchMode?'タップで怨念解放！':'怨念解放 OK!'),P.x,P.y-70-pl*3,15,p2?'#e0c0ff':'#ffe27a','center',JP,[p2?'#2a0040':'#3a1a00',4],false,900);g.globalAlpha=1}
       }
       if(P.guard&&!P.dead){
         glow(P.x+Math.cos(P.face)*24,P.y+Math.sin(P.face)*24,46,'#40d8ff',P.guardFx>0?.5:.22);
@@ -3242,7 +3346,7 @@ function drawWorld(){
     }else{
       if(e.boss)glow(e.x,e.y,e.r*2.6,e.type==='kito'?'#8a3cff':e.type==='shirasagi'?'#40c8ff':'#ff3355',.18);
       if(e.boss&&e.onBlood)glow(e.x,e.y+e.r*.6,e.r*2,'#ff1030',.35+Math.sin(G.time*10)*.1);
-      if(e.drag!=null){const k=clamp(e.drag/HAND_T,0,1);g.save();g.globalAlpha=1-k*.85;g.translate(e.x,e.y+k*8);g.scale(1-k*.35,1-k*.55);g.translate(-e.x,-e.y);}
+      if(e.drag!=null){const k=clamp(e.drag/HAND_T,0,1),jt=(1-k)*2.5;g.save();g.globalAlpha=1-k*.85;g.translate(e.x+rand(-jt,jt),e.y+k*10);g.scale(1-k*.35,1-k*.55);g.translate(-e.x,-e.y);}
       if(e.shiki)drawShiki(e);else{drawThug(e);if(e.type==='onmyo')drawOnmyo(e)}
       if(e.drag!=null)g.restore();
       if(e.ashT!=null)drawBurning(e);
@@ -3411,6 +3515,7 @@ function drawControls(){
   g.restore();
 }
 function drawOverlays(){
+  drawHandDark();
   // 雨のステージは全体を少し青く湿らせる。稲光は青白く2回またたく
   {const rk=rainK();if(rk>0&&state!=='title'){g.fillStyle=`rgba(40,60,110,${.07*rk})`;g.fillRect(0,0,W,H)}
    if(bolt>0){const a=bolt>.38?.22:bolt>.3?0:bolt>.18?.3*(bolt-.18)/.12:0;if(a>0){g.fillStyle=`rgba(200,215,255,${a})`;g.fillRect(0,0,W,H)}}}
@@ -3524,7 +3629,7 @@ function drawTitle(){
   }
   g.globalAlpha=la*.85;
   // 操作説明（15px・6行）
-  const L=touchMode?['目的：血で床を塗りつぶせ。囲めば一気に制圧','左半分をドラッグ：移動','右半分をタップ：攻撃（連打で連撃）','右半分を長押し：ガード（1回防ぐと解除）','光る主人公をタップ：怨念解放　右側を下へスワイプ：怨霊の手']
+  const L=touchMode?['目的：血で床を塗りつぶせ。囲めば一気に制圧','左半分をドラッグ：移動','右半分をタップ：攻撃（連打で連撃）','右半分を長押し：ガード（1回防ぐと解除）','光る主人公をタップ：怨念解放（紫なら怨霊の手）']
     :['目的：血で床を塗りつぶせ。囲めば一気に制圧','WASD／矢印：移動　Enter：スタート　T：チュートリアル','J／左クリック：攻撃（連打で連撃）','U／右クリック長押し：ガード（1回防ぐと解除）','L／E：怨念解放　Q：怨霊の手　P：ポーズ　パッド対応'];
   L.push('ステージクリアで強化を1つ選択');
   L.forEach((l,i)=>txt(l,W/2,682+i*19,14,i>=5?'#ffd54a':'#c9cfdc','center',JP,null,false,700));
@@ -3537,7 +3642,7 @@ function drawTitle(){
 }
 function dim(a,col){g.fillStyle=`rgba(${col||'4,4,8'},${a})`;g.fillRect(0,0,W,H)}
 const RULES=[['塗る','敵を倒すと床に血。床をすべて塗るとクリア'],['囲う','囲むと中が一気に染まる。光る「囲える」マスを狙え（壁際も可）'],['掃除屋','塗った血を消しに来る。最優先で倒せ'],
-  ['弾き返し','敵の弾やロケットは、攻撃で跳ね返せる'],['ガード','正面だけ防いで回復。1回防ぐと解除（押し直し）'],['怨念解放','SOUL1段目（金）満タンで発動。周囲の敵を灰にする'],['怨霊の手','SOUL2段目（紫）満タンで発動。血の床の上の敵を全員引きずり込む'],
+  ['弾き返し','敵の弾やロケットは、攻撃で跳ね返せる'],['ガード','正面だけ防いで回復。当たる直前ならジャストガード'],['怨念解放','SOUL1段目（金）満タンで発動。周囲の敵を灰にする'],['怨霊の手','SOUL2段目（紫）満タンで発動。血の床の上の敵を全員引きずり込む'],
   ['仕掛け','ステージの物を殴ると発動する'],['強化カード','ステージクリアで強化を1つ選ぶ'],['ボス','近づくと掴んで投げてくる（ガード不能）']];
 function drawPause(){
   dim(.82);txt('PAUSED',W/2,104,40,'#fff','center',EN,null,true);
