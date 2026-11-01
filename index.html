@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.40 2026-11-01';
+const VERSION='v0.42 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -155,6 +155,7 @@ function silentWav(){
   return URL.createObjectURL(new Blob([b],{type:'audio/wav'}));
 }
 function unlockAudio(){
+  if(document.hidden)return; // 裏に回っている間は鳴らし直さない
   // iPhoneでは、無音の<audio>を「指を離した瞬間」に再生すると、マナーモードでもゲーム音が鳴る状態に切り替わる
   if(IOS){
     if(!silentEl){silentEl=document.createElement('audio');silentEl.src=silentWav();silentEl.loop=true;silentEl.setAttribute('playsinline','');silentEl.setAttribute('webkit-playsinline','');silentEl.preload='auto'}
@@ -166,7 +167,13 @@ function unlockAudio(){
   try{const s=AC.createBufferSource();s.buffer=AC.createBuffer(1,1,22050);s.connect(AC.destination);s.start(0)}catch(e){}
 }
 for(const ev of ['touchend','pointerup','mouseup','click','keydown'])document.addEventListener(ev,unlockAudio,{passive:true,capture:true});
-document.addEventListener('visibilitychange',()=>{if(document.hidden){if(silentEl)silentEl.pause()}});
+// ブラウザを最小化した・別のアプリに切り替えた・画面を消した時は、音（BGM・効果音）を止める。戻ってきたら再開
+// （AudioContextを一時停止すると、鳴っている音も予約済みの音も止まり、時間も止まるので、戻った時に音がまとめて鳴ることもない）
+function muteBg(){if(silentEl)silentEl.pause();if(AC&&AC.state==='running'){const pr=AC.suspend();if(pr&&pr.catch)pr.catch(()=>{})}}
+function unmuteBg(){if(document.hidden||!AC)return;if(AC.state!=='running'){const pr=AC.resume();if(pr&&pr.catch)pr.catch(()=>{})}}
+document.addEventListener('visibilitychange',()=>{if(document.hidden)muteBg();else unmuteBg()});
+addEventListener('pagehide',muteBg);addEventListener('pageshow',unmuteBg);
+document.addEventListener('freeze',muteBg);
 function initAudio(){
   if(AC){if(AC.state!=='running')AC.resume().catch(()=>{});return}
   const A=window.AudioContext||window.webkitAudioContext;if(!A)return;
@@ -575,6 +582,8 @@ function blockPush(o){
     else{const k=(o.r-d)/d;o.x+=dx*k;o.y+=dy*k;res=[dx/d,dy/d]}}
   return res;
 }
+// 2点の間の射線が、ふさがったマスに遮られていないか（12px刻みで調べる）
+function losClear(x1,y1,x2,y2){if(!nBlock)return true;const n=Math.ceil(dist(x1,y1,x2,y2)/12);for(let k=1;k<n;k++){const i=tileAt(x1+(x2-x1)*k/n,y1+(y2-y1)*k/n);if(i>=0&&BLOCK[i])return false}return true}
 // (x,y) の半径 m 以内にふさがったマスがあるか（物や敵を置く場所選び用）
 function nearBlock(x,y,m){if(!nBlock)return false;for(const [dx,dy] of [[0,0],[m,0],[-m,0],[0,m],[0,-m]]){const i=tileAt(x+dx,y+dy);if(i>=0&&BLOCK[i])return true}return false}
 // ボス第2形態：天井から柱が4本落ちてくる（影で1.3秒予告→その場所がふさがる。下にいると被弾）。
@@ -879,7 +888,7 @@ function drawPick(){
 /* ---------------- ステージの仕掛け ----------------
    場所（床のテーマ）ごとに1種類。殴る・撃たせる・誘い込むことで、敵をまとめて倒せる */
 const GIMMICKS={
-  bottle: {name:'一升瓶',      hint:'瓶を殴ると倒れて酒がこぼれ、火が付いて敵を焼く'},
+  bottle: {name:'火炎瓶',      hint:'殴ると、殴った方向へ飛んで割れ、炎が広がって敵を焼く'},
   dyn:    {name:'ダイナマイト',hint:'殴る・撃たせると爆発、近くにも誘爆（近いと自分も被弾）'},
   oil:    {name:'ドラム缶',    hint:'殴ると穴が開いて油が漏れ出し、引火して広く燃える'},
   car:    {name:'放置車両',    hint:'車を殴ると滑り出し、敵を撥ね飛ばす'},
@@ -894,7 +903,7 @@ function propSpot(){
   for(let k=0;k<40;k++){const x=rand(AX0+50,AX1-50),y=rand(AY0+70,AY1-50);if(dist(x,y,P.x,P.y)>130&&!nearBlock(x,y,30)&&PROPS.every(o=>dist(x,y,o.x,o.y)>90))return{x,y}}
   return{x:rand(AX0+50,AX1-50),y:rand(AY0+70,AY1-50)};
 }
-function newProp(k){const p=propSpot();return{k,x:p.x,y:p.y,r:k==='car'?24:k==='oil'?20:16,used:false,lit:false,fuse:0,t:0,vx:0,vy:0,a:k==='car'?(Math.random()<.5?0:Math.PI/2):0,hits:new Set(),fall:null}}
+function newProp(k){const p=propSpot();return{k,x:p.x,y:p.y,r:k==='car'?24:k==='oil'?20:16,used:false,lit:false,fuse:0,t:0,vx:0,vy:0,a:k==='car'?(Math.random()<.5?0:Math.PI/2):0,hits:new Set(),fall:null,fly:null}}
 function setupGimmick(){
   PROPS=[];SMOKES=[];WARNS=[];SHOCKS=[];SPILLS=[];G.beamT=rand(3,5);
   G.gim=G.isBossWave?null:(theme.gim||null);
@@ -907,7 +916,8 @@ function hitProp(pr,ang){
   if(pr.used||pr.lit)return;
   if(pr.k==='dyn'){pr.lit=true;pr.fuse=DYN_FUSE;return}
   pr.used=true;pr.t=0;
-  if(pr.k==='bottle'){pr.fall={a:ang,t:0,done:false};SFX.wall()}
+  // 火炎瓶：殴った方向へ回りながら飛び、敵・壁・柱に当たるか一定距離で割れて、その場に炎が広がる
+  if(pr.k==='bottle'){pr.fly={a:ang,t:0,done:false};SFX.swing(1)}
   // ドラム缶（200L）：殴ると穴が開き、殴った方向へ黒い油が噴き出して床に広がる→少し遅れて引火（一升瓶より広く、燃える力は弱め）
   else if(pr.k==='oil'){SFX.wall();addShake(5);noise(.6,.25,'lowpass',900,200);
     for(let i=0;i<10;i++){const a=ang+rand(-.5,.5),v=rand(80,240),l=rand(.25,.5);fx({k:'oild',x:pr.x+Math.cos(ang)*12,y:pr.y+4,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:l,max:l})}
@@ -925,10 +935,16 @@ function updateGimmicks(dt){
     // 使った仕掛けは、しばらくすると別の場所に置き直される
     if(pr.used&&pr.t>(pr.k==='bottle'?11:pr.k==='oil'?13:9))Object.assign(pr,newProp(pr.k));
     if(pr.lit){pr.fuse-=dt;if(pr.fuse<=0)dynBoom(pr)}
-    if(pr.fall&&!pr.fall.done){pr.fall.t+=dt;if(pr.fall.t>.22){pr.fall.done=true;
-      // 瓶が割れて、倒れた方向へ酒が流れ出す（長さ150・幅46の帯）。少し遅れて火が付く
-      SFX.glass();for(let i=0;i<10;i++){const a=pr.fall.a+rand(-.8,.8),v=rand(60,200),l=rand(.2,.4);fx({k:'drop',x:pr.x+Math.cos(pr.fall.a)*20,y:pr.y+Math.sin(pr.fall.a)*20,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:l,max:l})}
-      SPILLS.push({x:pr.x,y:pr.y,a:pr.fall.a,len:150,w:46,t:0,tick:0,dur:5,lit:false,cause:'bottle',dmg:.22,grow:.45})}}
+    if(pr.fly&&!pr.fly.done){const f=pr.fly,c=Math.cos(f.a),s=Math.sin(f.a);f.t+=dt;pr.x+=c*480*dt;pr.y+=s*480*dt;
+      if(Math.random()<.7)fx({k:'fire',x:pr.x,y:pr.y-14,vx:rand(-20,20),vy:rand(-50,-20),life:.3,max:.3,sz:rand(5,9)});
+      const foe=E.find(e=>dist(pr.x,pr.y,e.x,e.y)<pr.r+e.r),ti=tileAt(pr.x,pr.y);
+      if(foe||f.t>.5||pr.x<AX0+8||pr.x>AX1-8||pr.y<AY0+8||pr.y>AY1-8||(ti>=0&&BLOCK[ti])){f.done=true;
+        pr.x=clamp(pr.x-c*8,AX0+10,AX1-10);pr.y=clamp(pr.y-s*8,AY0+10,AY1-10);
+        if(foe)gimHit('bottle',foe,1.5,f.a,220,{});
+        // 割れた瓶から炎が飛び散り、進んでいた向きに炎の帯（長さ120・幅64）が広がる。すぐに燃え上がる
+        SFX.glass();SFX.boom();addShake(8);RINGS.push({x:pr.x,y:pr.y,r:8,R:70,t:0,dur:.3,col:'255,150,50',w:8});
+        for(let i=0;i<16;i++){const a=rand(0,TAU),v=rand(60,260),l=rand(.25,.5);fx({k:'fire',x:pr.x,y:pr.y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:l,max:l,sz:rand(8,16)})}
+        SPILLS.push({x:pr.x-c*40,y:pr.y-s*40,a:f.a,len:120,w:64,t:0,tick:0,dur:5,lit:false,cause:'bottle',dmg:.22,grow:.25,ign:.05})}}
     if(pr.k==='car'){const v=Math.hypot(pr.vx,pr.vy);if(v>20){
       pr.x+=pr.vx*dt;pr.y+=pr.vy*dt;const f=Math.exp(-2.2*dt);pr.vx*=f;pr.vy*=f;pr.a=Math.atan2(pr.vy,pr.vx);
       if(pr.x<AX0+pr.r){pr.x=AX0+pr.r;pr.vx=Math.abs(pr.vx)*.5}else if(pr.x>AX1-pr.r){pr.x=AX1-pr.r;pr.vx=-Math.abs(pr.vx)*.5}
@@ -1021,9 +1037,12 @@ function drawGimmicks(){
       if(pr.lit){glow(2,-25,18,'#ffb030',.9);circ(2,-25,2.2,'#fff3b0')}
       g.restore()}
     else if(pr.k==='bottle'){
-      const bottle=()=>{rr(-9,-12,18,30,5,'#1f5a32');rr(-4,-26,8,15,3,'#1f5a32');rr(-5,-29,10,4,1.5,'#c9a24a');rr(-7,-3,14,12,2,'#efe6cf');g.fillStyle='rgba(255,255,255,.25)';g.fillRect(-6,-10,3,24);rr(-5,1,10,3,1,'#b01818')};
-      if(!pr.fall){shadow(pr.x,pr.y+16,13);g.save();g.translate(pr.x,pr.y);bottle();g.restore()}
-      else{const p=clamp(pr.fall.t/.22,0,1),fade=1-clamp((pr.t-8)/2,0,1);g.globalAlpha=fade;g.save();g.translate(pr.x,pr.y);g.rotate(angDiff(0,pr.fall.a+Math.PI/2)*p);bottle();g.restore();g.globalAlpha=1}}
+      // 火炎瓶：茶色のガラス瓶に琥珀色の燃料、口に詰めた布の先で火がちらつく
+      if(pr.fly&&pr.fly.done)continue;
+      const bottle=()=>{rr(-8,-10,16,26,5,'rgba(120,70,30,.85)');rr(-7,-1,14,16,4,'rgba(230,150,40,.75)');rr(-3.5,-22,7,13,2.5,'rgba(120,70,30,.9)');
+        g.fillStyle='rgba(255,255,255,.3)';g.fillRect(-5,-8,2.5,20);g.fillStyle='#d8cdb0';g.beginPath();g.moveTo(-3,-22);g.lineTo(3,-22);g.lineTo(5,-31);g.lineTo(-1,-28);g.closePath();g.fill();
+        const fl=.8+Math.random()*.4;glow(3,-33,12*fl,'#ff9a30',.85);circ(3,-33,2.5*fl,'#fff2b0')};
+      shadow(pr.x,pr.y+16,13);g.save();g.translate(pr.x,pr.y);if(pr.fly)g.rotate(pr.fly.t*18);bottle();g.restore()}
     else if(pr.k==='oil'){
       // 200Lドラム缶を横から見た形：赤い胴・補強の帯2本・上の縁・黄色い「火気注意」の菱形。穴が開くと少し傾いて残り、やがて消える
       const f=pr.used?1-clamp((pr.t-9)/2,0,1):1;if(f<=0)continue;
@@ -1792,7 +1811,9 @@ function updateEnemy(e,dt){
         const want=210,m=d>want+40?1:d<want-50?-1:0,sa=toP+Math.PI/2*(e.v?1:-1);
         e.x+=(Math.cos(toP)*m*e.spd+Math.cos(sa)*e.spd*.5)*dt;e.y+=(Math.sin(toP)*m*e.spd+Math.sin(sa)*e.spd*.5)*dt;e.walk+=e.spd*dt*.13;
         // 狙えるのは同時に1人だけ＋発射間隔あり → 弾は常に「単発」で飛んでくる
-        e.cd-=dt;if(e.cd<=0&&d<430&&!G.aimer&&G.shotGap<=0){e.state='aim';e.st=0;e.aim=toP;G.aimer=e}
+        // 柱の陰で射線が通らない時は撃たずに横へ回り込み、射線の通る位置を探す（遮蔽物があっても弾き返す機会を減らさない）
+        const los=losClear(e.x,e.y,P.x,P.y);if(!los){e.nolos=(e.nolos||0)+dt;if(e.nolos>1.4){e.nolos=0;e.v^=1}}else e.nolos=0;
+        e.cd-=dt;if(e.cd<=0&&los&&d<430&&!G.aimer&&G.shotGap<=0){e.state='aim';e.st=0;e.aim=toP;G.aimer=e}
       }else if(e.state==='aim'){
         if(e.st<.5)e.aim=turn(e.aim,toP,12*dt);e.ang=e.aim;
         if(e.st>.78){fire(e.x+Math.cos(e.aim)*22,e.y+Math.sin(e.aim)*22,e.aim,360,e.dmg);G.aimer=null;G.shotGap=.5/waveEase();e.state='recover';e.st=0;e.vx-=Math.cos(e.aim)*90;e.vy-=Math.sin(e.aim)*90}
@@ -1806,7 +1827,8 @@ function updateEnemy(e,dt){
         e.ang=turn(e.ang,toP,6*dt);
         const want=270,m=d>want+40?1:d<want-60?-1:0,sa=toP+Math.PI/2*(e.v?1:-1);
         e.x+=(Math.cos(toP)*m*e.spd+Math.cos(sa)*e.spd*.35)*dt;e.y+=(Math.sin(toP)*m*e.spd+Math.sin(sa)*e.spd*.35)*dt;e.walk+=e.spd*dt*.13;
-        e.cd-=dt;if(e.cd<=0&&d<480&&!G.aimer&&G.shotGap<=0){e.state='aim';e.st=0;e.aim=toP;G.aimer=e}
+        const los=losClear(e.x,e.y,P.x,P.y);if(!los){e.nolos=(e.nolos||0)+dt;if(e.nolos>1.4){e.nolos=0;e.v^=1}}else e.nolos=0;
+        e.cd-=dt;if(e.cd<=0&&los&&d<480&&!G.aimer&&G.shotGap<=0){e.state='aim';e.st=0;e.aim=toP;G.aimer=e}
       }else if(e.state==='aim'){
         if(e.st<.85)e.aim=turn(e.aim,toP,6*dt);e.ang=e.aim;
         if(e.st>1.3){const b=fire(e.x+Math.cos(e.aim)*30,e.y+Math.sin(e.aim)*30,e.aim,200,e.dmg,true);b.rocket=true;b.life=4;SFX.boom();addShake(6);
@@ -2077,7 +2099,12 @@ function update(rdt){
     b.x+=b.vx*dt;b.y+=b.vy*dt;b.life-=dt;
     for(const pr of PROPS)if(pr.k==='dyn'&&!pr.used&&!pr.lit&&dist(b.x,b.y,pr.x,pr.y)<pr.r+4){pr.lit=true;pr.fuse=DYN_FUSE-.45;b.life=0}
     // ふさがったマスに当たった弾は消える（ロケットはそこで爆発）
-    {const ti=tileAt(b.x,b.y);if(ti>=0&&BLOCK[ti]){b.life=0;if(b.rocket)explode(b.x,b.y,75,!b.friendly);else fx({k:'f',x:b.x,y:b.y,r:10,life:.06,max:.06,a:0});continue}}
+    // 弾き返した弾（ロケット以外）は柱で跳ね返る（跳弾・3回まで）。柱の陰の敵を狙うバンクショットができる
+    {const ti=tileAt(b.x,b.y);if(ti>=0&&BLOCK[ti]){
+      if(b.friendly&&!b.rocket&&(b.bnc||0)<3){const px=b.x-b.vx*dt,py=b.y-b.vy*dt,ix=tileAt(b.x,py),iy=tileAt(px,b.y),bx=ix>=0&&BLOCK[ix],by=iy>=0&&BLOCK[iy];
+        if(bx&&!by)b.vx*=-1;else if(by&&!bx)b.vy*=-1;else{b.vx*=-1;b.vy*=-1}
+        b.x=px;b.y=py;b.bnc=(b.bnc||0)+1;fx({k:'f',x:b.x,y:b.y,r:14,life:.08,max:.08,a:0});tone(1800,900,.06,'square',.08);continue}
+      b.life=0;if(b.rocket)explode(b.x,b.y,75,!b.friendly);else fx({k:'f',x:b.x,y:b.y,r:10,life:.06,max:.06,a:0});continue}}
     if(b.rocket){
       if(Math.random()<.6)fx({k:'smoke',x:b.x-b.vx*.04,y:b.y-b.vy*.04,vx:rand(-20,20),vy:rand(-20,20),life:.5,max:.5,sz:rand(6,11)});
       // 壁や寿命で爆発
