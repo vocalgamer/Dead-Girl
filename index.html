@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.50 2026-11-01';
+const VERSION='v0.51 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -1153,7 +1153,8 @@ function drawOilSpill(sp,L,f){
 // 炎の舌1本（根元が白く、先へ行くほど青く透ける）
 function flameTongue(x,y,h,w,al,lean,orange){
   const tx=x+lean*h,ty=y-h,gr=g.createLinearGradient(x,y,tx,ty);
-  if(orange){gr.addColorStop(0,`rgba(255,200,90,${.6*al})`);gr.addColorStop(.35,`rgba(255,90,15,${.5*al})`);gr.addColorStop(1,'rgba(160,20,0,0)')}
+  if(orange==='red'){gr.addColorStop(0,`rgba(255,170,170,${.75*al})`);gr.addColorStop(.35,`rgba(230,10,40,${.65*al})`);gr.addColorStop(1,'rgba(90,0,20,0)')}
+  else if(orange){gr.addColorStop(0,`rgba(255,200,90,${.6*al})`);gr.addColorStop(.35,`rgba(255,90,15,${.5*al})`);gr.addColorStop(1,'rgba(160,20,0,0)')}
   else{gr.addColorStop(0,`rgba(150,215,255,${.55*al})`);gr.addColorStop(.3,`rgba(70,140,255,${.45*al})`);gr.addColorStop(1,'rgba(30,60,255,0)')}
   g.fillStyle=gr;g.beginPath();g.moveTo(x-w,y);g.bezierCurveTo(x-w*1.1,y-h*.35,tx-w*.2,ty+h*.3,tx,ty);g.bezierCurveTo(tx+w*.2,ty+h*.3,x+w*1.1,y-h*.35,x+w,y);g.quadraticCurveTo(x,y+w*.7,x-w,y);g.fill();
 }
@@ -1165,6 +1166,17 @@ function drawBeam(x,y,a,sc,al){
   for(const sx of [-1,1]){g.save();g.beginPath();g.rect(sx>0?40:-52,-9,12,18);g.clip();g.fillStyle='#f2c21a';g.fillRect(sx>0?40:-52,-9,12,18);g.fillStyle='#111';for(let k=-3;k<4;k++){g.beginPath();g.moveTo((sx>0?40:-52)+k*6,-9);g.lineTo((sx>0?40:-52)+k*6+5,-9);g.lineTo((sx>0?40:-52)+k*6-4,9);g.lineTo((sx>0?40:-52)+k*6-9,9);g.closePath();g.fill()}g.restore()}
   g.fillStyle='#2a2d33';for(let k=-30;k<=30;k+=15){g.beginPath();g.arc(k,-6.5,1.3,0,TAU);g.arc(k,6.5,1.3,0,TAU);g.fill()}
   g.strokeStyle='#22252b';g.lineWidth=1.5;g.strokeRect(-52,-9,104,18);g.restore();g.globalAlpha=1;
+}
+// 怨念解放の演出：床に効果範囲の赤い円（点線の縁が回る）、主人公の足元から赤黒い怨念の炎が渦を巻いて立ち上り、頭上に「怨」の字
+function drawRageFx(){
+  const f=G.rageFx;if(!f)return;const p=f.t/f.dur,a=1-p,R=f.R*easeOut(Math.min(1,f.t/.35));
+  g.fillStyle=`rgba(255,20,50,${.16*a})`;g.beginPath();g.arc(P.x,P.y,R,0,TAU);g.fill();
+  g.strokeStyle=`rgba(255,70,100,${.9*a})`;g.lineWidth=3;g.setLineDash([12,7]);g.lineDashOffset=-G.time*60;g.beginPath();g.arc(P.x,P.y,R,0,TAU);g.stroke();g.setLineDash([]);
+  glow(P.x,P.y-10,80+20*Math.sin(G.time*20),'#ff1030',.65*a);
+  g.save();g.globalCompositeOperation='lighter';
+  for(let k=0;k<9;k++){const an=k/9*TAU+G.time*4,ox=Math.cos(an)*17,oy=Math.sin(an)*8;flameTongue(P.x+ox,P.y+8+oy,(36+18*Math.sin(G.time*14+k))*a+12,6,a,Math.sin(G.time*9+k)*.35,'red')}
+  g.restore();
+  txt('怨',P.x,P.y-56-p*24,32,`rgba(255,60,80,${a})`,'center',JP,['#000',4],false,900);
 }
 function drawGimmicks(){
   drawWindows();
@@ -1815,7 +1827,8 @@ function tryRage(){
   if(G.soul<100||P.dead)return;
   tutComplete(5,1);
   const R=novaR();
-  G.soul=0;SFX.rage();slow(.6,.2);G.flash=.7;G.flashCol='255,30,60';addShake(24);G.zoom=.07;G.hitstop=Math.max(G.hitstop,.1);
+  // 弾き返しと同じくらいのスローで、範囲（床の赤い円）と、波が届いて敵が燃え上がっていく様子を見せる
+  G.soul=0;SFX.rage();slow(1.1,.22);G.rageFx={t:0,dur:1.3,R};G.flash=.7;G.flashCol='255,30,60';addShake(24);G.zoom=.07;G.hitstop=Math.max(G.hitstop,.1);
   P.inv=Math.max(P.inv,.9);healP(15);
   RINGS.push({x:P.x,y:P.y,r:10,R:R+15,t:0,dur:.55,col:'255,40,70',w:20});
   RINGS.push({x:P.x,y:P.y,r:10,R:R*.8,t:-.08,dur:.5,col:'255,200,210',w:7});
@@ -1828,7 +1841,7 @@ function tryRage(){
   G.cause=pc;
   for(const b of B)if(!b.friendly&&dist(P.x,P.y,b.x,b.y)<R+5)reflect(b);
   // 怨念解放は床を塗らない（倒した敵も燃え尽きて灰になり、血は出ない）
-  callout('怨 念 解 放','周囲の敵を灰にした','#ff2f5f');
+  popText(W/2,AY0+70,'怨 念 解 放','#ff2f5f',30,1.3); // 主人公の周りの演出を隠さないよう、画面中央ではなく上部に出す
 }
 function updatePlayer(dt){
   // SOULが満タンになった瞬間に大きく告知（1回だけ）
@@ -2202,6 +2215,7 @@ function update(rdt){
   for(const r of RAIN){r.y+=r.s*rdt;r.x-=r.s*.25*rdt;if(r.y>H){r.y=-20;r.x=rand(0,W+200)}}
   if(state==='title'||state==='shop'){G.time+=rdt;return}
   if(state==='ad'){if(stateT>AD_T&&adCb){const f=adCb;adCb=null;f()}return}
+  if(G.rageFx){G.rageFx.t+=rdt;if(G.rageFx.t>G.rageFx.dur)G.rageFx=null} // 怨念解放の演出は実時間で進める（スロー中もきっちり1.3秒）
   G.shake*=Math.exp(-11*rdt);if(G.zHold>0)G.zHold-=rdt;else{G.zoom*=Math.exp(-7*rdt);if(G.zoom<.004)G.zc=null}G.flash=Math.max(0,G.flash-rdt*2.2);
   if(G.banner){G.banner.t+=rdt;if(G.banner.t>G.banner.dur)G.banner=null}
   if(G.sea){G.sea.t+=rdt;if(G.sea.t>.45&&!G.sea.b){G.sea.b=1;SFX.just();addShake(10)}if(G.sea.t>3.4)G.sea=null}
@@ -2625,7 +2639,7 @@ function drawWorld(){
     g.stroke();
     drawCapPreview();
   }
-  drawBlocks();drawPillarWarn();
+  drawBlocks();drawPillarWarn();drawRageFx();
   // 代紋：床に描かれた鬼頭組の紋（ただの飾り。光らせず、血で塗られると暗く沈む）
   for(const c of G.crests){
     const t=tileRect(c.i),x=t.x+t.w/2,y=t.y+t.h/2,col=DONE[c.i]?'rgba(70,0,12,.55)':'rgba(200,165,90,.32)';
@@ -2822,6 +2836,8 @@ function drawControls(){
   g.restore();
 }
 function drawOverlays(){
+  // 怨念解放の間は、画面の縁を赤黒く沈めて主人公の周りに目を向けさせる
+  if(G.rageFx){const a=(1-G.rageFx.t/G.rageFx.dur)*.45,vg=g.createRadialGradient(P.x,P.y,G.rageFx.R*.9,P.x,P.y,H*.9);vg.addColorStop(0,'rgba(40,0,8,0)');vg.addColorStop(1,`rgba(40,0,8,${a})`);g.fillStyle=vg;g.fillRect(0,0,W,H)}
   // 塗るほど照明が赤く染まる（進み具合を数字でなく雰囲気で感じさせる）
   if(state==='play'&&!G.isBossWave&&!G.tutMode&&G.phase==='fight'){const pr=prog(),a=pr*pr*.3;
     if(a>.01){const vg=g.createRadialGradient(W/2,H*.55,H*.18,W/2,H*.55,H*.75);vg.addColorStop(0,`rgba(255,0,30,${a*.25})`);vg.addColorStop(1,`rgba(150,0,20,${a})`);g.fillStyle=vg;g.fillRect(0,0,W,H)}}
