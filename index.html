@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v1.03 2026-11-02';
+const VERSION='v1.06 2026-11-02';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.6; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値。v0.98で.4→.6）
@@ -882,7 +882,7 @@ function slow(d,s){G.slowT=Math.max(G.slowT,d);G.slowScale=s}
 function fx(o){if(FX.length>=900)return;FX.push(o);if(Math.random()<FXK-1&&o.vx!=null)FX.push({...o,vx:o.vx*rand(.8,1.2),vy:o.vy*rand(.8,1.2)})} // 粒は約1.25倍に増やす
 // 血しぶき：吹き飛んだ向きの前方の扇形に飛ぶ（以前は2割が全方向に飛び、後ろ側の床も少しずつ塗っていた）。np：主人公の血など、床の塗りに数えない
 // 塗りの倍率（4段目の回転斬りで当てた・倒した敵の血は45%。全方向に飛ぶ技なので、狙って塗る1〜3段目より控えめに）
-let PAINT_K=1;const SPIN_PAINT=.45;
+let PAINT_K=1;const SPIN_PAINT=1; // v1.05：4段目の塗りは、飛ぶ距離（約2.6マス）で決まるように戻した
 function bloodBurst(x,y,ang,n,spd,np){
   for(let i=0;i<n;i++){const a=Math.random()<.8?ang+rand(-.75,.75):ang+rand(-1.4,1.4),s=rand(.25,1)*spd,l=rand(.25,.65);
     fx({k:'b',x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:l,max:l,sz:rand(1.5,4.2),np,pk:PAINT_K,col:pick(['#b3001b','#8a0012','#d4142e','#6d000e'])})}
@@ -929,7 +929,7 @@ function splat(x,y,r,ang,noPaint){
   if(noPaint)return;
   // 前方が壁の外にはみ出す時は、塗る範囲を壁の内側に収める（壁際で倒しても塗りが消えないように）
   const px=clamp(x+c*r*.85,AX0+r*.6,AX1-r*.6),py=clamp(y+s_*r*.85,AY0+r*.6,AY1-r*.6);
-  paint(px,py,r*1.05,.9);paint(x,y,r*.3,.9);
+  paint(px,py,r*.55,.9);paint(x,y,r*.25,.9); // v1.06：血だまりの塗りは小さめ。塗りの大部分は、飛んだ距離（死体の血の筋）で決まる
 }
 /* ---------------- 血塗り判定（クリア条件） ----------------
    アリーナを床タイル(46px)単位で区切り、血が一定量たまったタイルを「塗りつぶし済み」にする。
@@ -1191,8 +1191,11 @@ function hitEnemy(e,dmg,ang,kb,o){
   if(o.crit&&!o.wall)TEXTS.push({x:e.x+rand(-6,6),y:e.y-e.r-8,txt:String(Math.round(dmg*10)),col:'#ffd54a',size:20,t:0,dur:.55,vy:-90});
   SFX.hit(big);
   // 倒した敵の死体が滑る速さ。4段目の回転攻撃は控えめ（滑る距離 約2.4マス→約1.4マス）
-  if(e.hp<=0)killEnemy(e,ang,o.spin?clamp(k,380,440):Math.max(k,o.fin?720:480),o);
+  // 倒した敵の死体が滑る速さ×KO_K。普通の攻撃で約2マス（基準）、4段目は締めの一撃なので基準より遠い約2.6マス、
+  // クリティカル・反射弾で約3マス、爆発で約3.1マス（4段目の塗り過ぎは、塗る量を45%にする SPIN_PAINT で別に抑えている）
+  if(e.hp<=0)killEnemy(e,ang,(o.spin?620:Math.max(k,o.fin?720:480))*KO_K,o);
 }
+const KO_K=.59; // 吹き飛ぶ距離の倍率（v1.04で、普通の攻撃で倒した時が約3.4マス→約2マスになるよう全体を縮めた）
 function killEnemy(e,ang,spd,o){
   o=o||{};if(e.dead)return;e.dead=true;
   const i=E.indexOf(e);if(i>=0)E.splice(i,1);
@@ -1227,7 +1230,7 @@ function explode(x,y,r,hostile){
   for(let i=0;i<26;i++){const a=rand(0,TAU),s=rand(60,380),l=rand(.25,.6);fx({k:'fire',x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:l,max:l,sz:rand(10,24)})}
   for(let i=0;i<12;i++){const a=rand(0,TAU),s=rand(30,150),l=rand(.6,1.2);fx({k:'smoke',x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:l,max:l,sz:rand(14,26)})}
   scorch(x,y,r*.75);
-  for(const e of [...E]){if(dist(x,y,e.x,e.y)<r+e.r)hitEnemy(e,e.boss?6:8,Math.atan2(e.y-y,e.x-x),760,{fin:true})}
+  for(const e of [...E]){if(dist(x,y,e.x,e.y)<r+e.r)hitEnemy(e,e.boss?6:8,Math.atan2(e.y-y,e.x-x),720,{fin:true})} // 吹き飛ぶ距離はクリティカルと同じ（約3マス）
   if(hostile&&dist(x,y,P.x,P.y)<r*.85+P.r)hurtPlayer(16,x,y);
   for(const o of PROPS)if(o.k==='dyn'&&!o.used&&!o.lit&&dist(o.x,o.y,x,y)<r+20){o.lit=true;o.fuse=.18}
 }
@@ -3180,11 +3183,12 @@ function update(rdt){
     if(e.y<AY0+e.r){e.y=AY0+e.r;c.vy=Math.abs(c.vy)*.12;wall=true}else if(e.y>AY1-e.r){e.y=AY1-e.r;c.vy=-Math.abs(c.vy)*.12;wall=true}
     {const n=blockPush(e);if(n){bounceOff(c,n,.12);wall=true}}
     if(wall)c.slumped=true;
-    if(wall&&sp>320){splat(e.x,e.y,e.r*2.1,inA);addShake(7);SFX.wall();popText(e.x,e.y-24,'SPLASH!','#ff4d6d',14,.6);if(lv('quake')&&!c.boomed){c.boomed=true;explode(e.x,e.y,49,false)}}
+    if(wall&&sp>190){splat(e.x,e.y,e.r*2.1,inA);addShake(7);SFX.wall();popText(e.x,e.y-24,'SPLASH!','#ff4d6d',14,.6);if(lv('quake')&&!c.boomed){c.boomed=true;explode(e.x,e.y,49,false)}}
     // 吹き飛ぶ死体は床に血の筋を引きずる
     // 途切れない太い血の筋を描き、通ったマスをしっかり塗る（倒す向きで塗る場所を狙える）
-    if(sp>110){if(c.lx!=null){decG.strokeStyle='rgba(105,0,15,.5)';decG.lineCap='round';decG.lineWidth=e.r*(sp>500?1.1:.8);decG.beginPath();decG.moveTo(c.lx,c.ly);decG.lineTo(e.x,e.y);decG.stroke()}
-      c.lx=e.x;c.ly=e.y;c.sm=(c.sm||0)+sp*dt;if(c.sm>9&&!c.slumped){c.sm=0;const pk=PAINT_K;PAINT_K=c.pk||1;paint(e.x,e.y,e.r*.7,sp>500?.36:.2);PAINT_K=pk}}else c.lx=null;
+    // 血の筋は滑った距離に比例して塗る（9px進むごとに同じ量）。遠くへ飛ぶほど、多く塗れる
+    if(sp>40){if(c.lx!=null){decG.strokeStyle='rgba(105,0,15,.5)';decG.lineCap='round';decG.lineWidth=e.r*(sp>300?1.1:.8);decG.beginPath();decG.moveTo(c.lx,c.ly);decG.lineTo(e.x,e.y);decG.stroke()}
+      c.lx=e.x;c.ly=e.y;c.sm=(c.sm||0)+sp*dt;if(c.sm>9&&!c.slumped){c.sm=0;const pk=PAINT_K;PAINT_K=c.pk||1;paint(e.x,e.y,e.r*.75,.42);PAINT_K=pk}}else c.lx=null;
     if(sp<40&&!c.landed){c.landed=true;splat(e.x,e.y,e.r,c.slumped?inA+Math.PI:Math.atan2(c.vy,c.vx),c.slumped)} // 壁際で崩れた死体の血だまりは絵だけ（塗りは激突の血しぶきで済んでいる）
   }
   CORPSES=CORPSES.filter(c=>c.t<1.2);
