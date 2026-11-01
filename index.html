@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.44 2026-11-01';
+const VERSION='v0.45 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -82,7 +82,7 @@ const THEMES=[
   {name:'港の倉庫街',     base:'#082428',grid:'100,175,180',refl:['40,220,210','255,150,60'],hi:'150,235,230',tube:['#2fffe0','#ff9a3f','#2f8cff'],mark:'立入禁止',gim:'dyn'},
   {name:'赤提灯の横丁',   base:'#2a1a0b',grid:'200,155,100',refl:['255,150,50','255,215,120'],hi:'245,215,165',tube:['#ffa02f','#ffd76a','#ff6a3f'],mark:'一方通行',gim:'oil',win:true},
   {name:'霧島の縄張り',   base:'#171a24',grid:'190,195,215',refl:['220,230,255','150,170,255'],hi:'215,222,240',tube:['#e8ecff','#7f9cff','#c0c8ff'],mark:'霧島組'},
-  {name:'立体駐車場',     base:'#132213',grid:'150,180,140',refl:['170,255,90','255,230,80'],hi:'195,235,180',tube:['#b8ff5a','#ffe85a','#5affb0'],mark:'P',gim:'car'},
+  {name:'立体駐車場',     base:'#132213',grid:'150,180,140',refl:['170,255,90','255,230,80'],hi:'195,235,180',tube:['#b8ff5a','#ffe85a','#5affb0'],mark:'P',gim:'tires'},
   {name:'廃工場',         base:'#261f0d',grid:'190,165,95',refl:['255,190,60','120,200,255'],hi:'235,215,160',tube:['#ffc23f','#ff7a2f','#6fc8ff'],mark:'危険',gim:'beam'},
   {name:'雨のビル屋上',   base:'#0b1834',grid:'115,150,225',refl:['80,140,255','190,110,255'],hi:'165,195,250',tube:['#4f8cff','#b46cff','#ffffff'],mark:'H',gim:'edge'},
   {name:'地下駐車場',     base:'#0b2419',grid:'115,195,150',refl:['80,255,160','230,255,120'],hi:'165,240,200',tube:['#4fffa0','#d8ff5a','#4fd0ff'],mark:'出口',gim:'ext'},
@@ -91,7 +91,7 @@ const THEMES=[
   {name:'霧島組 事務所',   base:'#1a1418',grid:'200,190,200',refl:['230,230,255','255,80,110'],hi:'225,215,230',tube:['#f0f0ff','#ff4d6d','#c8c8ff'],mark:'霧島組'},
   {name:'高架下の闇市',   base:'#1d0f0a',grid:'210,140,110',refl:['255,120,60','255,60,90'],hi:'240,190,170',tube:['#ff7a3f','#ff3f6a','#ffd06a'],mark:'闇市',gim:'bottle',win:true},
   {name:'中華街',         base:'#2a0a0e',grid:'220,120,110',refl:['255,60,60','255,200,80'],hi:'245,185,175',tube:['#ff3a3a','#ffd23f','#ff8a3f'],mark:'中華街',gim:'dyn',win:true},
-  {name:'埠頭のコンテナ置き場',base:'#0a1a26',grid:'110,160,200',refl:['60,170,255','255,120,60'],hi:'160,205,240',tube:['#3fa8ff','#ff7a3f','#7fffd0'],mark:'コンテナ',gim:'car'},
+  {name:'埠頭のコンテナ置き場',base:'#0a1a26',grid:'110,160,200',refl:['60,170,255','255,120,60'],hi:'160,205,240',tube:['#3fa8ff','#ff7a3f','#7fffd0'],mark:'コンテナ',gim:'cart'},
   {name:'解体中のビル',   base:'#1e1c1a',grid:'190,180,160',refl:['255,210,90','150,160,180'],hi:'225,215,195',tube:['#ffd23f','#c8c8c8','#ff9a3f'],mark:'工事中',gim:'beam'},
   {name:'白鷺クリーニング工場',base:'#0f1c22',grid:'170,215,230',refl:['120,220,255','230,250,255'],hi:'200,235,245',tube:['#7fe0ff','#e8fbff','#4fb0ff'],mark:'白鷺'}
 ];
@@ -897,28 +897,30 @@ const GIMMICKS={
   bottle: {name:'火炎瓶',      hint:'殴ると、殴った方向へ飛んで割れ、炎が広がって敵を焼く'},
   dyn:    {name:'ダイナマイト',hint:'殴る・撃たせると爆発、近くにも誘爆（近いと自分も被弾）'},
   oil:    {name:'ドラム缶',    hint:'殴ると穴が開いて油が漏れ出し、引火して広く燃える'},
-  car:    {name:'放置車両',    hint:'車を殴ると滑り出し、敵を撥ね飛ばす'},
+  cart:   {name:'荷物を積んだ台車',hint:'台車を殴ると滑り出し、敵を撥ね飛ばす。壁に激突すると荷物が散らばる'},
+  tires:  {name:'タイヤの山',  hint:'殴るとタイヤがばらけて転がり、当たった敵を撥ね飛ばす'},
   beam:   {name:'落下する鉄骨',hint:'影の下に敵を誘い込め——自分は避けろ'},
   edge:   {name:'柵のない屋上',hint:'左右の端へ吹き飛ばすと、敵は転落する'},
   ext:    {name:'消火器',      hint:'殴ると煙が噴き出し、中の敵は動けなくなる'}
 };
 const DYN_FUSE=1.55; // ダイナマイトが点火から爆発するまでの秒数（弾が当たった場合は0.45秒短い。誘爆は0.18秒）
-const PROP_N={bottle:3,dyn:4,oil:2,car:2,ext:3};
-let PROPS=[],SMOKES=[],WARNS=[],SHOCKS=[],SPILLS=[];
+const PROP_N={bottle:3,dyn:4,oil:2,cart:2,tires:2,ext:3};
+let PROPS=[],SMOKES=[],WARNS=[],SHOCKS=[],SPILLS=[],TIRES=[];
 function propSpot(){
   for(let k=0;k<40;k++){const x=rand(AX0+50,AX1-50),y=rand(AY0+70,AY1-50);if(dist(x,y,P.x,P.y)>130&&!nearBlock(x,y,30)&&PROPS.every(o=>dist(x,y,o.x,o.y)>90))return{x,y}}
   return{x:rand(AX0+50,AX1-50),y:rand(AY0+70,AY1-50)};
 }
-function newProp(k){const p=propSpot();return{k,x:p.x,y:p.y,r:k==='car'?24:k==='oil'?20:16,used:false,lit:false,fuse:0,t:0,vx:0,vy:0,a:k==='car'?(Math.random()<.5?0:Math.PI/2):0,hits:new Set(),fall:null,fly:null}}
+function newProp(k){const p=propSpot();return{k,x:p.x,y:p.y,r:k==='cart'?20:k==='oil'?20:k==='tires'?18:16,used:false,lit:false,fuse:0,t:0,vx:0,vy:0,a:k==='cart'?(Math.random()<.5?0:Math.PI/2):0,hits:new Set(),fall:null,fly:null,cargo:true}}
 function setupGimmick(){
-  PROPS=[];SMOKES=[];WARNS=[];SHOCKS=[];SPILLS=[];G.beamT=rand(3,5);
+  PROPS=[];SMOKES=[];WARNS=[];SHOCKS=[];SPILLS=[];TIRES=[];G.beamT=rand(3,5);
   G.gim=G.isBossWave?null:(theme.gim||null);
   if(G.gim&&PROP_N[G.gim])for(let i=0;i<PROP_N[G.gim];i++)PROPS.push(newProp(G.gim));
 }
 // 仕掛けによるダメージ（原因を付けて当てる）
 function gimHit(cause,e,dmg,ang,kb,o){const pc=G.cause;G.cause=cause;hitEnemy(e,dmg,ang,kb,o);G.cause=pc}
 function hitProp(pr,ang){
-  if(pr.k==='car'){pr.vx=Math.cos(ang)*560;pr.vy=Math.sin(ang)*560;pr.hits=new Set();SFX.wall();addShake(6);return}
+  // 台車：殴った方向へ滑り出す（何度でも押せる）
+  if(pr.k==='cart'){pr.vx=Math.cos(ang)*560;pr.vy=Math.sin(ang)*560;pr.hits=new Set();SFX.wall();addShake(6);return}
   if(pr.used||pr.lit)return;
   if(pr.k==='dyn'){pr.lit=true;pr.fuse=DYN_FUSE;return}
   pr.used=true;pr.t=0;
@@ -928,6 +930,8 @@ function hitProp(pr,ang){
   else if(pr.k==='oil'){SFX.wall();addShake(5);noise(.6,.25,'lowpass',900,200);
     for(let i=0;i<10;i++){const a=ang+rand(-.5,.5),v=rand(80,240),l=rand(.25,.5);fx({k:'oild',x:pr.x+Math.cos(ang)*12,y:pr.y+4,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:l,max:l})}
     SPILLS.push({x:pr.x+Math.cos(ang)*6,y:pr.y+Math.sin(ang)*6+8,a:ang,len:175,w:100,t:0,tick:0,dur:5,lit:false,cause:'oil',dmg:.14,grow:.95,ign:1.25,oil:true})}
+  // タイヤの山：4本がばらけて、殴った方向へ扇状に転がる
+  else if(pr.k==='tires'){SFX.wall();addShake(7);for(let i=0;i<4;i++){const a=ang+(i-1.5)*.18+rand(-.05,.05),v=rand(430,520);TIRES.push({x:pr.x+rand(-6,6),y:pr.y+rand(-6,6),r:11,vx:Math.cos(a)*v,vy:Math.sin(a)*v,rot:0,t:0,hits:new Set()})}}
   else if(pr.k==='ext'){SMOKES.push({x:pr.x,y:pr.y,r:88,t:3.5});SFX.wash();addShake(4)}
 }
 function dynBoom(pr){
@@ -966,7 +970,7 @@ function updateGimmicks(dt){
   for(const pr of PROPS){
     pr.t+=dt;
     // 使った仕掛けは、しばらくすると別の場所に置き直される
-    if(pr.used&&pr.t>(pr.k==='bottle'?11:pr.k==='oil'?13:9))Object.assign(pr,newProp(pr.k));
+    if(pr.used&&pr.t>(pr.k==='bottle'?11:pr.k==='oil'?13:pr.k==='tires'?8:9))Object.assign(pr,newProp(pr.k));
     if(pr.lit){pr.fuse-=dt;if(pr.fuse<=0)dynBoom(pr)}
     if(pr.fly&&!pr.fly.done){const f=pr.fly,c=Math.cos(f.a),s=Math.sin(f.a);f.t+=dt;pr.x+=c*480*dt;pr.y+=s*480*dt;
       if(Math.random()<.7)fx({k:'fire',x:pr.x,y:pr.y-14,vx:rand(-20,20),vy:rand(-50,-20),life:.3,max:.3,sz:rand(5,9)});
@@ -978,14 +982,26 @@ function updateGimmicks(dt){
         SFX.glass();SFX.boom();addShake(8);RINGS.push({x:pr.x,y:pr.y,r:8,R:70,t:0,dur:.3,col:'255,150,50',w:8});
         for(let i=0;i<16;i++){const a=rand(0,TAU),v=rand(60,260),l=rand(.25,.5);fx({k:'fire',x:pr.x,y:pr.y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:l,max:l,sz:rand(8,16)})}
         SPILLS.push({x:pr.x-c*40,y:pr.y-s*40,a:f.a,len:120,w:64,t:0,tick:0,dur:5,lit:false,cause:'bottle',dmg:.22,grow:.25,ign:.05})}}
-    if(pr.k==='car'){const v=Math.hypot(pr.vx,pr.vy);if(v>20){
+    if(pr.k==='cart'){const v=Math.hypot(pr.vx,pr.vy);if(v>20){
       pr.x+=pr.vx*dt;pr.y+=pr.vy*dt;const f=Math.exp(-2.2*dt);pr.vx*=f;pr.vy*=f;pr.a=Math.atan2(pr.vy,pr.vx);
-      if(pr.x<AX0+pr.r){pr.x=AX0+pr.r;pr.vx=Math.abs(pr.vx)*.5}else if(pr.x>AX1-pr.r){pr.x=AX1-pr.r;pr.vx=-Math.abs(pr.vx)*.5}
-      if(pr.y<AY0+pr.r){pr.y=AY0+pr.r;pr.vy=Math.abs(pr.vy)*.5}else if(pr.y>AY1-pr.r){pr.y=AY1-pr.r;pr.vy=-Math.abs(pr.vy)*.5}
-      {const n=blockPush(pr);if(n)bounceOff(pr,n,.5)}
-      if(v>140)for(const e of [...E]){if(pr.hits.has(e))continue;if(dist(pr.x,pr.y,e.x,e.y)<pr.r+e.r){pr.hits.add(e);gimHit('car',e,e.armor?6:e.hp+1,Math.atan2(e.y-pr.y,e.x-pr.x),560,{fin:true});popText(e.x,e.y-30,'撥ねた！','#ffd54a',14,.6)}}
+      let hw=false;
+      if(pr.x<AX0+pr.r){pr.x=AX0+pr.r;pr.vx=Math.abs(pr.vx)*.5;hw=true}else if(pr.x>AX1-pr.r){pr.x=AX1-pr.r;pr.vx=-Math.abs(pr.vx)*.5;hw=true}
+      if(pr.y<AY0+pr.r){pr.y=AY0+pr.r;pr.vy=Math.abs(pr.vy)*.5;hw=true}else if(pr.y>AY1-pr.r){pr.y=AY1-pr.r;pr.vy=-Math.abs(pr.vy)*.5;hw=true}
+      {const n=blockPush(pr);if(n){bounceOff(pr,n,.5);hw=true}}
+      // 勢いよく壁・柱に激突すると、積んでいた段ボールが散らばる（台車は空になっても押せる）
+      if(hw&&v>250&&pr.cargo){pr.cargo=false;SFX.wall();addShake(5);for(let i=0;i<14;i++){const a=rand(0,TAU),s2=rand(60,240),l=rand(.5,1);fx({k:'paper',x:pr.x,y:pr.y,vx:Math.cos(a)*s2,vy:Math.sin(a)*s2,life:l,max:l,sz:rand(4,7),rot:rand(0,TAU),vr:rand(-10,10),col:'#a67c46'})}}
+      if(v>140)for(const e of [...E]){if(pr.hits.has(e))continue;if(dist(pr.x,pr.y,e.x,e.y)<pr.r+e.r){pr.hits.add(e);gimHit('cart',e,e.armor?6:e.hp+1,Math.atan2(e.y-pr.y,e.x-pr.x),560,{fin:true});popText(e.x,e.y-30,'撥ねた！','#ffd54a',14,.6)}}
     }}
   }
+  // 転がるタイヤ：壁・柱で跳ね返り、当たった敵を撥ね飛ばす（同じ敵には1回だけ）。止まったら消える
+  for(const t of TIRES){t.t+=dt;t.x+=t.vx*dt;t.y+=t.vy*dt;const f=Math.exp(-1.1*dt);t.vx*=f;t.vy*=f;const v=Math.hypot(t.vx,t.vy);t.rot+=v*dt/t.r;
+    if(t.x<AX0+t.r){t.x=AX0+t.r;t.vx=Math.abs(t.vx)*.6}else if(t.x>AX1-t.r){t.x=AX1-t.r;t.vx=-Math.abs(t.vx)*.6}
+    if(t.y<AY0+t.r){t.y=AY0+t.r;t.vy=Math.abs(t.vy)*.6}else if(t.y>AY1-t.r){t.y=AY1-t.r;t.vy=-Math.abs(t.vy)*.6}
+    {const n=blockPush(t);if(n)bounceOff(t,n,.6)}
+    if(v>120)for(const e of [...E]){if(t.hits.has(e)||dist(t.x,t.y,e.x,e.y)>=t.r+e.r)continue;t.hits.add(e);
+      gimHit('tires',e,e.boss?2:e.armor?4:e.hp+1,Math.atan2(t.vy,t.vx),480,{fin:true});popText(e.x,e.y-30,'撥ねた！','#ffd54a',14,.6);t.vx*=.7;t.vy*=.7}
+    t.done=v<35&&t.t>.5}
+  TIRES=TIRES.filter(t=>!t.done);
   for(const sm of SMOKES){sm.t-=dt;for(const e of E)if(dist(sm.x,sm.y,e.x,e.y)<sm.r){if(!e.boss)e.stun=Math.max(e.stun,.2);e.smoked=1.2}}
   SMOKES=SMOKES.filter(sm=>sm.t>0);
   for(const sp of SPILLS){sp.t+=dt;const L=sp.len*Math.min(1,sp.t/sp.grow),c=Math.cos(sp.a),sn=Math.sin(sp.a);
@@ -1047,6 +1063,9 @@ function flameTongue(x,y,h,w,al,lean){
 }
 function drawGimmicks(){
   drawWindows();
+  // 転がるタイヤ（横から見た円＋回転するスポーク）
+  for(const t of TIRES){shadow(t.x,t.y+t.r*.7,t.r*.9);circ(t.x,t.y,t.r,'#18181c');g.strokeStyle='#3a3a42';g.lineWidth=2;g.beginPath();g.arc(t.x,t.y,t.r-3,0,TAU);g.stroke();
+    g.strokeStyle='#8a8a92';g.lineWidth=2;g.beginPath();for(let k=0;k<3;k++){const a=t.rot+k*TAU/3;g.moveTo(t.x,t.y);g.lineTo(t.x+Math.cos(a)*(t.r-5),t.y+Math.sin(a)*(t.r-5))}g.stroke()}
   for(const w of WARNS){
     if(!w.done){const p=clamp(w.t/w.dur,0,1),rr_=w.r*(1.3-p*.3);
       g.fillStyle=`rgba(0,0,0,${.25+p*.4})`;g.beginPath();g.ellipse(w.x,w.y,rr_,rr_*.6,0,0,TAU);g.fill();
@@ -1060,7 +1079,7 @@ function drawGimmicks(){
     g.restore();g.globalAlpha=1;
     if(sp.lit){const c=Math.cos(sp.a),sn=Math.sin(sp.a);for(let l=10;l<L;l+=36)glow(sp.x+c*l,sp.y+sn*l,sp.w*.85,'#ff6a1a',.32*f)}}
   for(const pr of PROPS){
-    const ready=!pr.used&&!pr.lit&&pr.k!=='car';
+    const ready=!pr.used&&!pr.lit&&pr.k!=='cart';
     if(ready){const pl=.25+Math.sin(G.time*4+pr.x)*.15;g.strokeStyle=`rgba(255,255,255,${pl})`;g.lineWidth=1.2;g.beginPath();g.arc(pr.x,pr.y,pr.r+9,0,TAU);g.stroke()}
     if(pr.k==='dyn'){if(pr.used)continue;
       // ダイナマイト1本：赤い筒＋導火線。点火すると導火線の先が火花を散らし、本体が点滅する
@@ -1088,8 +1107,16 @@ function drawGimmicks(){
       g.fillStyle='#c0261c';g.beginPath();g.moveTo(0,-3.6);g.quadraticCurveTo(3,.2,0,2.8);g.quadraticCurveTo(-3,.2,0,-3.6);g.fill();
       if(pr.used){circ(Math.cos(.1)*6,3,2.4,'#140a05')}
       g.restore();g.globalAlpha=1}
-    else if(pr.k==='car'){shadow(pr.x,pr.y+6,26);g.save();g.translate(pr.x,pr.y);g.rotate(pr.a);rr(-27,-15,54,30,7,'#3d5168');rr(-8,-12,18,24,4,'#1a2330');rr(14,-12,7,24,3,'#253244');
-      g.fillStyle='#fff3b0';g.fillRect(24,-12,3,5);g.fillRect(24,7,3,5);g.fillStyle='#ff3030';g.fillRect(-27,-12,3,5);g.fillRect(-27,7,3,5);g.restore()}
+    // 台車：灰色の荷台に小さな車輪4つ、後ろに持ち手。荷物（段ボール2箱）を積んでいる間は箱も描く
+    else if(pr.k==='cart'){shadow(pr.x,pr.y+6,22);g.save();g.translate(pr.x,pr.y);g.rotate(pr.a);
+      for(const [wx,wy] of [[-15,-12],[15,-12],[-15,12],[15,12]])circ(wx,wy,3.5,'#141418');
+      rr(-20,-12,40,24,3,'#6a7078');g.strokeStyle='#454a52';g.lineWidth=1;for(let k=-12;k<=12;k+=8){g.beginPath();g.moveTo(k,-11);g.lineTo(k,11);g.stroke()}
+      g.strokeStyle='#2a2d33';g.lineWidth=3;g.beginPath();g.moveTo(-20,-11);g.lineTo(-27,-11);g.lineTo(-27,11);g.lineTo(-20,11);g.stroke();
+      if(pr.cargo){rr(-16,-10,15,19,1.5,'#b08850');rr(1,-9,14,17,1.5,'#9c7644');g.fillStyle='#d8c8a0';g.fillRect(-9.5,-10,2,19);g.fillRect(7,-9,2,17)}
+      g.restore()}
+    // タイヤの山：3本が少しずれて重なっている（使った後はしばらく消える）
+    else if(pr.k==='tires'){if(pr.used)continue;shadow(pr.x,pr.y+8,18);
+      for(const [ox,oy] of [[-5,4],[5,2],[0,-5]]){circ(pr.x+ox,pr.y+oy,13,'#18181c');g.strokeStyle='#34343a';g.lineWidth=2;g.beginPath();g.arc(pr.x+ox,pr.y+oy,10,0,TAU);g.stroke();circ(pr.x+ox,pr.y+oy,5,'#0c0c0e')}}
     else if(pr.k==='ext'){if(pr.used)continue;shadow(pr.x,pr.y+12,9);rr(pr.x-7,pr.y-14,14,28,5,'#d0201a');rr(pr.x-4,pr.y-20,8,6,2,'#222');g.strokeStyle='#222';g.lineWidth=2;g.beginPath();g.moveTo(pr.x+3,pr.y-18);g.quadraticCurveTo(pr.x+14,pr.y-16,pr.x+11,pr.y-4);g.stroke()}
   }
   // 4段目の見た目の衝撃波は紫の二重の輪（強化カードの本物の衝撃波は金色）
@@ -2525,7 +2552,7 @@ function drawWorld(){
     else if(f.k==='drop'){g.globalAlpha=a;circ(f.x,f.y,2,'#9fd8ff')}
     else if(f.k==='oild'){g.globalAlpha=a;circ(f.x,f.y,2.4,'#24160c')}
     else if(f.k==='suds'){g.globalAlpha=a*.8;g.strokeStyle='#f2f8ff';g.lineWidth=1.3;g.beginPath();g.arc(f.x,f.y,f.sz*(1.4-a*.4),0,TAU);g.stroke();g.globalAlpha=a*.25;circ(f.x,f.y,f.sz*(1.4-a*.4),'#ffffff')}
-    else if(f.k==='paper'){g.globalAlpha=Math.min(1,a*1.6);g.save();g.translate(f.x,f.y);g.rotate(f.rot);g.scale(1,Math.abs(Math.cos(f.rot*1.7))*.8+.2);g.fillStyle=f.red?'#d42a2a':'#f4efe2';g.fillRect(-f.sz,-f.sz*.6,f.sz*2,f.sz*1.2);g.restore()}
+    else if(f.k==='paper'){g.globalAlpha=Math.min(1,a*1.6);g.save();g.translate(f.x,f.y);g.rotate(f.rot);g.scale(1,Math.abs(Math.cos(f.rot*1.7))*.8+.2);g.fillStyle=f.col||(f.red?'#d42a2a':'#f4efe2');g.fillRect(-f.sz,-f.sz*.6,f.sz*2,f.sz*1.2);g.restore()}
     else if(f.k==='mist'){glow(f.x,f.y,8,'#ff1838',a*.5)}
     else if(f.k==='tile'){g.fillStyle=`rgba(255,40,70,${a*.5})`;g.fillRect(f.x,f.y,f.w,f.h);
       if(!f.cap){const e=(1-a)*5;g.strokeStyle=`rgba(255,235,240,${a})`;g.lineWidth=3*a+1;g.strokeRect(f.x+3-e,f.y+3-e,f.w-6+e*2,f.h-6+e*2)}}
