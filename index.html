@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.35 2026-11-01';
+const VERSION='v0.38 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -551,7 +551,7 @@ function hitEnemy(e,dmg,ang,kb,o){
     // 通常ヒットでは敵の予備動作をキャンセルしない（フィニッシュ/爆発/クリティカルのみ潰せる）
     const busy=e.state==='windup'||e.state==='aim'||e.state==='fuse'||e.state==='strike';
     e.stun=Math.max(e.stun,o.fin?.55:.2);if(e.state!=='enter'&&(o.fin||!busy))e.state='chase';
-    if(k>=420){e.fly=.45;e.bset=new Set([e])}
+    if(k>=420&&!o.crash){e.fly=.45;e.bset=new Set([e])} // ぶつけられた敵はさらに次へは飛ばない（連鎖は直後の1体まで）
   }
   e.vx=Math.cos(ang)*k;e.vy=Math.sin(ang)*k;
   G.chain++;G.chainT=2.4;G.chainPop=1;G.maxChain=Math.max(G.maxChain,G.chain);G.wchain=Math.max(G.wchain||0,G.chain);
@@ -579,7 +579,7 @@ function killEnemy(e,ang,spd,o){
   if(o.fall){for(let i=0;i<8;i++){const a=rand(0,TAU),v=rand(30,120),l=rand(.3,.6);fx({k:'smoke',x:e.x,y:e.y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:l,max:l,sz:rand(8,14)})}}
   // 連続撃破ほど血しぶきが大きくなる（25連で最大1.8倍）
   else{const cs=1+Math.min(.8,G.chain/25);splat(e.x,e.y,e.r*1.5*cs,ang);bloodBurst(e.x,e.y,ang,Math.round(18*cs),440*cs)}  {
-    if(!o.fall)CORPSES.push({e,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,rot:0,vr:rand(-16,16),t:0,hit:new Set()});
+    if(!o.fall)CORPSES.push({e,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,rot:0,vr:rand(-16,16),t:0,hit:new Set(),noCrash:!!o.crash,push2:!!o.crash});
     G.kills++;const pts=Math.round(e.val*G.mult);G.score+=pts;
     G.soul=Math.min(100,G.soul+soulMul()*(e.type==='brute'?20:10));
     dropOrbs(e.x,e.y,Math.random()<(P.hp<40?.24:.1)+(e.type==='brute'?.3:0));
@@ -1504,15 +1504,26 @@ function bowl(e,sp){
     if(o===e||e.bset.has(o))continue;
     if(dist(e.x,e.y,o.x,o.y)<e.r+o.r+2){
       e.bset.add(o);const a=Math.atan2(o.y-e.y,o.x-e.x);G.score+=Math.round(50*G.mult);
-      popText(o.x,o.y-26,'CRASH!','#ffd54a',13,.6);hitEnemy(o,2.5,a,sp*.8,{fin:sp>600});e.vx*=.7;e.vy*=.7;
+      popText(o.x,o.y-26,'CRASH!','#ffd54a',13,.6);hitEnemy(o,2.5,a,sp*.8,{fin:sp>600,crash:true});e.vx*=.7;e.vy*=.7;
+      e.fly=0;break; // 吹っ飛んだ敵がぶつかるのも最初の1体だけ
     }
   }
+}
+// 押し飛ばし（ダメージなし）の玉突き：押された敵が次の敵に当たると、勢いを約6割に落として伝える。
+// 当たった敵は衝撃の方向へよろけ、勢いが SHOVE_MIN を切るまで続く。同じ玉突きで同じ敵には2度当たらない
+const SHOVE_MIN=90;
+function startShove(o,a,k){if(o.boss)return;k=o.armor?k*.4:k;o.vx=Math.cos(a)*k;o.vy=Math.sin(a)*k;o.stun=Math.max(o.stun,Math.min(.35,k/1200));o.flash=.1;o.shove=.35}
+function shove(e,sp){
+  for(const o of E){if(o===e||e.shoveSet.has(o)||dist(e.x,e.y,o.x,o.y)>=e.r+o.r+3)continue;
+    const k=sp*.6;e.shove=0;if(k<SHOVE_MIN*.8)return;
+    e.shoveSet.add(o);o.shoveSet=e.shoveSet;startShove(o,Math.atan2(o.y-e.y,o.x-e.x),k);e.vx*=.5;e.vy*=.5;return}
 }
 function updateEnemy(e,dt){
   e.flash-=dt;e.st+=dt;e.fly-=dt;
   const sp=Math.hypot(e.vx,e.vy);
   if(sp>1){e.x+=e.vx*dt;e.y+=e.vy*dt;const f=Math.exp(-(e.armor?10:6.5)*dt);e.vx*=f;e.vy*=f}
   if(e.fly>0&&sp>330&&e.bset)bowl(e,sp);
+  if(e.shove>0){e.shove-=dt;if(sp>SHOVE_MIN)shove(e,sp)}
   if(e.dead)return;
   if(e.state!=='enter'&&e.state!=='charge')wallCheck(e,sp);
   if(e.stun>0){e.stun-=dt;return}
@@ -1757,8 +1768,13 @@ function update(rdt){
   for(const c of CORPSES){
     c.t+=dt;const e=c.e;e.x+=c.vx*dt;e.y+=c.vy*dt;const f=Math.exp(-3*dt);c.vx*=f;c.vy*=f; // 死体は遠くまで滑る
     const sp=Math.hypot(c.vx,c.vy);c.rot+=c.vr*dt*Math.min(1,sp/300);
-    // ビリヤード：滑る死体が敵に当たると吹き飛ばす。勢いがあれば雑魚は一撃で倒れ、さらに次の敵へ連鎖する
-    if(sp>220)for(const o of [...E]){if(c.hit.has(o))continue;if(dist(e.x,e.y,o.x,o.y)<e.r+o.r+6){c.hit.add(o);G.score+=Math.round(50*G.mult);popText(o.x,o.y-26,'CRASH!','#ffd54a',13,.6);hitEnemy(o,sp>450?3.8:2.5,Math.atan2(o.y-e.y,o.x-e.x),sp*.85,{fin:sp>550});c.vx*=.6;c.vy*=.6}}
+    // ビリヤード：滑る死体が敵に当たると吹き飛ばす。勢いがあれば雑魚は一撃で倒れる
+    // 当たるのは最初の1体だけ。ぶつけられた敵（とその死体）はさらに次へは連鎖しない（雑魚の群れで床が一気に塗られすぎるのを防ぐ）
+    // ぶつけられて倒れた敵の死体（2体目）は、次の1体（3体目）をダメージなしで押し飛ばすだけ。3体目は死なず、連鎖もそこで止まる
+    if(sp>220&&c.noCrash&&c.push2)for(const o of E){if(o.boss||dist(e.x,e.y,o.x,o.y)>=e.r+o.r+6)continue;
+      c.push2=false;o.shoveSet=new Set([o]);startShove(o,Math.atan2(o.y-e.y,o.x-e.x),Math.min(sp*.7,420));o.stun=Math.max(o.stun,.35);
+      c.vx*=.5;c.vy*=.5;SFX.wall();break}
+    if(sp>220&&!c.noCrash)for(const o of [...E]){if(dist(e.x,e.y,o.x,o.y)<e.r+o.r+6){c.noCrash=true;G.score+=Math.round(50*G.mult);popText(o.x,o.y-26,'CRASH!','#ffd54a',13,.6);hitEnemy(o,sp>450?3.8:2.5,Math.atan2(o.y-e.y,o.x-e.x),sp*.85,{fin:sp>550,crash:true});c.vx*=.6;c.vy*=.6;break}}
     let wall=false;
     if(e.x<AX0+e.r){e.x=AX0+e.r;c.vx=Math.abs(c.vx)*.4;wall=true}else if(e.x>AX1-e.r){e.x=AX1-e.r;c.vx=-Math.abs(c.vx)*.4;wall=true}
     if(e.y<AY0+e.r){e.y=AY0+e.r;c.vy=Math.abs(c.vy)*.4;wall=true}else if(e.y>AY1-e.r){e.y=AY1-e.r;c.vy=-Math.abs(c.vy)*.4;wall=true}
