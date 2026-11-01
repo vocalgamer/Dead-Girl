@@ -27,8 +27,8 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.94 2026-11-02';
-const ENEMY_DMG=1.5; // 敵の攻撃力倍率
+const VERSION='v0.95 2026-11-02';
+const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
 const GUARD_ARC=1.2; // 正面ガードの有効角（片側・ラジアン。1.2≒69°）
@@ -799,7 +799,8 @@ function updateWave(dt){
 }
 const SEA_FOCUS=.75; // 血の海達成の前に、最後の1マスへ寄って見せる秒数
 function waveClear(){
-  G.phase='break';G.breakT=3.2;healP(20+15*lv('mend'));slow(.9,.2);SFX.clear();addShake(16);G.flash=.5;G.flashCol='255,20,50';
+  const clearHeal=30+15*lv('mend'); // ステージクリア時の回復（v0.95で20→30）
+  G.phase='break';G.breakT=3.2;healP(clearHeal);slow(.9,.2);SFX.clear();addShake(16);G.flash=.5;G.flashCol='255,20,50';
   for(const o of [...E])killEnemy(o,Math.atan2(o.y-P.y,o.x-P.x),700,{});
   MARKS.length=0;B.length=0;
   // ランクはクリアの速さで決まる。PERFECT反射とジャストガードは1回につき2秒速かったことにする（最大16秒）＋技ボーナス
@@ -807,9 +808,9 @@ function waveClear(){
   // そのWAVEの自己ベスト（クリアタイム）を記録
   const bk='dg_bw'+G.wave,prev=parseFloat(lsGet(bk)),isNew=!(prev>0)||tm<prev;if(isNew)lsSet(bk,tm.toFixed(1));
   G.res={rank:rk,time:tm,kills:G.wk,chain:G.wchain,cap:G.wcap,best:isNew?tm:prev,isNew,first:!(prev>0),pf:G.wpf||0,jg:G.wjg||0};
-  G.banner={top:'STAGE '+pad2(G.wave)+'  —  RANK '+rk,main:'CLEAR',sub:'TIME '+tm.toFixed(1)+'s   BONUS +'+bonus+'   HP +20',t:0,dur:2.6,col:rk==='S'?'#ffd54a':'#ff2f5f'};
+  G.banner={top:'STAGE '+pad2(G.wave)+'  —  RANK '+rk,main:'CLEAR',sub:'TIME '+tm.toFixed(1)+'s   BONUS +'+bonus+'   HP +'+clearHeal,t:0,dur:2.6,col:rk==='S'?'#ffd54a':'#ff2f5f'};
   // 床を100%塗ってのクリアは「血の海達成！」がクリア表示を兼ねる（CLEARの帯は出さず、結果はこの演出の中に出す）
-  if(!G.isBossWave&&painted>=GN){G.sea={t:-SEA_FOCUS,drips:seaDrips(),info:'RANK '+rk+'　TIME '+tm.toFixed(1)+'s　BONUS +'+bonus+'　HP +20',col:rk==='S'?'#ffd54a':'#fff'};G.banner=null;G.breakT=3.8+SEA_FOCUS;addShake(24);SFX.boom();
+  if(!G.isBossWave&&painted>=GN){G.sea={t:-SEA_FOCUS,drips:seaDrips(),info:'RANK '+rk+'　TIME '+tm.toFixed(1)+'s　BONUS +'+bonus+'　HP +'+clearHeal,col:rk==='S'?'#ffd54a':'#fff'};G.banner=null;G.breakT=3.8+SEA_FOCUS;addShake(24);SFX.boom();
     // 最後の1マスにカメラが寄り、スローで「とどめ」を見せてから血の海の演出へ
     if(G.lastTile!=null){const t=tileRect(G.lastTile),x=t.x+t.w/2,y=t.y+t.h/2;G.zc={x,y};G.zoom=.22;G.zHold=SEA_FOCUS*.75;slow(SEA_FOCUS+.3,.12);
       G.flash=.8;G.flashCol='255,255,255';RINGS.push({x,y,r:6,R:90,t:0,dur:.5,col:'255,255,255',w:10});RINGS.push({x,y,r:6,R:160,t:-.1,dur:.6,col:'255,30,60',w:16});tone(55,30,1.2,'sine',.8)}}
@@ -1156,7 +1157,7 @@ function killEnemy(e,ang,spd,o){
     if(!G.firstBlood&&!G.tutMode&&!o.fall){G.firstBlood=true;slow(1.1,.18);G.zc={x:e.x,y:e.y};G.zoom=Math.max(G.zoom,.14);G.zHold=.45;addShake(22);G.flash=Math.max(G.flash,.5);G.flashCol='255,0,30';
       callout('FIRST BLOOD','','#ff1a3c');bloodBurst(e.x,e.y,ang,46,620);splat(e.x,e.y,e.r*3.2,ang);SFX.boom()}
     G.kills++;const pts=Math.round(e.val*G.mult*(1+.25*lv('greed')));G.score+=pts;
-    G.soul=Math.min(SOUL_MAX,G.soul+soulMul()*(e.type==='brute'?12:6));
+    G.soul=Math.min(SOUL_MAX,G.soul+soulMul()*(e.type==='brute'?16:8)); // 撃破のSOUL（v0.95で6→8に少し戻した）
     SFX.kill(G.chain);G.hitstop=Math.max(G.hitstop,.06);addShake(6);
   }
 }
