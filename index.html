@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.79 2026-11-01';
+const VERSION='v0.80 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -2239,6 +2239,7 @@ function screenAction(p,key){
     if(!p){if(key==='title'){state='title';stateT=0;skipPrologue()}return}
     for(let n=1;n<=20;n++)if(inR(p,DEV_BTN(n))){devStart(n);return}
     for(let k=0;k<3;k++)if(inR(p,DEV_BON(k))){devBonus(k);return}
+    for(let n=1;n<=TUT_STEPS;n++)if(inR(p,DEV_TUT(n))){devTut(n);return}
     if(inR(p,DEV_UI.endless)){devStart(21);return}
     if(inR(p,DEV_UI.god)){DEV.god=!DEV.god;SFX.ui();return}
     if(inR(p,DEV_UI.close)){state='title';stateT=0;skipPrologue();SFX.ui()}return}
@@ -3497,9 +3498,12 @@ function drawPlayerGauges(){
 const DEV={god:false};let DEVSHIFT=false,devHold=null;
 const DEV_BTN=n=>({x:66+((n-1)%4)*106,y:150+Math.floor((n-1)/4)*62,w:96,h:52});
 const DEV_BON=k=>({x:84+k*141,y:480,w:132,h:44});
-const DEV_UI={endless:{x:W/2-80,y:548,w:150,h:44},god:{x:W/2+80,y:548,w:150,h:44},close:{x:W/2,y:630,w:200,h:44}};
+const DEV_UI={endless:{x:W/2-80,y:548,w:150,h:44},god:{x:W/2+80,y:548,w:150,h:44},close:{x:W/2,y:700,w:200,h:44}};
+const DEV_TUT=n=>({x:W/2+(n-5)*45,y:632,w:40,h:40}); // チュートリアルの手順①〜⑨
 function openDev(){devHold=null;state='dev';stateT=0;SFX.ui()}
 function devStart(n){resetRun();G.tutMode=false;G.runSeed=1+Math.floor(Math.random()*1e6);G.endless=n>20;state='play';stateT=0;SFX.ui();startWave(n)}
+// チュートリアルを、指定した手順から始める
+function devTut(n){newGame(true);G.tut.step=n;G.tut.rep=0;tutSetup(n);state='tutintro';stateT=0}
 function devBonus(k){resetRun();G.tutMode=false;G.wave=[5,10,15][k];G.bonusFor=G.wave;SFX.ui();startBonus(['gun','gunaxe','shiki'][k])}
 function drawDev(){
   g.fillStyle='#08090d';g.fillRect(0,0,W,H);
@@ -3511,6 +3515,9 @@ function drawDev(){
   ['弾丸返し','弾丸返し・改','式神斬り'].forEach((l,k)=>button(DEV_BON(k),l,'rgba(110,80,10,.95)'));
   button(DEV_UI.endless,'ENDLESS 21','rgba(30,32,44,.95)',EN);
   button(DEV_UI.god,'無敵：'+(DEV.god?'ON':'OFF'),DEV.god?'rgba(20,110,60,.95)':'rgba(30,32,44,.95)');
+  txt('チュートリアル（手順を選ぶ）',W/2,600,12,'#8b93a8','center',JP,null,false,700);
+  for(let n=1;n<=TUT_STEPS;n++){const r=DEV_TUT(n),t=tutText(n);rr(r.x-r.w/2,r.y-r.h/2,r.w,r.h,7,'rgba(20,70,90,.95)');g.strokeStyle='rgba(255,255,255,.3)';g.lineWidth=1;rrPath(r.x-r.w/2,r.y-r.h/2,r.w,r.h,7);g.stroke();
+    txt(t?t[0].slice(0,1):String(n),r.x,r.y+7,18,'#7ff3ff','center',JP,null,false,900)}
   button(DEV_UI.close,'閉じる','rgba(30,32,44,.95)');
 }
 function drawHUD(){
