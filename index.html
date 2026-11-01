@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.38 2026-11-01';
+const VERSION='v0.39 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -262,7 +262,7 @@ function titleStep(s,t){
 }
 function playStep(s,t){
   // 塗るほど曲が激しくなる：40%で刻みが細かく、60%でスネアの合いの手、75%（と大群ラッシュ中）で全開
-  const fight=!G.isBossWave&&G.phase==='fight',pr=painted/GN,mid=fight&&pr>=.4,hot=fight&&pr>=.6;
+  const fight=!G.isBossWave&&G.phase==='fight',pr=prog(),mid=fight&&pr>=.4,hot=fight&&pr>=.6;
   const bar=Math.floor(s/16)%4,st=s%16,hype=fight&&(pr>=.75||G.rush>0);
   const roots=G.boss?[82.41,87.31,65.41,61.74]:[82.41,82.41,65.41,73.42];
   if(st%4===0||(hype&&st%4===2)||(st===14&&bar===3))kick(t);
@@ -303,16 +303,19 @@ function resetRun(){
   Object.assign(G,{score:0,kills:0,wave:0,chain:0,chainT:0,maxChain:0,chainPop:0,mult:1,soul:0,
     hitstop:0,slowT:0,slowScale:1,ts:1,shake:0,zoom:0,aimer:null,shotGap:0,crests:[],cleanT:8,seenSub:{},soulReady:false,waveTime:0,flash:0,flashCol:'255,40,70',time:0,
     toSpawn:0,spawnT:0,breakT:0,addsT:0,banner:null,callout:null,boss:null,bossInfo:null,bossPending:0,isBossWave:false,
-    phase:'fight',tutMode:false,endless:false,deathT:0,endT:0,newBest:false,tut:null,propSpot:0,rush:0,rushT:99,res:null,gim:null,intro:[],cards:null,cardSel:0,beamT:0,cause:null});
+    phase:'fight',tutMode:false,endless:false,deathT:0,endT:0,newBest:false,tut:null,propSpot:0,rush:0,rushT:99,res:null,gim:null,intro:[],cards:null,cardSel:0,beamT:0,cause:null,
+    daily:false,dailySeed:0,runSeed:1,revived:false,metaPaid:0,metaGain:0,pickAgain:false,pickAdUsed:false});
   Object.assign(P,{x:W/2,y:540,vx:0,vy:0,kx:0,ky:0,lx:0,ly:0,lt:0,r:14,hp:100,hpLag:100,maxhp:100,face:-Math.PI/2,
     atk:null,stage:0,comboWin:0,recover:0,atkBuf:0,atkA:null,inv:0,blinkT:0,
     crit:false,walk:0,trail:[],ghostT:0,dead:false,guard:false,guardLock:false,guardFx:0});
   E=[];B=[];FX=[];ORBS=[];RINGS=[];TEXTS=[];MARKS=[];CORPSES=[];
   PROPS=[];SMOKES=[];WARNS=[];SHOCKS=[];SPILLS=[];for(const k in UP)delete UP[k];
-  washFloor();setTheme(1);
+  makeLayout(null);washFloor();setTheme(1);
+  // 怨念の祭壇で買った永続強化（チュートリアルでは使わない）
+  P.maxhp=P.hp=P.hpLag=100+10*mlv('hp');G.soul=20*mlv('soul');
 }
 // tut=true でチュートリアル（1ステージで一通りの操作を練習し、終わったらタイトルへ）
-function newGame(tut){resetRun();G.tutMode=!!tut;state='play';stateT=0;SFX.ui();startWave(1)}
+function newGame(tut){resetRun();G.tutMode=!!tut;if(tut){P.maxhp=P.hp=P.hpLag=100;G.soul=0}G.runSeed=1+Math.floor(Math.random()*1e6);state='play';stateT=0;SFX.ui();startWave(1)}
 function goEndless(){G.endless=true;state='play';stateT=0;P.hp=P.maxhp;startWave(11)}
 function saveBest(){if(G.score>best){best=G.score;G.newBest=true;try{localStorage.setItem('nb_best',best)}catch(e){}}}
 
@@ -321,6 +324,8 @@ function startWave(n){
   G.wave=n;G.sea=null;G.phase='fight';G.spawnT=1.3;G.bossPending=0;G.bossInfo=null;G.aimer=null;G.shotGap=0;G.cleanT=rand(5,9);G.crewOut=false;G.waveTime=0;G.crests=[];
   const bk=n%5===0?(n%10===5?'kirishima':'kito'):null;
   G.isBossWave=!!bk;
+  // 床の形：STAGE1・ボス・チュートリアルは素の長方形。ストーリーはステージごとに決まった形、ENDLESS・今日のステージは自動生成
+  makeLayout(G.tutMode||bk||(n===1&&!G.daily)?null:G.daily?G.dailySeed:n<=10?n*7919:(G.runSeed*7919+n*104729),!G.daily&&n<=10?STORY_TPL[n]:null);
   washFloor();setTheme(G.tutMode?TUT_THEME:n);setupGimmick();G.mile=0;capNew=[];CAPQ=[];G.wk=0;G.wchain=0;G.wcap=0;G.rushT=rand(22,34);G.rush=0;G.rushSp=0;
   // 開始の表示が終わったら、仕掛けを案内
   tutWave(n);if(G.gim&&!SEEN.has('gim_'+G.gim)){markSeen('gim_'+G.gim);G.propSpot=6}else G.propSpot=0;
@@ -333,7 +338,8 @@ function startWave(n){
     G.banner={top:'WARNING — BOSS — '+theme.name,main:BOSSES[bk].name,sub:BOSSES[bk].sub,t:0,dur:2.6,col:'#ff2f5f'};SFX.alarm()}
   else{
     if(!G.tutMode)pickCrests(); // チュートリアルの訓練場には代紋を置かない
-    G.banner=G.tutMode?{top:'— 訓練場 —',main:'TUTORIAL',sub:'操作をひとつずつ体験しよう',t:0,dur:2.3,col:'#7ff3ff'}:{top:'— '+theme.name+' —　敵の血で、画面を塗りつぶせ',main:'STAGE '+pad2(n),sub:n>10?'復讐は終わらない —— ENDLESS':STORY[n],t:0,dur:2.3,col:'#b8ff5a'}}
+    G.banner=G.tutMode?{top:'— 訓練場 —',main:'TUTORIAL',sub:'操作をひとつずつ体験しよう',t:0,dur:2.3,col:'#7ff3ff'}:
+      G.daily?{top:'— '+theme.name+' —　今日のステージ',main:'DAILY '+(G.dailySeed/100%100|0)+'/'+(G.dailySeed%100),sub:'今日だけの床の形。最速で塗りつぶせ',t:0,dur:2.3,col:'#ffd54a'}:{top:'— '+theme.name+' —　敵の血で、画面を塗りつぶせ',main:'STAGE '+pad2(n),sub:n>10?'復讐は終わらない —— ENDLESS':STORY[n],t:0,dur:2.3,col:'#b8ff5a'}}
 }
 function pickType(n){
   const pool=[['grunt',10]];
@@ -349,14 +355,14 @@ const CLEANER_INFO={mop:['掃除屋 出現','血を拭き取られる前に始�
 function queueSpawn(type,sub){
   if(type==='bazooka'&&!G.seenSub.bazooka){G.seenSub.bazooka=true;callout('バズーカ兵 出現','ロケット弾も弾き返せる——敵の群れに撃ち返せ！','#ff8a30');G.callout.dur=2.4}
   // 最終盤アシスト（85%以上）：主人公から離れた塗り残しのすぐそばに、壁を通らず直接現れる
-  if(!G.isBossWave&&type!=='cleaner'&&painted/GN>=.85&&painted<GN&&Math.random()<.8){
+  if(!G.isBossWave&&type!=='cleaner'&&prog()>=.85&&painted<GN&&Math.random()<.8){
     const left=[];for(let i=0;i<GN;i++)if(!DONE[i]){const t=tileRect(i);if(dist(t.x+t.w/2,t.y+t.h/2,P.x,P.y)>130)left.push(i)}
     if(left.length){const t=tileRect(pick(left)),a=rand(0,TAU),r=rand(20,60),x=clamp(t.x+t.w/2+Math.cos(a)*r,AX0+20,AX1-20),y=clamp(t.y+t.h/2+Math.sin(a)*r,AY0+24,AY1-20);
-      MARKS.push({x,y,ox:x,oy:y,type,sub,t:.7});return}
+      if(!nearBlock(x,y,16)){MARKS.push({x,y,ox:x,oy:y,type,sub,t:.7});return}}
   }
   let side=irand(0,3),ax=rand(AX0+30,AX1-30),ay=rand(AY0+60,AY1-60),assist=false;
   // 終盤アシスト：まだ塗られていないタイルに一番近い壁から敵を出す
-  if(!G.isBossWave&&painted/GN>=.75&&painted<GN&&Math.random()<.75){
+  if(!G.isBossWave&&prog()>=.75&&painted<GN&&Math.random()<.75){
     const left=[];for(let i=0;i<GN;i++)if(!DONE[i])left.push(i);
     const t=tileRect(pick(left)),tx=t.x+t.w/2,ty=t.y+t.h/2,m=Math.min(tx-AX0,AX1-tx,ty-AY0,AY1-ty);
     side=m===ty-AY0?0:m===AX1-tx?1:m===AY1-ty?2:3;ax=clamp(tx,AX0+20,AX1-20);ay=clamp(ty,AY0+20,AY1-20);assist=true;
@@ -367,6 +373,8 @@ function queueSpawn(type,sub){
   else if(side===2){x=ax;y=AY1-14;ox=x;oy=AY1+30}
   else{x=AX0+14;y=ay;ox=AX0-30;oy=y}
   if(!assist&&dist(x,y,P.x,P.y)<140){x=W-x;ox=W-ox;y=AY0+AY1-y;oy=AY0+AY1-oy}
+  // 入口がふさがったマスなら、空いている壁際を探し直す
+  for(let k=0;k<12&&nearBlock(x,y,14);k++){if(side===0||side===2)x=ox=rand(AX0+30,AX1-30);else y=oy=rand(AY0+60,AY1-60)}
   MARKS.push({x,y,ox,oy,type,sub,t:.7});
 }
 function makeEnemy(type,x,y){
@@ -399,7 +407,7 @@ function updateWave(dt){
         // 種類：モップ係（WAVE2〜）／高圧洗浄機（WAVE3〜）／漂白剤（WAVE4〜）。解禁済みの種類は最低1人ずつ混ざる
         const crew=Math.min(6,G.wave),kinds=['mop'].concat(G.wave>=3?['washer']:[],G.wave>=4?['bleach']:[]);
         // 全滅させた瞬間から休憩タイマーを開始（間隔はランダム）。ただし床が7割以上塗られていると早めに戻ってくる
-        if(G.crewOut&&nc===0){G.crewOut=false;const late=painted/GN>=.7;
+        if(G.crewOut&&nc===0){G.crewOut=false;const late=prog()>=.7;
           G.cleanT=late?rand(4,7):Math.max(6,rand(9,15)-G.wave*.3);
           popText(P.x,P.y-64,'掃除屋 全滅！','#5ab8ff',18,1.1);G.score+=200*crew}
         G.cleanT-=dt;
@@ -410,15 +418,15 @@ function updateWave(dt){
           else popText(W/2,AY0+40,'掃除屋 ×'+crew,'#5ab8ff',16,1.2)}}
       // 大群ラッシュ：STAGE2以降、ステージの途中で一度（長引けばもう一度）、一撃で倒れる雑魚が8秒間どっと押し寄せる
       // まとめ斬り（まとめ倒しの血の判）を気持ちよく決めるための息抜き
-      if(G.wave>=2&&!G.tut){G.rushT-=dt;if(G.rushT<=0&&G.rush<=0&&painted/GN<.9){G.rush=8;G.rushT=rand(40,55);callout('大群襲来！','一撃で倒れる雑魚の群れ——まとめて薙ぎ払え','#ff8a30');G.callout.dur=1.8;SFX.alarm()}}
+      if(G.wave>=2&&!G.tut){G.rushT-=dt;if(G.rushT<=0&&G.rush<=0&&prog()<.9){G.rush=8;G.rushT=rand(40,55);callout('大群襲来！','一撃で倒れる雑魚の群れ——まとめて薙ぎ払え','#ff8a30');G.callout.dur=1.8;SFX.alarm()}}
       if(G.rush>0){G.rush-=dt;G.rushSp-=dt;if(G.rushSp<=0&&alive<Math.min(5+Math.ceil(G.wave*.7),11)+16){G.rushSp=.28;for(let k=0;k<2;k++){queueSpawn(Math.random()<.6?'runner':'grunt');MARKS[MARKS.length-1].horde=true}}}
       // 同時に出る敵の上限：WAVE1で6体〜最大11体（旧8〜15体）。まとめて薙ぎ払える集団湧きは残す
       G.spawnT-=dt;const cap=Math.min(5+Math.ceil(G.wave*.7),11)*waveEase();
       // チュートリアル中は通常の敵は出さない（各手順で必要な敵だけを出す）
       if(G.spawnT<=0&&alive<cap&&!G.tutMode){let n=Math.random()<.4?(G.wave>=6&&Math.random()<.5?3:2):1;if(waveEase()<1)n=Math.max(1,Math.min(n,Math.ceil(cap-alive)));for(let i=0;i<n;i++)queueSpawn(pickType(G.wave));G.spawnT=Math.max(.45,1-G.wave*.05)*rand(.7,1.2)*(waveEase()<1?1.15:1)}
     }
-  }else if(G.phase==='break'){G.breakT-=dt;if(G.breakT<=0)openPick()}
-  else if(G.phase==='ending'){G.endT-=dt;if(G.endT<=0){state='clear';stateT=0;saveBest()}}
+  }else if(G.phase==='break'){G.breakT-=dt;if(G.breakT<=0){if(G.daily)dailyEnd();else openPick()}}
+  else if(G.phase==='ending'){G.endT-=dt;if(G.endT<=0){state='clear';stateT=0;saveBest();grantMeta()}}
 }
 const SEA_FOCUS=.75; // 血の海達成の前に、最後の1マスへ寄って見せる秒数
 function waveClear(){
@@ -469,7 +477,7 @@ function splat(x,y,r,ang){
 const TS=46,GC=Math.ceil((AX1-AX0)/TS),GR=Math.ceil((AY1-AY0)/TS),GN=GC*GR;
 const PAINT_MUL=.85; // 1撃破あたりの塗り量の倍率（囲い込み制圧を主役にするため、普通に倒すだけの塗りはやや厳しめ）
 const PAINT=new Float32Array(GN),DONE=new Uint8Array(GN);let painted=0,paintVer=0; // paintVer：塗りの状態が変わるたびに増える（囲い予告の再計算用）
-function washFloor(){PAINT.fill(0);DONE.fill(0);painted=0;paintVer++;if(decReady){decG.save();decG.setTransform(1,0,0,1,0,0);decG.clearRect(0,0,decC.width,decC.height);decG.restore()}}
+function washFloor(){PAINT.fill(0);DONE.fill(0);painted=0;paintVer++;for(let i=0;i<GN;i++)if(BLOCK[i]){DONE[i]=1;painted++}if(decReady){decG.save();decG.setTransform(1,0,0,1,0,0);decG.clearRect(0,0,decC.width,decC.height);decG.restore()}}
 function tileRect(i){const x=AX0+(i%GC)*TS,y=AY0+Math.floor(i/GC)*TS;return{x,y,w:Math.min(TS,AX1-x),h:Math.min(TS,AY1-y)}}
 function paint(x,y,r,amt){
   const c0=clamp(Math.floor((x-r-AX0)/TS),0,GC-1),c1=clamp(Math.floor((x+r-AX0)/TS),0,GC-1);
@@ -478,7 +486,7 @@ function paint(x,y,r,amt){
     const i=cy*GC+cx;if(DONE[i])continue;const t=tileRect(i);
     if(Math.hypot(x-clamp(x,t.x,t.x+t.w),y-clamp(y,t.y,t.y+t.h))>r)continue;
     const inT=x>=t.x&&x<t.x+t.w&&y>=t.y&&y<t.y+t.h;
-    PAINT[i]+=amt*PAINT_MUL*(inT?1:.5)*(painted/GN>=.85?2:1)*(1+Math.min(1.2,G.chain/20));if(PAINT[i]>=1)fillTile(i); // 連続撃破ほど塗りが速い（20連で2倍、24連で最大2.2倍）
+    PAINT[i]+=amt*PAINT_MUL*(inT?1:.5)*(prog()>=.85?2:1)*(1+Math.min(1.2,G.chain/20))*(G.tutMode?1:1+.06*mlv('blood'));if(PAINT[i]>=1)fillTile(i); // 連続撃破ほど塗りが速い（20連で2倍、24連で最大2.2倍）
   }
 }
 function fillTile(i){
@@ -491,8 +499,71 @@ function fillTile(i){
   if(!G.isBossWave&&G.phase==='fight'&&state==='play'&&!P.dead&&painted>=GN&&!G.tutMode){G.lastTile=i;waveClear()}
 }
 function tileAt(x,y){const cx=Math.floor((x-AX0)/TS),cy=Math.floor((y-AY0)/TS);return cx<0||cy<0||cx>=GC||cy>=GR?-1:cy*GC+cx}
+/* ---------------- 床の形（柱・欠けた角・中央の壁など） ----------------
+   ふさがったマス（BLOCK）は最初から「塗り済み」扱いにして、囲いの壁としても働かせる。
+   ストーリーのステージは毎回同じ形（ステージ番号で決まる）、ENDLESSと今日のステージは自動生成で無限に変わる */
+const BLOCK=new Uint8Array(GN);let nBlock=0;
+const prog=()=>(painted-nBlock)/Math.max(1,GN-nBlock); // 塗りの進み具合（ふさがったマスを除く）
+function srand(seed){let s=(seed>>>0)||1;return()=>{s^=s<<13;s^=s>>>17;s^=s<<5;return(s>>>0)/4294967296}}
+// tpl：形の種類を指定（ストーリーのステージで形がかぶらないように）。省略時はランダム
+const STORY_TPL=[0,0,0,1,2,0,3,4,1,2,0]; // ステージ番号 → 形（0柱 1角欠け 2中央の壁 3ジグザグ 4十字）
+function makeLayout(seed,tpl){
+  BLOCK.fill(0);nBlock=0;if(seed==null)return;
+  const R=srand(seed),ri=(a,b)=>a+Math.floor(R()*(b-a+1));
+  const rect=(c,r,w,h)=>{for(let y=r;y<r+h;y++)for(let x=c;x<c+w;x++)if(x>=0&&y>=0&&x<GC&&y<GR)BLOCK[y*GC+x]=1};
+  const T=[
+    ()=>{const n=ri(3,5);for(let k=0;k<n;k++){const s=R()<.4?2:1;rect(ri(1,GC-1-s),ri(1,GR-2-s),s,s)}}, // 柱
+    ()=>{const cs=[[0,0],[1,0],[0,1],[1,1]].sort(()=>R()-.5).slice(0,ri(1,2));for(const [a,b] of cs){const w=ri(2,3),h=ri(2,4);rect(a?GC-w:0,b?GR-h:0,w,h)}}, // 角を欠く
+    ()=>{if(R()<.5)rect(3,ri(4,5),3,ri(2,3));else rect(4,ri(2,4),1,5)}, // 中央の壁
+    ()=>{const l=R()<.5,len=ri(4,5);rect(l?0:GC-len,ri(3,4),len,1);rect(l?GC-len:0,ri(11,12),len,1)}, // ジグザグの通路
+    ()=>{const cy=ri(4,5);rect(2,cy,5,1);rect(4,cy-2,1,5)} // 十字
+  ];
+  let ok=false;
+  for(let tries=0;tries<40&&!ok;tries++){
+    BLOCK.fill(0);T[tpl!=null?tpl:Math.floor(R()*T.length)]();if(R()<.3)T[0](); // たまに柱を足して組み合わせる
+    for(let y=8;y<=10;y++)for(let x=3;x<=5;x++)BLOCK[y*GC+x]=0; // 主人公の出現位置まわりは空ける
+    ok=layoutOK();
+  }
+  if(!ok)BLOCK.fill(0);
+  nBlock=BLOCK.reduce((s,v)=>s+v,0);
+}
+// 空いているマスがすべてつながっていて、ふさがりすぎていないか
+function layoutOK(){
+  let n=0;for(let i=0;i<GN;i++)n+=BLOCK[i];if(n<3||n>24)return false;
+  const s0=9*GC+4,st=[s0],seen=new Uint8Array(GN);seen[s0]=1;let c=0;
+  while(st.length){const j=st.pop();c++;const x=j%GC,y=(j/GC)|0;
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=GC||ny>=GR)continue;const k=ny*GC+nx;if(!BLOCK[k]&&!seen[k]){seen[k]=1;st.push(k)}}}
+  return c===GN-n;
+}
+// ふさがったマスに食い込んだ円（主人公・敵・死体）を押し出す。当たった面の向き [nx,ny] を返す（当たらなければ null）
+function blockPush(o){
+  if(!nBlock)return null;let res=null;
+  const c0=Math.max(0,Math.floor((o.x-o.r-AX0)/TS)),c1=Math.min(GC-1,Math.floor((o.x+o.r-AX0)/TS));
+  const r0=Math.max(0,Math.floor((o.y-o.r-AY0)/TS)),r1=Math.min(GR-1,Math.floor((o.y+o.r-AY0)/TS));
+  for(let cy=r0;cy<=r1;cy++)for(let cx=c0;cx<=c1;cx++){const i=cy*GC+cx;if(!BLOCK[i])continue;
+    const t=tileRect(i),px=clamp(o.x,t.x,t.x+t.w),py=clamp(o.y,t.y,t.y+t.h);let dx=o.x-px,dy=o.y-py,d=Math.hypot(dx,dy);
+    if(d>=o.r)continue;
+    if(d<.01){const l=o.x-t.x,r=t.x+t.w-o.x,u=o.y-t.y,b=t.y+t.h-o.y,m=Math.min(l,r,u,b);
+      if(m===l){o.x=t.x-o.r;res=[-1,0]}else if(m===r){o.x=t.x+t.w+o.r;res=[1,0]}else if(m===u){o.y=t.y-o.r;res=[0,-1]}else{o.y=t.y+t.h+o.r;res=[0,1]}}
+    else{const k=(o.r-d)/d;o.x+=dx*k;o.y+=dy*k;res=[dx/d,dy/d]}}
+  return res;
+}
+// (x,y) の半径 m 以内にふさがったマスがあるか（物や敵を置く場所選び用）
+function nearBlock(x,y,m){if(!nBlock)return false;for(const [dx,dy] of [[0,0],[m,0],[-m,0],[0,m],[0,-m]]){const i=tileAt(x+dx,y+dy);if(i>=0&&BLOCK[i])return true}return false}
+// 押し出した面に沿って速度を跳ね返す（e：速度 vx,vy を持つもの、k：反発の強さ）
+function bounceOff(v,n,k){const d=v.vx*n[0]+v.vy*n[1];if(d<0){v.vx-=(1+k)*d*n[0];v.vy-=(1+k)*d*n[1]}}
+// ふさがったマス：コンクリートの塊。上面を明るく、外周に縁取り
+function drawBlocks(){
+  if(!nBlock)return;const set=new Set();
+  for(let i=0;i<GN;i++)if(BLOCK[i])set.add(i);
+  g.fillStyle='rgba(0,0,0,.45)';for(const i of set){const t=tileRect(i);g.fillRect(t.x+5,t.y+7,t.w,t.h)}
+  for(const i of set){const t=tileRect(i),gr=g.createLinearGradient(t.x,t.y,t.x,t.y+t.h);gr.addColorStop(0,'#3a3d48');gr.addColorStop(1,'#1c1d24');g.fillStyle=gr;g.fillRect(t.x,t.y,t.w,t.h)}
+  g.strokeStyle='rgba(0,0,0,.35)';g.lineWidth=1;g.beginPath();for(const i of set){const t=tileRect(i);g.moveTo(t.x+4,t.y+t.h*.5);g.lineTo(t.x+t.w-4,t.y+t.h*.5)}g.stroke();
+  g.strokeStyle=`rgba(${theme.hi},.55)`;g.lineWidth=2;tileOutline(set);
+}
 // 掃除屋がタイルの血を拭き取る（塗り済みが取り消される）
 function cleanTile(i,quiet){
+  if(BLOCK[i])return;
   const t=tileRect(i);if(DONE[i]){DONE[i]=0;painted--;paintVer++}PAINT[i]=.15;
   decG.clearRect(t.x,t.y,t.w,t.h);
   fx({k:'wash',x:t.x,y:t.y,w:t.w,h:t.h,life:.5,max:.5});SFX.wash();
@@ -527,7 +598,7 @@ function pickCrests(){
   for(let n=0;n<3;n++){
     for(let tries=0;tries<60;tries++){
       const i=irand(0,GN-1),cx=i%GC,cy=Math.floor(i/GC);
-      if(cy<1||cy>=GR-1||G.crests.some(c=>Math.abs(c.i%GC-cx)+Math.abs(Math.floor(c.i/GC)-cy)<4))continue;
+      if(cy<1||cy>=GR-1||BLOCK[i]||G.crests.some(c=>Math.abs(c.i%GC-cx)+Math.abs(Math.floor(c.i/GC)-cy)<4))continue;
       G.crests.push({i});break;
     }
   }
@@ -693,18 +764,20 @@ const CARDS=[
 ];
 const UP={};
 const lv=id=>UP[id]||0;
-const powMul=()=>1+.175*lv('power');
+const powMul=()=>(1+.175*lv('power'))*(G.tutMode?1:1+.06*mlv('blade'));
 const soulMul=()=>.25*(1+.28*lv('soul')); // 戦闘で溜まるSOULの倍率（基本は当初の1/4）
 const novaR=()=>180*(1+.175*lv('nova')); // 怨念解放の範囲（基本215は強すぎたので180に）
 const guardArc=()=>GUARD_ARC+.245*lv('wide');
-function openPick(){
-  const pool=CARDS.filter(c=>lv(c.id)<c.max);if(!pool.length){startWave(G.wave+1);return}
+function openPick(extra){
+  const pool=CARDS.filter(c=>lv(c.id)<c.max);if(!pool.length){state='play';stateT=0;startWave(G.wave+1);return}
   for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]]}
   G.cards=pool.slice(0,3);G.cardSel=0;state='pick';stateT=0;SFX.ui();
+  if(!extra)G.pickAdUsed=false; // 「動画を見てもう1枚」はステージクリアごとに1回
 }
 function pickCard(i){
   if(state!=='pick'||stateT<.5)return;const c=G.cards[i];if(!c)return;
   UP[c.id]=lv(c.id)+1;if(c.id==='vital'){P.maxhp+=18;P.hp=Math.min(P.maxhp,P.hp+18)}
+  if(G.pickAgain){G.pickAgain=false;SFX.just();popText(W/2,AY0+60,c.name+' 獲得','#ffd54a',16,1.2);openPick(true);return}
   state='play';stateT=0;SFX.just();startWave(G.wave+1);popText(P.x,P.y-50,c.name+' 獲得','#ffd54a',16,1.2);
 }
 const CARD_R=i=>({x:W/2,y:300+i*128,w:380,h:112});
@@ -742,6 +815,8 @@ function drawPick(){
   const own=CARDS.filter(c=>lv(c.id)).map(c=>c.name+(c.max>1?lv(c.id):''));
   if(own.length){const line='所持：'+own.join(' / ');const L1=line.slice(0,30),L2=line.slice(30);txt(L1,W/2,690,11,'#c9cfdc','center',JP,null,false,700);if(L2)txt(L2,W/2,706,11,'#c9cfdc','center',JP,null,false,700)}
   txt(touchMode?'カードをタップして決定':'1・2・3キー ／ 矢印で選んでEnter',W/2,740,12,'#8b93a8','center',JP,null,false,700);
+  if(G.pickAgain)txt('このあと、もう1枚選べる',W/2,650,15,'#ffd54a','center',JP,['#000',3],false,900);
+  else if(!G.pickAdUsed&&!G.daily)button(SCR.pextra,'▶ 動画でもう1枚選ぶ','rgba(20,80,110,.95)');
   g.globalAlpha=1;
 }
 
@@ -760,7 +835,7 @@ const DYN_FUSE=1.55; // ダイナマイトが点火から爆発するまでの�
 const PROP_N={bottle:3,dyn:4,oil:2,car:2,ext:3};
 let PROPS=[],SMOKES=[],WARNS=[],SHOCKS=[],SPILLS=[];
 function propSpot(){
-  for(let k=0;k<40;k++){const x=rand(AX0+50,AX1-50),y=rand(AY0+70,AY1-50);if(dist(x,y,P.x,P.y)>130&&PROPS.every(o=>dist(x,y,o.x,o.y)>90))return{x,y}}
+  for(let k=0;k<40;k++){const x=rand(AX0+50,AX1-50),y=rand(AY0+70,AY1-50);if(dist(x,y,P.x,P.y)>130&&!nearBlock(x,y,30)&&PROPS.every(o=>dist(x,y,o.x,o.y)>90))return{x,y}}
   return{x:rand(AX0+50,AX1-50),y:rand(AY0+70,AY1-50)};
 }
 function newProp(k){const p=propSpot();return{k,x:p.x,y:p.y,r:k==='car'?24:k==='oil'?20:16,used:false,lit:false,fuse:0,t:0,vx:0,vy:0,a:k==='car'?(Math.random()<.5?0:Math.PI/2):0,hits:new Set(),fall:null}}
@@ -802,6 +877,7 @@ function updateGimmicks(dt){
       pr.x+=pr.vx*dt;pr.y+=pr.vy*dt;const f=Math.exp(-2.2*dt);pr.vx*=f;pr.vy*=f;pr.a=Math.atan2(pr.vy,pr.vx);
       if(pr.x<AX0+pr.r){pr.x=AX0+pr.r;pr.vx=Math.abs(pr.vx)*.5}else if(pr.x>AX1-pr.r){pr.x=AX1-pr.r;pr.vx=-Math.abs(pr.vx)*.5}
       if(pr.y<AY0+pr.r){pr.y=AY0+pr.r;pr.vy=Math.abs(pr.vy)*.5}else if(pr.y>AY1-pr.r){pr.y=AY1-pr.r;pr.vy=-Math.abs(pr.vy)*.5}
+      {const n=blockPush(pr);if(n)bounceOff(pr,n,.5)}
       if(v>140)for(const e of [...E]){if(pr.hits.has(e))continue;if(dist(pr.x,pr.y,e.x,e.y)<pr.r+e.r){pr.hits.add(e);gimHit('car',e,e.armor?6:e.hp+1,Math.atan2(e.y-pr.y,e.x-pr.x),560,{fin:true});popText(e.x,e.y-30,'撥ねた！','#ffd54a',14,.6)}}
     }}
   }
@@ -1016,7 +1092,7 @@ function updateCapQ(){
 }
 // 塗りの進み具合が25%・50%・75%を超えたら告知（演出のみ。75%からはBGMも激しくなる）
 function checkMilestones(){
-  if(G.isBossWave||G.phase!=='fight'||G.tutMode)return;const pr=painted/GN,m=pr>=.75?3:pr>=.5?2:pr>=.25?1:0;
+  if(G.isBossWave||G.phase!=='fight'||G.tutMode)return;const pr=prog(),m=pr>=.75?3:pr>=.5?2:pr>=.25?1:0;
   if(m>G.mile){G.mile=m;popText(W/2,AY0+76,'侵食 '+(m*25)+'%','#ff4d6d',26,1.3);G.flash=Math.max(G.flash,.18);G.flashCol='255,20,50';tone(70,40,.7,'sine',.6);if(m===3)callout('侵食 75%','あと少し——街を血で沈めろ','#ff2f5f')}
 }
 
@@ -1218,10 +1294,105 @@ const SCR={endless:{x:W/2,y:612,w:260,h:52},title:{x:W/2,y:682,w:260,h:44},ptitl
 const inC=(p,c,pad)=>Math.hypot(p.x-c.x,p.y-c.y)<c.r+(pad||0);
 const inR=(p,r)=>Math.abs(p.x-r.x)<r.w/2&&Math.abs(p.y-r.y)<r.h/2;
 function toLocal(ev){const r=cv.getBoundingClientRect();return{x:(ev.clientX-r.left)*W/r.width,y:(ev.clientY-r.top)*H/r.height}}
+Object.assign(SCR,{tdaily:{x:W/2-66,y:628,w:124,h:38},tshop:{x:W/2+66,y:628,w:124,h:38},
+  orevive:{x:W/2,y:556,w:290,h:50},oretry:{x:W/2,y:614,w:240,h:44},oshare:{x:W/2-64,y:668,w:120,h:38},otitle:{x:W/2+64,y:668,w:120,h:38},
+  pextra:{x:W/2,y:650,w:300,h:40},cshare:{x:W/2,y:552,w:200,h:40},sback:{x:W/2,y:716,w:220,h:44},dshare:{x:W/2,y:560,w:220,h:46},dtitle:{x:W/2,y:620,w:220,h:42}});
+
+/* ---------------- ごほうび広告の受け口 ----------------
+   投稿サイト（Poki / CrazyGames）のSDKが読み込まれていれば、その動画広告を最後まで見た時にごほうびを渡す。
+   SDKが無い時（自分のサイト・テスト中）は、仮の「広告」画面を AD_T 秒出してからごほうびを渡す */
+const AD_T=2;let adCb=null;
+function rewardAd(cb){
+  resetTouch();if(master)master.gain.value=0;
+  const done=ok=>{if(master)master.gain.value=muted?0:.85;if(ok)cb()};
+  try{
+    if(window.PokiSDK&&PokiSDK.rewardedBreak){PokiSDK.rewardedBreak().then(done).catch(()=>done(false));return}
+    const cg=window.CrazyGames&&CrazyGames.SDK;
+    if(cg&&cg.ad){cg.ad.requestAd('rewarded',{adFinished:()=>done(true),adError:()=>done(false)});return}
+  }catch(e){}
+  adCb=()=>done(true);state='ad';stateT=0;
+}
+function drawAd(){dim(.92);txt('広告（テスト表示）',W/2,H/2-20,22,'#fff','center',JP,null,false,900);
+  txt('本番では、ここに動画広告が流れます',W/2,H/2+14,13,'#8b93a8','center',JP,null,false,700);
+  txt(Math.max(0,Math.ceil(AD_T-stateT))+'',W/2,H/2+70,30,'#ffd54a','center',EN,null,true)}
+// 動画を見て復活：その場でライフ半分、周りの敵を吹き飛ばして2.5秒無敵（1回の挑戦で1回まで。今日のステージでは不可）
+const canRevive=()=>!G.revived&&!G.daily&&!G.tutMode;
+function revive(){
+  G.revived=true;Object.assign(P,{dead:false,hp:Math.round(P.maxhp*.5),inv:2.5,blinkT:0,vx:0,vy:0,kx:0,ky:0,atk:null});G.deathT=0;G.slowT=0;state='play';stateT=0;B.length=0;
+  for(const e of E){if(e.boss)continue;const a=Math.atan2(e.y-P.y,e.x-P.x);if(dist(e.x,e.y,P.x,P.y)<180){e.vx=Math.cos(a)*520;e.vy=Math.sin(a)*520;e.stun=Math.max(e.stun,1)}}
+  RINGS.push({x:P.x,y:P.y,r:10,R:190,t:0,dur:.5,col:'255,40,70',w:16});addShake(14);G.flash=.6;G.flashCol='255,30,60';
+  callout('復 活','怒りは、まだ消えない','#ff2f5f');G.callout.dur=1.6;SFX.heal();
+}
+const restartRun=()=>G.daily?newDaily():newGame(G.tutMode);
+
+/* ---------------- 怨念の祭壇（遊ぶたびに貯まるポイントで、永続の強化を買う） ----------------
+   スコア200ごとに怨念1。ゲームオーバー・クリア・今日のステージの終了時に加算（復活後の分は差分だけ足す） */
+const SHOP=[{id:'hp',name:'不死の肉体',desc:'最大ライフ +10',max:5,cost:[100,200,350,550,800]},
+  {id:'soul',name:'怨念の残り火',desc:'開始時のSOUL +20',max:3,cost:[150,300,500]},
+  {id:'blood',name:'濃い血',desc:'床の塗り +6%',max:3,cost:[200,400,700]},
+  {id:'blade',name:'復讐の爪',desc:'攻撃力 +6%',max:3,cost:[200,400,700]}];
+let META={pts:0,lv:{}};try{const m=JSON.parse(lsGet('dg_meta'));if(m&&m.lv)META=m}catch(e){}
+const mlv=id=>META.lv[id]||0;
+function saveMeta(){lsSet('dg_meta',JSON.stringify(META))}
+function grantMeta(){if(G.tutMode)return;const tot=Math.floor(G.score/200),d=tot-(G.metaPaid||0);if(d>0){META.pts+=d;G.metaPaid=tot;saveMeta()}G.metaGain=tot}
+const SHOP_R=i=>({x:W/2,y:262+i*104,w:390,h:92});
+function buyShop(i){const s=SHOP[i],l=mlv(s.id);if(l>=s.max||META.pts<s.cost[l]){SFX.wall();return}META.pts-=s.cost[l];META.lv[s.id]=l+1;saveMeta();SFX.just()}
+function drawShop(){
+  g.drawImage(bgC,0,0,W,H);dim(.86);
+  txt('怨念の祭壇',W/2,110,34,'#ff2f5f','center',JP,null,false,900);
+  txt('貯めた怨念で、永遠に強くなる',W/2,140,13,'#c9cfdc','center',JP,null,false,700);
+  txt('怨念 '+META.pts,W/2,186,26,'#ffd54a','center',JP,['#000',4],false,900);
+  SHOP.forEach((s,i)=>{const r=SHOP_R(i),l=mlv(s.id),x=r.x-r.w/2,y=r.y-r.h/2,mx=l>=s.max,can=!mx&&META.pts>=s.cost[l];
+    rr(x,y,r.w,r.h,10,'rgba(20,20,30,.95)');g.strokeStyle=can?'#ff4d6d':'rgba(255,255,255,.25)';g.lineWidth=can?2.5:1.5;rrPath(x,y,r.w,r.h,10);g.stroke();
+    txt(s.name,x+18,y+34,19,can?'#ff8aa0':'#c9cfdc','left',JP,null,false,900);
+    txt(s.desc,x+18,y+66,13,'#e6e9f0','left',JP,null,false,700);
+    for(let k=0;k<s.max;k++)rr(x+r.w-24-k*16,y+16,11,11,3,k<l?'#ff2f5f':'rgba(255,255,255,.18)');
+    txt(mx?'MAX':'怨念 '+s.cost[l],x+r.w-16,y+70,15,mx?'#b8ff5a':can?'#ffd54a':'#8b93a8','right',JP,null,false,900)});
+  txt(touchMode?'項目をタップで購入':'項目をクリックで購入',W/2,670,12,'#8b93a8','center',JP,null,false,700);
+  button(SCR.sback,'タイトルへ戻る','rgba(30,32,44,.92)');
+}
+
+/* ---------------- 今日のステージ ----------------
+   日付で決まる床の形・場所で、1ステージだけ挑戦する（誰が遊んでも同じ形）。クリアタイムをその日の自己ベストとして残す */
+function todayYMD(){const d=new Date();return d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate()}
+const DAILY_STAGES=[2,3,4,6,7,8,9];
+function newDaily(){const ymd=todayYMD();resetRun();G.daily=true;G.dailySeed=ymd;G.runSeed=ymd;state='play';stateT=0;SFX.ui();startWave(DAILY_STAGES[ymd%DAILY_STAGES.length])}
+function dailyEnd(){
+  const ymd=G.dailySeed,k='dg_daily_'+ymd,prev=parseFloat(lsGet(k)),tm=G.res?G.res.time:0;G.dailyNew=!(prev>0)||tm<prev;if(G.dailyNew)lsSet(k,tm.toFixed(1));
+  G.dailyBest=G.dailyNew?tm:prev;grantMeta();state='dres';stateT=0;SFX.just();
+}
+function drawDailyRes(){
+  const a=clamp(stateT/.6,0,1),R=G.res||{},ymd=G.dailySeed;dim(.86*a);g.globalAlpha=a;
+  txt('今日のステージ',W/2,200,18,'#ffd54a','center',JP,null,false,900);
+  txt((ymd/100%100|0)+'月'+(ymd%100)+'日　クリア！',W/2,246,32,'#fff','center',JP,null,false,900);
+  txt('RANK '+R.rank,W/2,312,40,R.rank==='S'?'#ffd54a':'#ff2f5f','center',EN,['#000',5],true);
+  txt('TIME '+(R.time||0).toFixed(1)+'s',W/2,360,22,'#fff','center',EN,null,true);
+  txt(G.dailyNew?'★ 今日の自己ベスト更新 ★':'今日の自己ベスト '+G.dailyBest.toFixed(1)+'s',W/2,396,14,G.dailyNew?'#ffd54a':'#8b93a8','center',JP,null,false,900);
+  txt('怨念 +'+(G.metaGain||0),W/2,440,16,'#ff8aa0','center',JP,null,false,900);
+  txt('明日はまた違う形のステージ',W/2,476,12,'#8b93a8','center',JP,null,false,700);
+  if(stateT>.8){button(SCR.dshare,'結果をシェア','rgba(20,80,110,.95)');button(SCR.dtitle,'タイトルへ','rgba(30,32,44,.92)')}
+  g.globalAlpha=1;
+}
+
+/* ---------------- 結果のシェア ----------------
+   スマホは共有メニュー（LINE・Xなど）、PCは X の投稿画面を開く。公開したページのURLも一緒に載せる */
+function shareText(){
+  if(G.daily&&state==='dres'){const y=G.dailySeed;return '【DEAD GIRL】今日のステージ（'+(y/100%100|0)+'/'+(y%100)+'）をクリア！ TIME '+G.res.time.toFixed(1)+'秒 RANK '+G.res.rank+' #DEADGIRL'}
+  if(state==='clear')return '【DEAD GIRL】鬼頭組を一夜で壊滅させた。SCORE '+G.score+' #DEADGIRL';
+  return '【DEAD GIRL】'+(G.daily?'今日のステージ':'STAGE '+pad2(G.wave))+'で力尽きた……SCORE '+G.score+' 次こそ復讐を。#DEADGIRL';
+}
+function shareResult(){
+  const t=shareText(),url=/^https?:/.test(location.href)?location.href.split('#')[0]:'';
+  try{if(navigator.share){navigator.share(url?{text:t,url}:{text:t}).catch(()=>{});return}}catch(e){}
+  try{window.open('https://twitter.com/intent/tweet?text='+encodeURIComponent(t+(url?' '+url:'')),'_blank')}catch(e){}
+}
 // a: 攻撃する向き（タッチでタップした方向）。省略時は移動入力／今の向き
 function pressAttack(a){P.atkBuf=.25;P.atkA=a==null?null:a}
 function screenAction(p,key){
-  if(state==='pick'){if(p){const i=cardAt(p);if(i>=0)pickCard(i)}else pickCard(G.cardSel);return}
+  if(state==='ad')return;
+  if(state==='pick'){if(p){if(!G.pickAdUsed&&!G.daily&&stateT>.5&&inR(p,SCR.pextra)){rewardAd(()=>{G.pickAdUsed=true;G.pickAgain=true;state='pick';stateT=.6});return}const i=cardAt(p);if(i>=0)pickCard(i)}else pickCard(G.cardSel);return}
+  if(state==='shop'){if(p){for(let i=0;i<SHOP.length;i++)if(inR(p,SHOP_R(i))){buyShop(i);return}if(!inR(p,SCR.sback))return}state='title';stateT=LOGO_T+.9;SFX.ui();return}
+  if(state==='dres'){if(stateT<.8)return;if(p&&inR(p,SCR.dshare)){shareResult();return}if(p&&!inR(p,SCR.dtitle))return;state='title';stateT=0;resetRun();skipPrologue();return}
   if(state==='tutintro'){if(stateT>.3){state='play';stateT=0;SFX.ui()}return}
   if(state==='tutend'){if(stateT>.8){state='title';stateT=0;resetRun();skipPrologue();SFX.ui()}return}
   if(state==='stintro'){if(stateT>.3){SFX.ui();stateT=0;if(++G.cardI>=G.cards.length){G.cards=null;state='play'}}return}
@@ -1230,15 +1401,22 @@ function screenAction(p,key){
   // プロローグ中のタップ（クリック・キー）は読み飛ばし：すぐロゴとボタンを出す（音の準備もこのタップで済ませる）
   if(state==='title'&&stateT<LOGO_T+.6){skipPrologue();return}
   if(state==='title'){if(!muted&&!(AC&&AC.state==='running')&&!G.titleTap){G.titleTap=1;return}
-    if(p){if(inR(p,SCR.tstart))newGame(false);else if(inR(p,SCR.ttut))newGame(true);return}
+    if(p){if(inR(p,SCR.tstart))newGame(false);else if(inR(p,SCR.ttut))newGame(true);else if(inR(p,SCR.tdaily))newDaily();else if(inR(p,SCR.tshop)){state='shop';stateT=0;SFX.ui()}return}
     newGame(key==='tut');return}
-  if(state==='over'){if(stateT>.9)newGame(G.tutMode);return}
+  if(state==='over'){if(stateT<.9)return;
+    if(p){if(canRevive()&&inR(p,SCR.orevive)){rewardAd(revive);return}
+      if(inR(p,SCR.oshare)){shareResult();return}
+      if(inR(p,SCR.otitle)){state='title';stateT=0;resetRun();skipPrologue();return}
+      if(inR(p,SCR.oretry))restartRun();return}
+    if(key==='title'){state='title';stateT=0;resetRun();skipPrologue();return}
+    restartRun();return}
   if(state==='pause'){
     if((p&&inR(p,SCR.ptitle))||key==='title'){state='title';stateT=0;resetRun();return}
     state='play';return;
   }
   if(state==='clear'){
     if(stateT<1.2)return;
+    if(p&&inR(p,SCR.cshare)){shareResult();return}
     if((p&&inR(p,SCR.title))||key==='title'){state='title';stateT=0;resetRun();return}
     if(!p||inR(p,SCR.endless)||key==='go')goEndless();
   }
@@ -1473,7 +1651,7 @@ function updatePlayer(dt){
   }
   // 連撃は1回押すごとに1段ずつ（押しっぱなしでは続かない）
   if(!P.atk&&!P.guard&&P.recover<=0&&P.atkBuf>0)startAttack(ix,iy);
-  P.x=clamp(P.x,AX0+P.r,AX1-P.r);P.y=clamp(P.y,AY0+P.r,AY1-P.r);
+  P.x=clamp(P.x,AX0+P.r,AX1-P.r);P.y=clamp(P.y,AY0+P.r,AY1-P.r);blockPush(P);
 }
 
 /* ---------------- enemies ---------------- */
@@ -1488,7 +1666,11 @@ function wallCheck(e,sp){
   let hit=false,nx=0,ny=0;
   if(e.x<AX0+e.r){e.x=AX0+e.r;hit=true;nx=1}else if(e.x>AX1-e.r){e.x=AX1-e.r;hit=true;nx=-1}
   if(e.y<AY0+e.r){e.y=AY0+e.r;hit=true;ny=1}else if(e.y>AY1-e.r){e.y=AY1-e.r;hit=true;ny=-1}
-  if(!hit)return false;
+  if(!hit){
+    // ふさがったマス（柱など）：壁と同じく跳ね返り、強く飛ばされていれば叩きつけ（転落はしない）
+    const n=blockPush(e);if(!n)return false;bounceOff(e,n,.35);
+    if(e.fly>0&&sp>360){e.fly=0;splat(e.x-n[0]*e.r,e.y-n[1]*e.r,e.r*1.4,Math.atan2(-n[1],-n[0]));addShake(8);SFX.wall();G.score+=Math.round(30*G.mult);hitEnemy(e,2,Math.atan2(n[1],n[0]),120,{wall:true})}
+    return true}
   // 屋上：左右の端へ強く吹き飛ばされた敵は転落する
   if(nx&&G.gim==='edge'&&!e.boss&&sp>260){const pc=G.cause;G.cause='edge';popText(e.x,e.y-30,'転落！','#ffd54a',17,.9);G.score+=Math.round(150*G.mult);killEnemy(e,Math.atan2(0,-nx),0,{fall:true});G.cause=pc;return true}
   if(nx)e.vx=Math.abs(e.vx)*nx*.35;if(ny)e.vy=Math.abs(e.vy)*ny*.35;
@@ -1724,7 +1906,8 @@ const RAIN=[];for(let i=0;i<70;i++)RAIN.push({x:rand(0,W+200),y:rand(0,H),s:rand
 function update(rdt){
   stateT+=rdt;
   for(const r of RAIN){r.y+=r.s*rdt;r.x-=r.s*.25*rdt;if(r.y>H){r.y=-20;r.x=rand(0,W+200)}}
-  if(state==='title'){G.time+=rdt;return}
+  if(state==='title'||state==='shop'){G.time+=rdt;return}
+  if(state==='ad'){if(stateT>AD_T&&adCb){const f=adCb;adCb=null;f()}return}
   G.shake*=Math.exp(-11*rdt);if(G.zHold>0)G.zHold-=rdt;else{G.zoom*=Math.exp(-7*rdt);if(G.zoom<.004)G.zc=null}G.flash=Math.max(0,G.flash-rdt*2.2);
   if(G.banner){G.banner.t+=rdt;if(G.banner.t>G.banner.dur)G.banner=null}
   if(G.sea){G.sea.t+=rdt;if(G.sea.t>.45&&!G.sea.b){G.sea.b=1;SFX.just();addShake(10)}if(G.sea.t>3.4)G.sea=null}
@@ -1736,7 +1919,7 @@ function update(rdt){
   if(state!=='play')return;
   // チュートリアルで倒れたら、ゲームオーバーにせず、その場で復活して今の手順からやり直す（成功回数はそのまま）
   if(P.dead&&G.tutMode&&G.tut){G.deathT+=rdt;if(G.deathT>1.6){Object.assign(P,{dead:false,hp:P.maxhp,inv:1.5,blinkT:0,vx:0,vy:0,kx:0,ky:0,atk:null});G.deathT=0;G.slowT=0;const r=G.tut.rep;tutSetup(G.tut.step);G.tut.rep=r;callout('再挑戦','この手順からやり直し','#ffd54a');G.callout.dur=1.5;SFX.heal()}}
-  else if(P.dead){G.deathT+=rdt;if(G.deathT>1.9){state='over';stateT=0;saveBest()}}
+  else if(P.dead){G.deathT+=rdt;if(G.deathT>1.9){state='over';stateT=0;if(!G.daily)saveBest();grantMeta()}}
   if(G.hitstop>0){G.hitstop-=rdt;return}
   if(G.slowT>0){G.slowT-=rdt;G.ts=G.slowScale}else G.ts=lerp(G.ts,1,1-Math.exp(-9*rdt));
   const dt=rdt*G.ts;G.time+=dt;
@@ -1778,6 +1961,7 @@ function update(rdt){
     let wall=false;
     if(e.x<AX0+e.r){e.x=AX0+e.r;c.vx=Math.abs(c.vx)*.4;wall=true}else if(e.x>AX1-e.r){e.x=AX1-e.r;c.vx=-Math.abs(c.vx)*.4;wall=true}
     if(e.y<AY0+e.r){e.y=AY0+e.r;c.vy=Math.abs(c.vy)*.4;wall=true}else if(e.y>AY1-e.r){e.y=AY1-e.r;c.vy=-Math.abs(c.vy)*.4;wall=true}
+    {const n=blockPush(e);if(n){bounceOff(c,n,.4);wall=true}}
     if(wall&&sp>320){splat(e.x,e.y,e.r*2.1,Math.atan2(c.vy,c.vx));addShake(7);SFX.wall();popText(e.x,e.y-24,'SPLASH!','#ff4d6d',14,.6);if(lv('quake')&&!c.boomed){c.boomed=true;explode(e.x,e.y,49,false)}}
     // 吹き飛ぶ死体は床に血の筋を引きずる
     // 途切れない太い血の筋を描き、通ったマスをしっかり塗る（倒す向きで塗る場所を狙える）
@@ -1790,6 +1974,8 @@ function update(rdt){
   for(const b of B){
     b.x+=b.vx*dt;b.y+=b.vy*dt;b.life-=dt;
     for(const pr of PROPS)if(pr.k==='dyn'&&!pr.used&&!pr.lit&&dist(b.x,b.y,pr.x,pr.y)<pr.r+4){pr.lit=true;pr.fuse=DYN_FUSE-.45;b.life=0}
+    // ふさがったマスに当たった弾は消える（ロケットはそこで爆発）
+    {const ti=tileAt(b.x,b.y);if(ti>=0&&BLOCK[ti]){b.life=0;if(b.rocket)explode(b.x,b.y,75,!b.friendly);else fx({k:'f',x:b.x,y:b.y,r:10,life:.06,max:.06,a:0});continue}}
     if(b.rocket){
       if(Math.random()<.6)fx({k:'smoke',x:b.x-b.vx*.04,y:b.y-b.vy*.04,vx:rand(-20,20),vy:rand(-20,20),life:.5,max:.5,sz:rand(6,11)});
       // 壁や寿命で爆発
@@ -2088,14 +2274,14 @@ function wantsBang(e){return (e.state==='windup'&&e.st<.3)||(e.state==='aim'&&e.
 function drawWorld(){
   g.drawImage(bgC,0,0,W,H);
   const fl=.75+Math.sin(G.time*13)*.08+(Math.random()<.03?-.4:0);
-  const heat=1+(G.isBossWave?0:painted/GN)*1.6; // 塗るほどネオンが強く光る
+  const heat=1+(G.isBossWave?0:prog())*1.6; // 塗るほどネオンが強く光る
   glow(8,260,90,theme.tube[0],.22*fl*heat);glow(8,625,80,theme.tube[0],.2*fl*heat);glow(W-8,330,90,theme.tube[1],.2*fl*heat);glow(W-8,680,90,theme.tube[2],.2*heat);
   // ウェーブ間は血が雨に洗い流されていく
   g.globalAlpha=G.phase==='break'?clamp(G.breakT/1.2,0,1):1;g.drawImage(decC,0,0,W,H);g.globalAlpha=1;
   if(!G.isBossWave&&G.phase==='fight'&&state==='play'){
     // まだ塗られていないタイルは床を明るく浮かせ、角マークでも示す（終盤ほど強く点滅）
-    const prog=painted/GN,al=prog>.75?.45+Math.sin(G.time*7)*.25:.3+prog*.15;
-    g.fillStyle=`rgba(${theme.hi},${prog>.75?.13+Math.sin(G.time*7)*.05:.11})`;
+    const pg=prog(),al=pg>.75?.45+Math.sin(G.time*7)*.25:.3+pg*.15;
+    g.fillStyle=`rgba(${theme.hi},${pg>.75?.13+Math.sin(G.time*7)*.05:.11})`;
     for(let i=0;i<GN;i++){if(DONE[i])continue;const t=tileRect(i);g.fillRect(t.x+1,t.y+1,t.w-2,t.h-2)}
     g.strokeStyle=`rgba(${theme.hi},${al})`;g.lineWidth=1.5;g.beginPath();
     for(let i=0;i<GN;i++){if(DONE[i])continue;const t=tileRect(i),m=5,L=8;
@@ -2104,6 +2290,7 @@ function drawWorld(){
     g.stroke();
     drawCapPreview();
   }
+  drawBlocks();
   // 代紋：床に描かれた鬼頭組の紋（ただの飾り。光らせず、血で塗られると暗く沈む）
   for(const c of G.crests){
     const t=tileRect(c.i),x=t.x+t.w/2,y=t.y+t.h/2,col=DONE[c.i]?'rgba(70,0,12,.55)':'rgba(200,165,90,.32)';
@@ -2231,11 +2418,11 @@ function drawHUD(){
       rr(bx,28,bw+40,9,3,'#2a1018');rr(bx,28,(bw+40)*clamp(b.hp/b.max,0,1),9,3,b.hp<b.max*.5?'#ff2040':'#ff5a7a')}
     else{txt('DEAD GIRL',bx,36,25,'#f4f6fb','left',EN,null,true)}
   }else{
-    const pr=painted/GN;txt('血溜まり',bx,22,12,'#ff4d6d','left',JP,null,false,900);
+    const pr=prog();txt('血溜まり',bx,22,12,'#ff4d6d','left',JP,null,false,900);
     const cm=1+Math.min(1.2,G.chain/20);if(cm>1.04)txt('塗り x'+cm.toFixed(1),bx+bw,22,10,'#ffd54a','right',JP,null,false,800);
     rr(bx,28,bw,10,3,'#2a1018');rr(bx,28,bw*pr,10,3,pr>.9&&Math.floor(G.time*8)%2?'#ffffff':'#d4142e');
     txt(Math.floor(pr*100)+'%',bx+bw+6,38,13,'#fff','left',EN,null,true);  }
-  txt(G.tutMode?'TUTORIAL':G.isBossWave?'BOSS':'STAGE '+pad2(G.wave),W-50,24,15,G.tutMode?'#7ff3ff':G.isBossWave?'#ff2f5f':'#b8ff5a','right',EN,null,true);
+  txt(G.tutMode?'TUTORIAL':G.daily?'DAILY':G.isBossWave?'BOSS':'STAGE '+pad2(G.wave),W-50,24,15,G.tutMode?'#7ff3ff':G.daily?'#ffd54a':G.isBossWave?'#ff2f5f':'#b8ff5a','right',EN,null,true);
   txt(String(G.score).padStart(7,'0'),W-50,42,14,'#fff','right',EN);
   if(!G.isBossWave&&!G.tutMode)txt('TIME '+G.waveTime.toFixed(0)+'s',W-50,57,10,'rgba(220,225,240,.6)','right',EN);
   // pause / mute
@@ -2289,7 +2476,7 @@ function drawControls(){
 }
 function drawOverlays(){
   // 塗るほど照明が赤く染まる（進み具合を数字でなく雰囲気で感じさせる）
-  if(state==='play'&&!G.isBossWave&&!G.tutMode&&G.phase==='fight'){const pr=painted/GN,a=pr*pr*.3;
+  if(state==='play'&&!G.isBossWave&&!G.tutMode&&G.phase==='fight'){const pr=prog(),a=pr*pr*.3;
     if(a>.01){const vg=g.createRadialGradient(W/2,H*.55,H*.18,W/2,H*.55,H*.75);vg.addColorStop(0,`rgba(255,0,30,${a*.25})`);vg.addColorStop(1,`rgba(150,0,20,${a})`);g.fillStyle=vg;g.fillRect(0,0,W,H)}}
   // 連撃の熱：20連撃を超えると画面の縁が赤く脈打ち、伸びるほど濃くなる／大群ラッシュ中は橙色に
   if(state==='play'&&!P.dead&&(G.chain>=20||G.rush>0)){const heat=G.rush>0?.16:Math.min(.22,(G.chain-15)/250),a=heat+Math.sin(G.time*10)*.03,col=G.rush>0?'255,120,30':'255,20,40';
@@ -2387,14 +2574,17 @@ function drawTitle(){
     button(SCR.tstart,'ゲームスタート','rgba(160,20,45,.92)');
     if(first)glow(SCR.ttut.x,SCR.ttut.y,150,'#40c8ff',.18+Math.sin(stateT*4)*.08);
     button(SCR.ttut,first?'チュートリアル（初めての方）':'チュートリアル',first?'rgba(20,80,110,.95)':'rgba(30,32,44,.92)');
-    if(!touchMode)txt('Enter：スタート　T：チュートリアル',W/2,614,11,'#8b93a8','center',JP,null,false,700);
+    // 今日のステージ（クリア済みなら自己ベストを添える）／怨念の祭壇（所持ポイント）
+    const db=parseFloat(lsGet('dg_daily_'+todayYMD()));
+    button(SCR.tdaily,'今日のステージ','rgba(110,70,10,.95)');if(db>0)txt('ベスト '+db.toFixed(1)+'s',SCR.tdaily.x,SCR.tdaily.y+32,10,'#ffd54a','center',JP,null,false,700);
+    button(SCR.tshop,'怨念の祭壇','rgba(70,20,60,.95)');txt('怨念 '+META.pts,SCR.tshop.x,SCR.tshop.y+32,10,'#ff8aa0','center',JP,null,false,700);
   }
   g.globalAlpha=la*.85;
-  // 操作説明（16.5px。画面幅に収まるよう1行を短く分けて7行に）
+  // 操作説明（15px・6行）
   const L=touchMode?['目的：血で床を塗りつぶせ。囲めば一気に制圧','左半分をドラッグ：移動','右半分をタップ：攻撃（連打で連撃）','右半分を長押し：ガード（1回防ぐと解除）','光る主人公をタップ：怨念解放']
-    :['目的：血で床を塗りつぶせ。囲めば一気に制圧','WASD／矢印：移動','J／左クリック：攻撃（連打で連撃）','U／右クリック長押し：ガード（1回防ぐと解除）','L／E：怨念解放　P：ポーズ　パッド対応'];
-  L.push('ステージクリアで強化を1つ選択','ステージの仕掛けを利用して戦え');
-  L.forEach((l,i)=>txt(l,W/2,644+i*22,16.5,i>=5?'#ffd54a':'#c9cfdc','center',JP,null,false,700));
+    :['目的：血で床を塗りつぶせ。囲めば一気に制圧','WASD／矢印：移動　Enter：スタート　T：チュートリアル','J／左クリック：攻撃（連打で連撃）','U／右クリック長押し：ガード（1回防ぐと解除）','L／E：怨念解放　P：ポーズ　パッド対応'];
+  L.push('ステージクリアで強化を1つ選択');
+  L.forEach((l,i)=>txt(l,W/2,682+i*19,14,i>=5?'#ffd54a':'#c9cfdc','center',JP,null,false,700));
   if(best>0)txt('BEST '+best,W/2,H-8,12,'#b8ff5a','center',EN);
   g.globalAlpha=1;txt(VERSION,W-10,H-8,11,'#8b93a8','right',EN,null,false,700);
   // 音の状態（実機で鳴らない時の確認用）
@@ -2424,8 +2614,13 @@ function drawOver(){
   const a=clamp(stateT/.6,0,1);dim(.82*a,'20,0,6');g.globalAlpha=a;
   txt('また、殺された。',W/2,250,36,'#ff2f5f','center',JP,null,false,900);
   txt('——でも、怒りは消えない。',W/2,286,15,'#c9cfdc','center',JP,null,false,700);
-  drawStats(360);
-  if(stateT>.9){g.globalAlpha=.55+Math.sin(stateT*4)*.45;txt(touchMode?'TAP TO RISE AGAIN':'ENTER TO RISE AGAIN',W/2,600,19,'#fff','center',EN,null,true)}
+  drawStats(340);
+  if(G.metaGain)txt('怨念 +'+G.metaGain+'（所持 '+META.pts+'）',W/2,506,14,'#ff8aa0','center',JP,null,false,900);
+  if(stateT>.9){
+    if(canRevive()){glow(SCR.orevive.x,SCR.orevive.y,170,'#ff2f5f',.18+Math.sin(stateT*4)*.08);button(SCR.orevive,'▶ 動画を見て復活','rgba(160,20,45,.95)')}
+    button(SCR.oretry,G.daily?'今日のステージに再挑戦':'最初からやり直す','rgba(30,32,44,.92)');
+    button(SCR.oshare,'シェア','rgba(20,80,110,.95)');button(SCR.otitle,'タイトルへ','rgba(30,32,44,.92)');
+    if(!touchMode)txt('Enter：やり直す　Esc：タイトルへ',W/2,716,11,'#8b93a8','center',JP,null,false,700)}
   g.globalAlpha=1;
 }
 function drawClear(){
@@ -2434,7 +2629,8 @@ function drawClear(){
   txt('鬼頭組は、一夜にして壊滅した。',W/2,232,14,'#c9cfdc','center',JP,null,false,700);
   txt('……それでも、この渇きは消えない。',W/2,256,14,'#ff4d6d','center',JP,null,false,700);
   drawStats(320);
-  if(stateT>1.2){button(SCR.endless,'ENDLESS MODE ▶','rgba(160,20,45,.92)',EN);button(SCR.title,'タイトルへ','rgba(30,32,44,.92)')}
+  if(G.metaGain)txt('怨念 +'+G.metaGain+'（所持 '+META.pts+'）',W/2,506,14,'#ff8aa0','center',JP,null,false,900);
+  if(stateT>1.2){button(SCR.cshare,'結果をシェア','rgba(20,80,110,.95)');button(SCR.endless,'ENDLESS MODE ▶','rgba(160,20,45,.92)',EN);button(SCR.title,'タイトルへ','rgba(30,32,44,.92)')}
   g.globalAlpha=1;
 }
 
@@ -2442,6 +2638,7 @@ function drawClear(){
 function draw(){
   g.setTransform(cv.width/W,0,0,cv.height/H,0,0);g.globalAlpha=1;g.globalCompositeOperation='source-over';
   if(state==='title'){TXT_SCALE=1;drawTitle();return}
+  if(state==='shop'){TXT_SCALE=1;drawShop();return}
   TXT_SCALE=1.2;
   g.save();
   const sh=G.shake;if(sh>.3)g.translate(rand(-sh,sh),rand(-sh,sh));
@@ -2452,7 +2649,7 @@ function draw(){
   drawHUD();drawTutPanel();
   if(touchMode&&state==='play')drawControls();
   drawSea();drawBanner();drawCallout();
-  if(state==='pause')drawPause();else if(state==='over')drawOver();else if(state==='clear')drawClear();else if(state==='pick')drawPick();else if(state==='tutmenu')drawTutMenu();else if(state==='tutintro')drawTutIntro();else if(state==='stintro')drawStIntro();else if(state==='tutend')drawTutEnd();
+  if(state==='pause')drawPause();else if(state==='over')drawOver();else if(state==='clear')drawClear();else if(state==='pick')drawPick();else if(state==='tutmenu')drawTutMenu();else if(state==='tutintro')drawTutIntro();else if(state==='stintro')drawStIntro();else if(state==='tutend')drawTutEnd();else if(state==='dres')drawDailyRes();else if(state==='ad')drawAd();
 }
 function loop(ts){
   const rdt=Math.min(.05,(ts-last)/1000||0);last=ts;
