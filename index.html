@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.46 2026-11-01';
+const VERSION='v0.50 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -302,8 +302,8 @@ const STAGES=[
   {dur:.25,hitAt:.07,range:76,arc:2.7,dmg:1.6,kb:230,from:-1.6,to:1.5,stop:.05,shake:4},
   {dur:.25,hitAt:.07,range:76,arc:2.7,dmg:1.6,kb:230,from:1.6,to:-1.5,stop:.05,shake:4},
   {dur:.27,hitAt:.08,range:88,arc:3.0,dmg:2.2,kb:380,from:-2.1,to:1.9,stop:.06,shake:6},
-  // 4段目：全周の回転攻撃（以前のものを復活。威力・範囲・吹き飛ばしは少し弱め）
-  {dur:.38,hitAt:.12,range:96,arc:TAU,dmg:3.2,kb:560,from:-.4,to:TAU+.6,stop:.1,shake:10}
+  // 4段目：全周の回転攻撃。吹き飛ばしは控えめ（飛ばしすぎると死体が遠くまで滑って床が塗れすぎるため）
+  {dur:.38,hitAt:.12,range:96,arc:TAU,dmg:3.2,kb:380,from:-.4,to:TAU+.6,stop:.1,shake:10}
 ];
 const TYPES={
   grunt:{r:13,hp:3.5,spd:82,dmg:10,val:100},
@@ -329,7 +329,7 @@ function resetRun(){
     hitstop:0,slowT:0,slowScale:1,ts:1,shake:0,zoom:0,aimer:null,shotGap:0,crests:[],cleanT:8,seenSub:{},soulReady:false,waveTime:0,flash:0,flashCol:'255,40,70',time:0,
     toSpawn:0,spawnT:0,breakT:0,addsT:0,banner:null,callout:null,boss:null,bossInfo:null,bossPending:0,isBossWave:false,
     phase:'fight',tutMode:false,endless:false,deathT:0,endT:0,newBest:false,tut:null,propSpot:0,rush:0,rushT:99,res:null,gim:null,intro:[],cards:null,cardSel:0,beamT:0,cause:null,
-    runSeed:1,revived:false,metaPaid:0,metaGain:0,pickAgain:false,pickAdUsed:false});
+    runSeed:1,revived:false,bonus:null,bonusFor:0,pickBonus:false,metaPaid:0,metaGain:0,pickAgain:false,pickAdUsed:false});
   Object.assign(P,{x:W/2,y:540,vx:0,vy:0,kx:0,ky:0,lx:0,ly:0,lt:0,r:14,hp:100,hpLag:100,maxhp:100,face:-Math.PI/2,
     atk:null,stage:0,comboWin:0,recover:0,atkBuf:0,atkA:null,inv:0,blinkT:0,
     crit:false,walk:0,trail:[],ghostT:0,dead:false,guard:false,guardLock:false,guardFx:0});
@@ -344,6 +344,56 @@ function newGame(tut){resetRun();G.tutMode=!!tut;if(tut){P.maxhp=P.hp=P.hpLag=10
 function goEndless(){G.endless=true;state='play';stateT=0;P.hp=P.maxhp;startWave(21)}
 // 全20ステージをクリアすると、タイトルから直接ENDLESS（STAGE 21〜・床は毎回自動生成）を始められる
 const endlessOpen=()=>lsGet('dg_cleared')==='1';
+/* ---------------- ボーナス面 ----------------
+   中ボス（STAGE 5・10・15、ENDLESSでも5ステージごと）を倒して強化を選んだ後に1回だけ挟まる。1発でも被弾したら即終了。
+   成功すれば強化カードをもう1枚選べる。失敗しても、それまでの分のスコアは入り、そのまま次のステージへ進む */
+const BONUS_INFO={gun:{name:'弾丸返し',sub:'銃撃手の弾を15発弾き返せ。1発でも当たれば終了',need:15},
+  gunaxe:{name:'弾丸返し・改',sub:'弾と斧を18発弾き返せ。1発でも当たれば終了',need:18},
+  shiki:{name:'式神斬り',sub:'25秒間、式神を斬りまくれ。攻撃を受けたら終了',need:0}};
+const BONUS_THEME={name:'血の試練場',base:'#140810',grid:'200,120,140',refl:['255,60,90','255,200,90'],hi:'235,190,200',tube:['#ffd23f','#ff3f6a','#ffd23f'],mark:'試練'};
+const bonusKind=n=>n===5?'gun':n===10?'gunaxe':n===15?'shiki':['gun','gunaxe','shiki'][(n/5)%3];
+function startBonus(kind){
+  state='play';stateT=0;E=[];B=[];MARKS=[];CORPSES=[];
+  G.bonus={kind,ref:0,kills:0,need:BONUS_INFO[kind].need,t:0,wait:2.4,dur:25,end:false,ok:false,endT:0};
+  G.phase='fight';G.isBossWave=true;G.boss=null;G.bossPending=0;G.rush=0;G.aimer=null;G.shotGap=1;G.cards=null;G.gim=null;G.crests=[];
+  makeLayout(null);washFloor();setTheme(BONUS_THEME);PROPS=[];SPILLS=[];TIRES=[];SMOKES=[];WARNS=[];PWARN=[];
+  WINS=kind==='gunaxe'?WIN_POS.map(p=>({...p,st:'idle',t:0,cool:rand(3,5)})):[];
+  Object.assign(P,{x:W/2,y:AY0+(AY1-AY0)*.55,hp:P.maxhp,inv:1,vx:0,vy:0,kx:0,ky:0,atk:null});
+  G.banner={top:'— BONUS STAGE —',main:BONUS_INFO[kind].name,sub:BONUS_INFO[kind].sub,t:0,dur:2.4,col:'#ffd54a'};SFX.alarm();
+}
+function updateBonus(dt){
+  const b=G.bonus;b.t+=dt;
+  if(b.end){b.endT+=dt/Math.max(.05,G.ts);if(b.endT>2.4)finishBonus();return} // 終了演出のスローに関係なく、実時間で2.4秒
+  if(b.t<b.wait)return;
+  const alive=E.length+MARKS.length;
+  if(b.kind==='shiki'){
+    if(b.t-b.wait>=b.dur){bonusEnd(true);return}
+    b.sp=(b.sp||0)-dt;if(b.sp<=0&&alive<24){b.sp=.3;for(let k=0;k<2;k++){queueSpawn(Math.random()<.6?'runner':'grunt');MARKS[MARKS.length-1].horde=true}}
+  }else{
+    // 銃撃手を常に一定数そろえる（弾き返した弾で倒されたら補充）。弾き返すほど撃つ間隔が縮む
+    const ng=E.filter(e=>e.type==='gunner').length+MARKS.filter(m=>m.type==='gunner').length;if(ng<(b.kind==='gun'?4:3))queueSpawn('gunner');
+    G.shotGap=Math.min(G.shotGap,.35-b.ref*.01); // 約1秒に1発のテンポ（弾き返すほど少しずつ速くなる）
+    for(const e of E)if(e.type==='gunner'&&e.state==='chase')e.cd=Math.min(e.cd,.5);
+  }
+}
+function bonusEnd(ok){
+  const b=G.bonus;if(!b||b.end)return;b.end=true;b.ok=ok;b.endT=0;B.length=0;MARKS.length=0;
+  const pts=(b.kind==='shiki'?b.kills*150:b.ref*400)*Math.max(1,G.wave/5)+(ok?5000:0);b.pts=Math.round(pts);G.score+=b.pts;
+  if(ok){slow(1,.25);for(const e of [...E])killEnemy(e,Math.atan2(e.y-P.y,e.x-P.x),600,{});SFX.clear();G.flash=.6;G.flashCol='255,215,90';
+    callout('BONUS CLEAR!','+'+b.pts+'　強化をもう1枚選べる','#ffd54a')}
+  else{slow(1.2,.2);SFX.hurt();G.flash=.6;G.flashCol='255,30,60';addShake(14);callout('終 了','+'+b.pts+'　次のステージへ','#ff4d6d')}
+  G.callout.dur=2.2;
+}
+function finishBonus(){
+  const ok=G.bonus.ok;G.bonus=null;WINS=[];E=[];B=[];
+  if(ok){G.pickBonus=true;G.res=null;openPick()}else{state='play';stateT=0;startWave(G.wave+1)}
+}
+function drawBonusHUD(){
+  const b=G.bonus;if(!b||b.t<b.wait)return;
+  const main=b.kind==='shiki'?'残り '+Math.max(0,Math.ceil(b.dur-(b.t-b.wait)))+'秒　斬った数 '+b.kills:'弾き返し '+b.ref+' / '+b.need;
+  txt(main,W/2,AY0+34,20,'#ffd54a','center',JP,['#000',5],false,900);
+  if(b.kind!=='shiki'){const w=200,x=W/2-w/2;rr(x,AY0+44,w,6,3,'rgba(0,0,0,.5)');rr(x,AY0+44,w*clamp(b.ref/b.need,0,1),6,3,'#ffd54a')}
+}
 function newEndless(){resetRun();G.endless=true;G.runSeed=1+Math.floor(Math.random()*1e6);state='play';stateT=0;SFX.ui();startWave(21)}
 function saveBest(){if(G.score>best){best=G.score;G.newBest=true;try{localStorage.setItem('nb_best',best)}catch(e){}}}
 
@@ -430,6 +480,7 @@ function spawnBoss(kind){
 }
 function updateWave(dt){
   if(G.phase==='fight'){
+    if(G.bonus){updateBonus(dt);return}
     updateTut(dt);if(G.propSpot>0)G.propSpot-=dt;for(const e of E)if(e.spot>0)e.spot-=dt;
     for(const it of G.intro){it.t-=dt;if(it.t<=0&&!it.shown){it.shown=true;callout(it.txt,it.sub,it.col);G.callout.dur=it.dur||2.2}}    if(G.bossPending>0){G.bossPending-=dt;if(G.bossPending<=0)spawnBoss(G.bossInfo.kind)}
     const alive=E.length+MARKS.length;
@@ -500,6 +551,24 @@ function multiStamp(list){
   const n=list.length;let x=0,y=0;for(const p of list){x+=p.x;y+=p.y}x/=n;y/=n;
   RINGS.push({x,y,r:20,R:Math.min(150,90+(n-3)*15),t:0,dur:.4,col:'255,40,70',w:14});
   addShake(10+n*2);G.hitstop=Math.max(G.hitstop,.08);G.flash=Math.max(G.flash,.25);G.flashCol='255,20,50';SFX.boom();
+}
+// 燃え尽きて灰になる：一瞬、体の形の炎が立ち上り、灰が舞い上がって、床には焦げ跡だけが残る
+function ashBurst(e){
+  fx({k:'husk',x:e.x,y:e.y,r:e.r,life:.55,max:.55});scorch(e.x,e.y,e.r*2.2);addShake(5);G.flash=Math.max(G.flash,.15);G.flashCol='255,120,30';
+  RINGS.push({x:e.x,y:e.y,r:6,R:e.r*4.5,t:0,dur:.35,col:'255,150,50',w:7});noise(.35,.3,'bandpass',2200,700);tone(160,50,.3,'sawtooth',.12);
+  for(let i=0;i<16;i++){const a=rand(0,TAU),v=rand(120,300),l=rand(.25,.5);fx({k:'fire',x:e.x,y:e.y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:l,max:l,sz:rand(4,9)})}
+  for(let i=0;i<30;i++){const a=rand(0,TAU),v=rand(20,90),l=rand(.8,1.6);fx({k:'ash',x:e.x+rand(-e.r,e.r),y:e.y+rand(-e.r,e.r),vx:Math.cos(a)*v,vy:Math.sin(a)*v-40,life:l,max:l,sz:rand(1.5,3.2),rot:rand(0,TAU),vr:rand(-6,6)})}
+  for(let i=0;i<10;i++){const a=rand(-Math.PI,0),v=rand(60,200),l=rand(.3,.6);fx({k:'fire',x:e.x,y:e.y,vx:Math.cos(a)*v*.4,vy:Math.sin(a)*v,life:l,max:l,sz:rand(6,12)})}
+}
+// 燃えている敵：体が赤黒く焼け、足元から炎の舌が何本も立ち上る（燃え尽きる直前ほど激しい）
+function drawBurning(e){
+  const p=1-clamp(e.ashT/e.ashMax,0,1),fl=.7+Math.random()*.3;
+  glow(e.x,e.y,e.r*3*(.8+p*.6),'#ff4a08',(.22+p*.3)*fl);
+  g.globalAlpha=.35+p*.5;g.fillStyle='#1a0602';g.beginPath();g.ellipse(e.x,e.y,e.r*1.05,e.r*1.25,0,0,TAU);g.fill();g.globalAlpha=1;
+  g.save();g.globalCompositeOperation='lighter';
+  for(let k=0;k<5;k++){const ph=G.time*(9+k*2.3)+e.id*1.7+k,h=(e.r*1.6+p*e.r*2.2)*(.6+.4*Math.abs(Math.sin(ph)));
+    flameTongue(e.x+(k-2)*e.r*.42,e.y+e.r*.7-Math.abs(k-2)*2,h,e.r*.26+2,.75,Math.sin(ph*1.3)*.3,true)}
+  g.restore();
 }
 // 紙吹雪：式神が斬られた時の白い紙片（回りながら舞って落ちる）
 function paperBurst(x,y,ang,n){for(let i=0;i<n;i++){const a=Math.random()<.7?ang+rand(-1,1):rand(0,TAU),s=rand(80,320),l=rand(.5,1);
@@ -700,12 +769,13 @@ function hitEnemy(e,dmg,ang,kb,o){
   if([10,25,50,100,150,200,300].includes(G.chain))callout(rankOf(G.chain)+'!',G.chain+' HITS  x'+G.mult.toFixed(1));
   G.soul=Math.min(100,G.soul+soulMul()*(o.fin?3:1.6));
   const big=o.fin||o.crit||dmg>=3;
-  if(e.shiki)paperBurst(e.x,e.y,ang,big?6:4);else bloodBurst(e.x,e.y,ang,big?14:8,big?340:230);
+  if(e.shiki)paperBurst(e.x,e.y,ang,big?6:4);else if(G.cause!=='rage'&&!e.burning)bloodBurst(e.x,e.y,ang,big?14:8,big?340:230);
   spark(e.x-Math.cos(ang)*e.r*.5,e.y-Math.sin(ang)*e.r*.5,ang,big);
   // ダメージ数字はクリティカルの時だけ（床を見やすくするため）
   if(o.crit&&!o.wall)TEXTS.push({x:e.x+rand(-6,6),y:e.y-e.r-8,txt:String(Math.round(dmg*10)),col:'#ffd54a',size:20,t:0,dur:.55,vy:-90});
   SFX.hit(big);
-  if(e.hp<=0)killEnemy(e,ang,Math.max(k,o.fin?720:480),o);
+  // 倒した敵の死体が滑る速さ。4段目の回転攻撃は控えめ（滑る距離 約2.4マス→約1.4マス）
+  if(e.hp<=0)killEnemy(e,ang,o.spin?clamp(k,380,440):Math.max(k,o.fin?720:480),o);
 }
 function killEnemy(e,ang,spd,o){
   o=o||{};if(e.dead)return;e.dead=true;
@@ -717,10 +787,12 @@ function killEnemy(e,ang,spd,o){
   if(G.tut){const gl=G.tut.step===2&&G.tut.gap>=0?[G.tut.gap]:G.tut.step===7&&G.tut.targets?G.tut.targets:[];
     for(const i of gl)if(!DONE[i]){const t=tileRect(i);if(dist(e.x,e.y,t.x+t.w/2,t.y+t.h/2)<95)fillTile(i)}}
   if(lv('drain'))P.hp=Math.min(P.maxhp,P.hp+1.4*lv('drain'));
+  // 怨念解放で倒した敵（ボス以外）は、怨念の炎で燃え尽きて灰になる。血は出ず、死体も残らない（床は塗れない）
+  if(G.cause==='rage'||e.burning){ashBurst(e);if(e.type==='onmyo'){G.rush=0;for(const o of [...E])if(o.shiki)killEnemy(o,0,0,{})}return}
   // 陰陽師を斬ると術が解け、呼び出された式神はすべて紙に戻る
   if(e.type==='onmyo'){G.rush=0;popText(e.x,e.y-40,'術が解けた！','#d8a8ff',18,1.1);addShake(10);for(const o of [...E])if(o.shiki)killEnemy(o,Math.atan2(o.y-e.y,o.x-e.x),300,{})}
   // 式神（紙の人形）：血は出ず、斬り裂かれた紙が舞い散る。死体も残らない（床は塗れない）
-  if(e.shiki){paperBurst(e.x,e.y,ang,16);SFX.swing(0);return}
+  if(e.shiki){paperBurst(e.x,e.y,ang,16);SFX.swing(0);if(G.bonus&&!G.bonus.end)G.bonus.kills++;return}
   if(o.fall){for(let i=0;i<8;i++){const a=rand(0,TAU),v=rand(30,120),l=rand(.3,.6);fx({k:'smoke',x:e.x,y:e.y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:l,max:l,sz:rand(8,14)})}}
   // 連続撃破ほど血しぶきが大きくなる（25連で最大1.8倍）
   else{const cs=1+Math.min(.8,G.chain/25);splat(e.x,e.y,e.r*1.5*cs,ang);bloodBurst(e.x,e.y,ang,Math.round(18*cs),440*cs)}  {
@@ -755,6 +827,7 @@ function fire(x,y,a,spd,dmg,big){
 // 跳ね返した弾は雑魚を貫通し続ける（装甲・ボスに当たると止まる）
 function reflect(b){
   tutComplete(4,.6);
+  if(G.bonus&&!G.bonus.end&&!b.friendly&&G.bonus.kind!=='shiki'){G.bonus.ref++;if(G.bonus.ref>=G.bonus.need)bonusEnd(true)}
   const pf=dist(b.x,b.y,P.x,P.y)<P.r+26+15*lv('perfect');
   b.friendly=true;b.life=2;b.perfect=pf;b.kills=0;b.hits=new Set();b.trail=[];let t=null,bd=1e9;
   for(const e of E){const d=dist(b.x,b.y,e.x,e.y);if(d<bd){bd=d;t=e}}
@@ -795,6 +868,8 @@ function hurtPlayer(dmg,sx,sy){
     popText(P.x,P.y-30,'GUARD +'+Math.max(1,Math.round(heal)),'#6dff9c',15,.7);
     return;
   }
+  // ボーナス面は1発でも被弾したら即終了（ライフは減らない）
+  if(G.bonus){if(!G.bonus.end)bonusEnd(false);P.inv=.8;return}
   P.hp-=dmg;P.inv=.8;P.blinkT=.8;
   P.kx=Math.cos(a)*300;P.ky=Math.sin(a)*300;
   bloodBurst(P.x,P.y,a,14,300);addShake(11);G.flash=Math.max(G.flash,.35);G.flashCol='255,30,60';G.hitstop=Math.max(G.hitstop,.07);SFX.hurt();
@@ -852,7 +927,9 @@ function pickCard(i){
   if(state!=='pick'||stateT<.5)return;const c=G.cards[i];if(!c)return;
   UP[c.id]=lv(c.id)+1;if(c.id==='vital'){P.maxhp+=18;P.hp=Math.min(P.maxhp,P.hp+18)}
   if(G.pickAgain){G.pickAgain=false;SFX.just();popText(W/2,AY0+60,c.name+' 獲得','#ffd54a',16,1.2);openPick(true);return}
-  state='play';stateT=0;SFX.just();startWave(G.wave+1);popText(P.x,P.y-50,c.name+' 獲得','#ffd54a',16,1.2);
+  // 中ボスを倒した後は、次のステージの前にボーナス面を1回挟む
+  if(!G.tutMode&&bossFor(G.wave)&&G.bonusFor!==G.wave){G.bonusFor=G.wave;SFX.just();startBonus(bonusKind(G.wave));return}
+  G.pickBonus=false;state='play';stateT=0;SFX.just();startWave(G.wave+1);popText(P.x,P.y-50,c.name+' 獲得','#ffd54a',16,1.2);
 }
 const CARD_R=i=>({x:W/2,y:300+i*128,w:380,h:112});
 function cardAt(p){for(let i=0;i<(G.cards||[]).length;i++)if(inR(p,CARD_R(i)))return i;return -1}
@@ -865,7 +942,7 @@ function pickKey(k){
 }
 function drawPick(){
   const a=clamp(stateT/.35,0,1);dim(.82*a);g.globalAlpha=a;
-  txt('STAGE '+pad2(G.wave)+' CLEAR',W/2,92,28,'#ff2f5f','center',EN,['#000',5],true);
+  txt(G.pickBonus?'BONUS CLEAR':'STAGE '+pad2(G.wave)+' CLEAR',W/2,92,28,'#ff2f5f','center',EN,['#000',5],true);
   const R=G.res;
   if(R&&!R.boss){
     txt('RANK '+R.rank,W/2-70,128,22,R.rank==='S'?'#ffd54a':'#fff','center',EN,['#000',4],true);
@@ -902,7 +979,7 @@ const GIMMICKS={
   oil:    {name:'ドラム缶',    hint:'殴ると穴が開いて油が漏れ出し、引火して広く燃える'},
   cart:   {name:'荷物を積んだ台車',hint:'台車を殴ると滑り出し、敵を撥ね飛ばす。壁に激突すると荷物が散らばる'},
   tires:  {name:'タイヤの山',  hint:'殴るとタイヤがばらけて転がり、当たった敵を撥ね飛ばす'},
-  beam:   {name:'落下する鉄骨',hint:'影の下に敵を誘い込め——自分は避けろ'},
+  beam:   {name:'落下する鉄骨',hint:'天井のクレーンから鉄骨が落ちてくる。床の影の下に敵を誘い込め——自分は避けろ'},
   edge:   {name:'柵のない屋上',hint:'左右の端へ吹き飛ばすと、敵は転落する'},
   ext:    {name:'消火器',      hint:'殴ると煙が噴き出し、中の敵は動けなくなる'}
 };
@@ -1074,10 +1151,20 @@ function drawOilSpill(sp,L,f){
     g.restore()}
 }
 // 炎の舌1本（根元が白く、先へ行くほど青く透ける）
-function flameTongue(x,y,h,w,al,lean){
+function flameTongue(x,y,h,w,al,lean,orange){
   const tx=x+lean*h,ty=y-h,gr=g.createLinearGradient(x,y,tx,ty);
-  gr.addColorStop(0,`rgba(150,215,255,${.55*al})`);gr.addColorStop(.3,`rgba(70,140,255,${.45*al})`);gr.addColorStop(1,'rgba(30,60,255,0)');
+  if(orange){gr.addColorStop(0,`rgba(255,200,90,${.6*al})`);gr.addColorStop(.35,`rgba(255,90,15,${.5*al})`);gr.addColorStop(1,'rgba(160,20,0,0)')}
+  else{gr.addColorStop(0,`rgba(150,215,255,${.55*al})`);gr.addColorStop(.3,`rgba(70,140,255,${.45*al})`);gr.addColorStop(1,'rgba(30,60,255,0)')}
   g.fillStyle=gr;g.beginPath();g.moveTo(x-w,y);g.bezierCurveTo(x-w*1.1,y-h*.35,tx-w*.2,ty+h*.3,tx,ty);g.bezierCurveTo(tx+w*.2,ty+h*.3,x+w*1.1,y-h*.35,x+w,y);g.quadraticCurveTo(x,y+w*.7,x-w,y);g.fill();
+}
+// 鉄骨（H形鋼）：濃い鋼色の本体に明るいフランジ、両端に黄黒の危険表示、リベット
+function drawBeam(x,y,a,sc,al){
+  g.save();g.globalAlpha=al;g.translate(x,y);g.rotate(a);g.scale(sc,sc);
+  if(sc>1.05){g.fillStyle='rgba(0,0,0,.25)';g.fillRect(-52+6*sc,-9+8*sc,104,18)}
+  rr(-52,-9,104,18,1.5,'#4a505c');g.fillStyle='#9aa2ae';g.fillRect(-52,-9,104,3.5);g.fillRect(-52,5.5,104,3.5);g.fillStyle='#363b44';g.fillRect(-52,-1,104,2);
+  for(const sx of [-1,1]){g.save();g.beginPath();g.rect(sx>0?40:-52,-9,12,18);g.clip();g.fillStyle='#f2c21a';g.fillRect(sx>0?40:-52,-9,12,18);g.fillStyle='#111';for(let k=-3;k<4;k++){g.beginPath();g.moveTo((sx>0?40:-52)+k*6,-9);g.lineTo((sx>0?40:-52)+k*6+5,-9);g.lineTo((sx>0?40:-52)+k*6-4,9);g.lineTo((sx>0?40:-52)+k*6-9,9);g.closePath();g.fill()}g.restore()}
+  g.fillStyle='#2a2d33';for(let k=-30;k<=30;k+=15){g.beginPath();g.arc(k,-6.5,1.3,0,TAU);g.arc(k,6.5,1.3,0,TAU);g.fill()}
+  g.strokeStyle='#22252b';g.lineWidth=1.5;g.strokeRect(-52,-9,104,18);g.restore();g.globalAlpha=1;
 }
 function drawGimmicks(){
   drawWindows();
@@ -1088,8 +1175,10 @@ function drawGimmicks(){
     if(!w.done){const p=clamp(w.t/w.dur,0,1),rr_=w.r*(1.3-p*.3);
       g.fillStyle=`rgba(0,0,0,${.25+p*.4})`;g.beginPath();g.ellipse(w.x,w.y,rr_,rr_*.6,0,0,TAU);g.fill();
       g.strokeStyle=`rgba(255,200,60,${.5+Math.sin(G.time*20)*.3})`;g.lineWidth=2;g.setLineDash([6,5]);g.beginPath();g.arc(w.x,w.y,w.r,0,TAU);g.stroke();g.setLineDash([]);
-      if(p>.55){const fy=w.y-(1-p)*420;g.save();g.translate(w.x,fy);g.rotate(w.a);rr(-52,-9,104,18,2,'#6a707c');g.restore()}}
-    else{g.globalAlpha=1-clamp((w.t-w.dur)/1.2,0,1);g.save();g.translate(w.x,w.y);g.rotate(w.a);rr(-52,-9,104,18,2,'#6a707c');g.strokeStyle='#2a2d33';g.lineWidth=2;g.strokeRect(-52,-9,104,18);g.restore();g.globalAlpha=1}
+      // 影の上に注意書き。後半は真上から鉄骨が落ちてくる（高い所にあるうちは大きく薄く、床に近づくほど本来の大きさに）
+      txt('鉄骨落下',w.x,w.y+4,12,`rgba(255,210,70,${.6+Math.sin(G.time*20)*.3})`,'center',JP,['#000',3],false,900);
+      if(p>.45){const q=(p-.45)/.55;drawBeam(w.x,w.y-(1-q)*30,w.a,1+(1-q)*1.6,.3+q*.7)}}
+    else drawBeam(w.x,w.y,w.a,1,1-clamp((w.t-w.dur)/1.2,0,1))
   }
   for(const sp of SPILLS){const L=sp.len*Math.min(1,sp.t/sp.grow),f=Math.min(1,(sp.dur-sp.t)/.6);if(sp.oil){drawOilSpill(sp,L,f);continue}g.save();g.translate(sp.x,sp.y);g.rotate(sp.a);g.globalAlpha=f;
     rr(0,-sp.w/2,L,sp.w,sp.w/2,sp.lit?'rgba(255,110,20,.28)':sp.oil?'rgba(24,16,10,.72)':'rgba(190,130,40,.5)');
@@ -1705,7 +1794,7 @@ function doHit(a){
     const d=dist(P.x,P.y,e.x,e.y);if(d>range+e.r)continue;
     const an=Math.atan2(e.y-P.y,e.x-P.x);
     if(S.arc<TAU&&Math.abs(angDiff(P.face,an))>S.arc/2&&d>e.r+P.r+4)continue;
-    hitEnemy(e,dmg,an,S.kb*(a.crit?1.4:1),{fin,crit:a.crit});n++;
+    hitEnemy(e,dmg,an,S.kb*(a.crit?1.4:1),{fin,crit:a.crit,spin:a.st===3});n++;
   }
   for(const b of B){
     if(b.friendly)continue;const d=dist(P.x,P.y,b.x,b.y);if(d>range+14)continue;
@@ -1732,11 +1821,14 @@ function tryRage(){
   RINGS.push({x:P.x,y:P.y,r:10,R:R*.8,t:-.08,dur:.5,col:'255,200,210',w:7});
   RINGS.push({x:P.x,y:P.y,r:10,R:R*.55,t:-.16,dur:.45,col:'255,215,80',w:5});
   const pc=G.cause;G.cause='rage';
-  for(const e of [...E]){const d=dist(P.x,P.y,e.x,e.y);if(d<R+e.r)hitEnemy(e,e.boss?12:e.armor?10:e.hp+1,Math.atan2(e.y-P.y,e.x-P.x),820,{fin:true})}
+  // ボスにはダメージ。それ以外の敵は、波が届いた順（近い順）にその場で炎に包まれ、燃え尽きて灰になる
+  for(const e of [...E]){const d=dist(P.x,P.y,e.x,e.y);if(d>=R+e.r||e.ashT!=null)continue;
+    if(e.boss)hitEnemy(e,12,Math.atan2(e.y-P.y,e.x-P.x),820,{fin:true});
+    else{e.ashT=e.ashMax=.08+d/R*.3+.42;e.burning=true;e.stun=9;e.vx=e.vy=0;e.state='chase';if(e===G.aimer)G.aimer=null}}
   G.cause=pc;
   for(const b of B)if(!b.friendly&&dist(P.x,P.y,b.x,b.y)<R+5)reflect(b);
-  // 怨念解放は敵を倒すだけで、床は直接塗らない（倒した敵の血は普通に飛ぶ）
-  callout('怨 念 解 放','周囲の敵を一掃した','#ff2f5f');
+  // 怨念解放は床を塗らない（倒した敵も燃え尽きて灰になり、血は出ない）
+  callout('怨 念 解 放','周囲の敵を灰にした','#ff2f5f');
 }
 function updatePlayer(dt){
   // SOULが満タンになった瞬間に大きく告知（1回だけ）
@@ -1753,7 +1845,8 @@ function updatePlayer(dt){
   let ix=inp.kx+inp.tx+inp.px,iy=inp.ky+inp.ty+inp.py;const il=Math.hypot(ix,iy);if(il>1){ix/=il;iy/=il}
   if(inp.ragePress){inp.ragePress=false;tryRage()}
   // ガード中は攻撃不可・移動は遅い
-  P.guard=guarding();P.guardFx-=dt;P.gT=P.guard?Math.min(1,(P.gT||0)+dt*9):0;
+  P.guard=guarding()&&!(G.bonus&&G.bonus.kind!=='shiki'); // 弾丸返しのボーナス面ではガードは使えない（攻撃で弾き返すのが目的）
+ P.guardFx-=dt;P.gT=P.guard?Math.min(1,(P.gT||0)+dt*9):0;
   if(P.guard){
     P.atk=null;P.atkBuf=0;P.lt=0;
     // 向き：移動入力の方向。入力が無いときだけ最寄りの敵へゆっくり向く
@@ -1832,6 +1925,9 @@ function shove(e,sp){
     e.shoveSet.add(o);o.shoveSet=e.shoveSet;startShove(o,Math.atan2(o.y-e.y,o.x-e.x),k);e.vx*=.5;e.vy*=.5;return}
 }
 function updateEnemy(e,dt){
+  // 怨念の炎で燃えている敵：動けず、時間が来たら燃え尽きる
+  if(e.ashT!=null){e.ashT-=dt;if(Math.random()<.25)fx({k:'fire',x:e.x+rand(-e.r,e.r),y:e.y-e.r*.5+rand(-e.r*.5,0),vx:rand(-20,20),vy:rand(-140,-70),life:.35,max:.35,sz:rand(3,6)});
+    if(e.ashT<=0){const pc=G.cause;G.cause='rage';hitEnemy(e,e.hp+99,Math.atan2(e.y-P.y,e.x-P.x),0,{fin:true});G.cause=pc}return}
   e.flash-=dt;e.st+=dt;e.fly-=dt;
   const sp=Math.hypot(e.vx,e.vy);
   if(sp>1){e.x+=e.vx*dt;e.y+=e.vy*dt;const f=Math.exp(-(e.armor?10:6.5)*dt);e.vx*=f;e.vy*=f}
@@ -2224,6 +2320,7 @@ function update(rdt){
     f.life-=dt;f.x+=f.vx*dt||0;f.y+=f.vy*dt||0;
     if(f.k==='b'){const k=Math.exp(-7*dt);f.vx*=k;f.vy*=k;if(f.life<=0&&Math.random()<.25){decG.fillStyle='rgba(110,0,15,.6)';decG.beginPath();decG.arc(f.x,f.y,f.sz*.7,0,TAU);decG.fill();paint(f.x,f.y,5,.04)}}
     else if(f.k==='fire'||f.k==='smoke'||f.k==='gold'){const k=Math.exp(-4*dt);f.vx*=k;f.vy*=k}
+    else if(f.k==='ash'){const k=Math.exp(-2.2*dt);f.vx*=k;f.vy=f.vy*k-30*dt;f.rot+=f.vr*dt}
     else if(f.k==='paper'){const k=Math.exp(-5*dt);f.vx*=k;f.vy=f.vy*k+40*dt;f.rot+=f.vr*dt}
   }
   FX=FX.filter(f=>f.life>0);
@@ -2567,6 +2664,7 @@ function drawWorld(){
       if(e.boss)glow(e.x,e.y,e.r*2.6,e.type==='kito'?'#8a3cff':e.type==='shirasagi'?'#40c8ff':'#ff3355',.18);
       if(e.boss&&e.onBlood)glow(e.x,e.y+e.r*.6,e.r*2,'#ff1030',.35+Math.sin(G.time*10)*.1);
       if(e.shiki)drawShiki(e);else{drawThug(e);if(e.type==='onmyo')drawOnmyo(e)}
+      if(e.ashT!=null)drawBurning(e);
       if(!e.boss&&e.hp<e.max&&e.max>2){const w=e.r*2;g.fillStyle='rgba(0,0,0,.6)';g.fillRect(e.x-w/2,e.y-e.r-12,w,4);g.fillStyle='#ff4060';g.fillRect(e.x-w/2,e.y-e.r-12,w*clamp(e.hp/e.max,0,1),4)}
     }
   }
@@ -2601,6 +2699,8 @@ function drawWorld(){
     else if(f.k==='drop'){g.globalAlpha=a;circ(f.x,f.y,2,'#9fd8ff')}
     else if(f.k==='oild'){g.globalAlpha=a;circ(f.x,f.y,2.4,'#24160c')}
     else if(f.k==='suds'){g.globalAlpha=a*.8;g.strokeStyle='#f2f8ff';g.lineWidth=1.3;g.beginPath();g.arc(f.x,f.y,f.sz*(1.4-a*.4),0,TAU);g.stroke();g.globalAlpha=a*.25;circ(f.x,f.y,f.sz*(1.4-a*.4),'#ffffff')}
+    else if(f.k==='ash'){g.globalAlpha=Math.min(1,a*1.3)*.85;g.save();g.translate(f.x,f.y);g.rotate(f.rot);g.fillStyle=a>.75?'#ff9a40':'#6a6670';g.fillRect(-f.sz,-f.sz*.6,f.sz*2,f.sz*1.2);g.restore()}
+    else if(f.k==='husk'){const p=1-a;glow(f.x,f.y-f.r*p,f.r*3,'#ff6a1a',a*.8);g.globalAlpha=a*.8;g.fillStyle='#120806';g.beginPath();g.ellipse(f.x,f.y-p*6,f.r*.9*(1-p*.5),f.r*1.3*(1-p*.3),0,0,TAU);g.fill()}
     else if(f.k==='paper'){g.globalAlpha=Math.min(1,a*1.6);g.save();g.translate(f.x,f.y);g.rotate(f.rot);g.scale(1,Math.abs(Math.cos(f.rot*1.7))*.8+.2);g.fillStyle=f.col||(f.red?'#d42a2a':'#f4efe2');g.fillRect(-f.sz,-f.sz*.6,f.sz*2,f.sz*1.2);g.restore()}
     else if(f.k==='mist'){glow(f.x,f.y,8,'#ff1838',a*.5)}
     else if(f.k==='tile'){g.fillStyle=`rgba(255,40,70,${a*.5})`;g.fillRect(f.x,f.y,f.w,f.h);
@@ -2669,7 +2769,7 @@ function drawHUD(){
     const cm=1+Math.min(1.2,G.chain/20);if(cm>1.04)txt('塗り x'+cm.toFixed(1),bx+bw,22,10,'#ffd54a','right',JP,null,false,800);
     rr(bx,28,bw,10,3,'#2a1018');rr(bx,28,bw*pr,10,3,pr>.9&&Math.floor(G.time*8)%2?'#ffffff':'#d4142e');
     txt(Math.floor(pr*100)+'%',bx+bw+6,38,13,'#fff','left',EN,null,true);  }
-  txt(G.tutMode?'TUTORIAL':G.isBossWave?'BOSS':'STAGE '+pad2(G.wave),W-50,24,15,G.tutMode?'#7ff3ff':G.isBossWave?'#ff2f5f':'#b8ff5a','right',EN,null,true);
+  txt(G.tutMode?'TUTORIAL':G.bonus?'BONUS':G.isBossWave?'BOSS':'STAGE '+pad2(G.wave),W-50,24,15,G.tutMode?'#7ff3ff':G.isBossWave?'#ff2f5f':'#b8ff5a','right',EN,null,true);
   txt(String(G.score).padStart(7,'0'),W-50,42,14,'#fff','right',EN);
   if(!G.isBossWave&&!G.tutMode)txt('TIME '+G.waveTime.toFixed(0)+'s',W-50,57,10,'rgba(220,225,240,.6)','right',EN);
   // pause / mute
@@ -2841,7 +2941,7 @@ function drawTitle(){
 }
 function dim(a,col){g.fillStyle=`rgba(${col||'4,4,8'},${a})`;g.fillRect(0,0,W,H)}
 const RULES=[['塗る','敵を倒すと床に血。血溜まりを100%にするとクリア'],['囲う','囲むと中が一気に染まる。光る「囲える」マスを狙え（壁際も可）'],['掃除屋','塗った血を消しに来る。最優先で倒せ'],
-  ['弾き返し','敵の弾やロケットは、攻撃で跳ね返せる'],['ガード','正面だけ防いで回復。1回防ぐと解除（押し直し）'],['怨念解放','SOUL満タンで発動。周囲の敵を一掃する'],
+  ['弾き返し','敵の弾やロケットは、攻撃で跳ね返せる'],['ガード','正面だけ防いで回復。1回防ぐと解除（押し直し）'],['怨念解放','SOUL満タンで発動。周囲の敵を灰にする（血は出ない）'],
   ['仕掛け','ステージの物を殴ると発動する'],['強化カード','ステージクリアで強化を1つ選ぶ'],['ボス','近づくと掴んで投げてくる（ガード不能）']];
 function drawPause(){
   dim(.82);txt('PAUSED',W/2,104,40,'#fff','center',EN,null,true);
@@ -2895,7 +2995,7 @@ function draw(){
   drawOverlays();
   drawHUD();drawTutPanel();
   if(touchMode&&state==='play')drawControls();
-  drawSea();drawBanner();drawCallout();
+  drawBonusHUD();drawSea();drawBanner();drawCallout();
   if(state==='pause')drawPause();else if(state==='over')drawOver();else if(state==='clear')drawClear();else if(state==='pick')drawPick();else if(state==='tutmenu')drawTutMenu();else if(state==='tutintro')drawTutIntro();else if(state==='stintro')drawStIntro();else if(state==='tutend')drawTutEnd();else if(state==='ad')drawAd();
 }
 function loop(ts){
