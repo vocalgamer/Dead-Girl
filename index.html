@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.31 2026-11-01';
+const VERSION='v0.32 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -332,7 +332,7 @@ function startWave(n){
   if(bk){G.addsT=5;G.bossPending=1.9;G.bossInfo={kind:bk,...BOSSES[bk]};
     G.banner={top:'WARNING — BOSS — '+theme.name,main:BOSSES[bk].name,sub:BOSSES[bk].sub,t:0,dur:2.6,col:'#ff2f5f'};SFX.alarm()}
   else{
-    if(!G.tutMode)pickCrests(); // チュートリアルの訓練場には金の代紋を置かない
+    if(!G.tutMode)pickCrests(); // チュートリアルの訓練場には代紋を置かない
     G.banner=G.tutMode?{top:'— 訓練場 —',main:'TUTORIAL',sub:'操作をひとつずつ体験しよう',t:0,dur:2.3,col:'#7ff3ff'}:{top:'— '+theme.name+' —　敵の血で、画面を塗りつぶせ',main:'STAGE '+pad2(n),sub:n>10?'復讐は終わらない —— ENDLESS':STORY[n],t:0,dur:2.3,col:'#b8ff5a'}}
 }
 function pickType(n){
@@ -478,7 +478,6 @@ function fillTile(i){
   for(let k=0;k<6;k++){d.fillStyle=`rgba(${irand(90,140)},0,${irand(8,20)},${rand(.3,.55).toFixed(2)})`;d.beginPath();d.arc(t.x+rand(8,t.w-8),t.y+rand(8,Math.max(9,t.h-8)),rand(5,9),0,TAU);d.fill()}
   // 塗り切った瞬間はマスの枠を白く光らせ、「今ここが塗れた」と分かるようにする（制圧の波で埋まる分は控えめ）
   fx({k:'tile',x:t.x,y:t.y,w:t.w,h:t.h,life:capFilling?.35:.6,max:capFilling?.35:.6,cap:capFilling});SFX.tile();
-  for(const c of G.crests)if(c.i===i&&!c.taken){c.taken=true;crestReward(c)}
   if(!G.isBossWave&&G.phase==='fight'&&state==='play'&&!P.dead&&painted>=GN&&!G.tutMode)waveClear();
 }
 function tileAt(x,y){const cx=Math.floor((x-AX0)/TS),cy=Math.floor((y-AY0)/TS);return cx<0||cy<0||cx>=GC||cy>=GR?-1:cy*GC+cx}
@@ -513,32 +512,15 @@ function bleachArea(i){
   RINGS.push({x:ox,y:oy,r:10,R:TS*2.4,t:0,dur:.4,col:'235,245,255',w:8});SFX.wash();addShake(4);
   const t=tileRect(i);popText(t.x+t.w/2,t.y+t.h/2,'漂白','#e8f4ff',14,.9);
 }
-// 周囲を一気に血の海にする（掃除屋撃破・代紋ボーナス）
-function bloodNova(x,y,r,hurt){
-  for(let k=0;k<10;k++){const a=rand(0,TAU),l=rand(0,r*.8);splat(x+Math.cos(a)*l,y+Math.sin(a)*l,rand(12,20),a)}
-  paint(x,y,r,1.2);bloodBurst(x,y,rand(0,TAU),30,500);
-  RINGS.push({x,y,r:10,R:r,t:0,dur:.4,col:'255,30,60',w:10});addShake(10);SFX.kill(30);
-  if(hurt)for(const e of [...E])if(dist(x,y,e.x,e.y)<r+e.r)hitEnemy(e,5,Math.atan2(e.y-y,e.x-x),600,{fin:true});
-}
-// 代紋タイル：床に描かれた鬼頭組の紋。血で塗るとボーナス
+// 代紋：床に描かれた鬼頭組の紋。雰囲気づくりの飾りで、塗っても何も起きない
 function pickCrests(){
-  const kinds=['soul','heal','nova'].sort(()=>Math.random()-.5);
   for(let n=0;n<3;n++){
     for(let tries=0;tries<60;tries++){
       const i=irand(0,GN-1),cx=i%GC,cy=Math.floor(i/GC);
       if(cy<1||cy>=GR-1||G.crests.some(c=>Math.abs(c.i%GC-cx)+Math.abs(Math.floor(c.i/GC)-cy)<4))continue;
-      G.crests.push({i,r:kinds[n],taken:false});break;
+      G.crests.push({i});break;
     }
   }
-}
-function crestReward(c){
-  misAdd('crest');
-  const t=tileRect(c.i),x=t.x+t.w/2,y=t.y+t.h/2;
-  SFX.just();addShake(10);RINGS.push({x,y,r:10,R:120,t:0,dur:.45,col:'255,210,90',w:8});
-  G.score+=Math.round(500*G.mult);
-  if(c.r==='soul'){G.soul=Math.min(100,G.soul+50);callout('代紋 粉砕','SOUL +50','#ffd54a')}
-  else if(c.r==='heal'){healP(30);callout('代紋 粉砕','HP +30','#ffd54a')}
-  else{callout('代紋 粉砕','血の爆心 —— 周囲が血の海に','#ffd54a');bloodNova(x,y,120,true)}
 }
 function scorch(x,y,r){const d=decG,gr=d.createRadialGradient(x,y,0,x,y,r);gr.addColorStop(0,'rgba(0,0,0,.7)');gr.addColorStop(1,'rgba(0,0,0,0)');d.fillStyle=gr;d.beginPath();d.arc(x,y,r,0,TAU);d.fill()}
 function popText(x,y,txt,col,size,dur){TEXTS.push({x,y,txt,col:col||'#fff',size:size||14,t:0,dur:dur||.7,vy:-60})}
@@ -900,7 +882,6 @@ const MIS_GEN=[
   {id:'chain',  n:w=>20+w*4,           t:'%n連撃を達成せよ'},
   {id:'cleaner',n:w=>Math.min(10,w+1), t:'掃除屋を%n人倒せ',ok:w=>w>=2},
   {id:'time',   n:()=>60,              t:'%n秒以内にクリアせよ'},
-  {id:'crest',  n:()=>3,               t:'金の代紋を3つすべて塗れ'},
   {id:'guard',  n:w=>4+w,              t:'ガードで%n回防げ'},
   {id:'crash',  n:w=>3+Math.floor(w/2),t:'死体をぶつけて%n回CRASHさせろ'},
   {id:'rage',   n:w=>3+Math.floor(w/3), t:'怨念解放の一撃で%n体倒せ'},
@@ -2091,18 +2072,12 @@ function drawWorld(){
     g.stroke();
     drawCapPreview();
   }
-  // 代紋タイル
+  // 代紋：床に描かれた鬼頭組の紋（ただの飾り。光らせず、血で塗られると暗く沈む）
   for(const c of G.crests){
-    const t=tileRect(c.i),x=t.x+t.w/2,y=t.y+t.h/2;
-    if(c.taken){g.globalAlpha=.45;g.strokeStyle='#5a0010';g.lineWidth=2;g.beginPath();g.arc(x,y,16,0,TAU);g.stroke();txt('鬼',x,y+7,19,'#5a0010','center',JP);g.globalAlpha=1;continue}
-    const pl=.6+Math.sin(G.time*4+c.i)*.25;
-    glow(x,y,34,'#ffc840',.22*pl);
-    g.strokeStyle=`rgba(255,205,80,${pl})`;g.lineWidth=2;g.beginPath();g.arc(x,y,16,0,TAU);g.stroke();
-    g.beginPath();g.arc(x,y,12,0,TAU);g.stroke();
-    txt('鬼',x,y+7,19,`rgba(255,215,100,${pl})`,'center',JP);
-    const lb={soul:'SOUL+50',heal:'HP+30',nova:'BLOOD NOVA'}[c.r];
-    txt(lb,x,y+29,9,'#ffd54a','center',EN,['#000',3]);
-    if(PAINT[c.i]>0){g.fillStyle='rgba(255,40,60,.7)';g.fillRect(t.x+4,t.y+t.h-5,(t.w-8)*clamp(PAINT[c.i],0,1),3)}
+    const t=tileRect(c.i),x=t.x+t.w/2,y=t.y+t.h/2,col=DONE[c.i]?'rgba(70,0,12,.55)':'rgba(200,165,90,.32)';
+    g.strokeStyle=col;g.lineWidth=2;g.beginPath();g.arc(x,y,17,0,TAU);g.stroke();
+    g.lineWidth=1;g.beginPath();g.arc(x,y,13,0,TAU);g.stroke();
+    txt('鬼',x,y+7,18,col,'center',JP);
   }
   drawGimmicks();
   for(const m of MARKS){const p=1-m.t/.7;g.strokeStyle=`rgba(255,40,70,${.4+p*.6})`;g.lineWidth=2;g.beginPath();g.arc(m.x,m.y,16-p*6,0,TAU);g.stroke();glow(m.x,m.y,30,'#ff2040',.3+p*.4)}
