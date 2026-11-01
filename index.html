@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.43 2026-11-01';
+const VERSION='v0.44 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -328,7 +328,7 @@ function resetRun(){
     hitstop:0,slowT:0,slowScale:1,ts:1,shake:0,zoom:0,aimer:null,shotGap:0,crests:[],cleanT:8,seenSub:{},soulReady:false,waveTime:0,flash:0,flashCol:'255,40,70',time:0,
     toSpawn:0,spawnT:0,breakT:0,addsT:0,banner:null,callout:null,boss:null,bossInfo:null,bossPending:0,isBossWave:false,
     phase:'fight',tutMode:false,endless:false,deathT:0,endT:0,newBest:false,tut:null,propSpot:0,rush:0,rushT:99,res:null,gim:null,intro:[],cards:null,cardSel:0,beamT:0,cause:null,
-    daily:false,dailySeed:0,runSeed:1,revived:false,metaPaid:0,metaGain:0,pickAgain:false,pickAdUsed:false});
+    runSeed:1,revived:false,metaPaid:0,metaGain:0,pickAgain:false,pickAdUsed:false});
   Object.assign(P,{x:W/2,y:540,vx:0,vy:0,kx:0,ky:0,lx:0,ly:0,lt:0,r:14,hp:100,hpLag:100,maxhp:100,face:-Math.PI/2,
     atk:null,stage:0,comboWin:0,recover:0,atkBuf:0,atkA:null,inv:0,blinkT:0,
     crit:false,walk:0,trail:[],ghostT:0,dead:false,guard:false,guardLock:false,guardFx:0});
@@ -351,8 +351,8 @@ function startWave(n){
   G.wave=n;G.sea=null;G.phase='fight';G.spawnT=1.3;G.bossPending=0;G.bossInfo=null;G.aimer=null;G.shotGap=0;G.cleanT=rand(5,9);G.crewOut=false;G.waveTime=0;G.crests=[];
   const bk=bossFor(n);
   G.isBossWave=!!bk;
-  // 床の形：STAGE1・ボス・チュートリアルは素の長方形。ストーリーはステージごとに決まった形、ENDLESS・今日のステージは自動生成
-  makeLayout(G.tutMode||bk||(n===1&&!G.daily)?null:G.daily?G.dailySeed:n<=20?n*7919:(G.runSeed*7919+n*104729),!G.daily&&n<=20?STORY_TPL[n]:null);
+  // 床の形：STAGE1・ボス・チュートリアルは素の長方形。ストーリーはステージごとに決まった形、ENDLESSは自動生成
+  makeLayout(G.tutMode||bk||n===1?null:n<=20?n*7919:(G.runSeed*7919+n*104729),n<=20?STORY_TPL[n]:null);
   washFloor();setTheme(G.tutMode?TUT_THEME:themeFor(n));setupWindows();setupGimmick();G.mile=0;capNew=[];CAPQ=[];G.wk=0;G.wchain=0;G.wcap=0;G.rushT=rand(22,34);G.rush=0;G.rushSp=0;
   // 開始の表示が終わったら、仕掛けを案内
   tutWave(n);if(G.gim&&!SEEN.has('gim_'+G.gim)){markSeen('gim_'+G.gim);G.propSpot=6}else G.propSpot=0;
@@ -372,7 +372,7 @@ function startWave(n){
   else{
     if(!G.tutMode)pickCrests(); // チュートリアルの訓練場には代紋を置かない
     G.banner=G.tutMode?{top:'— 訓練場 —',main:'TUTORIAL',sub:'操作をひとつずつ体験しよう',t:0,dur:2.3,col:'#7ff3ff'}:
-      G.daily?{top:'— '+theme.name+' —　今日のステージ',main:'DAILY '+(G.dailySeed/100%100|0)+'/'+(G.dailySeed%100),sub:'今日だけの床の形。最速で塗りつぶせ',t:0,dur:2.3,col:'#ffd54a'}:{top:'— '+theme.name+' —　敵の血で、画面を塗りつぶせ',main:'STAGE '+pad2(n),sub:n>20?'復讐は終わらない —— ENDLESS':STORY[n],t:0,dur:2.3,col:'#b8ff5a'}}
+{top:'— '+theme.name+' —　敵の血で、画面を塗りつぶせ',main:'STAGE '+pad2(n),sub:n>20?'復讐は終わらない —— ENDLESS':STORY[n],t:0,dur:2.3,col:'#b8ff5a'}}
 }
 function pickType(n){
   const pool=[['grunt',10]];
@@ -460,7 +460,7 @@ function updateWave(dt){
       // チュートリアル中は通常の敵は出さない（各手順で必要な敵だけを出す）
       if(G.spawnT<=0&&alive<cap&&!G.tutMode){let n=Math.random()<.4?(G.wave>=6&&Math.random()<.5?3:2):1;if(waveEase()<1)n=Math.max(1,Math.min(n,Math.ceil(cap-alive)));for(let i=0;i<n;i++)queueSpawn(pickType(G.wave));G.spawnT=Math.max(.45,1-G.wave*.05)*rand(.7,1.2)*(waveEase()<1?1.15:1)}
     }
-  }else if(G.phase==='break'){G.breakT-=dt;if(G.breakT<=0){if(G.daily)dailyEnd();else openPick()}}
+  }else if(G.phase==='break'){G.breakT-=dt;if(G.breakT<=0)openPick()}
   else if(G.phase==='ending'){G.endT-=dt;if(G.endT<=0){state='clear';stateT=0;saveBest();grantMeta();lsSet('dg_cleared','1')}}
 }
 const SEA_FOCUS=.75; // 血の海達成の前に、最後の1マスへ寄って見せる秒数
@@ -539,7 +539,7 @@ function fillTile(i){
 function tileAt(x,y){const cx=Math.floor((x-AX0)/TS),cy=Math.floor((y-AY0)/TS);return cx<0||cy<0||cx>=GC||cy>=GR?-1:cy*GC+cx}
 /* ---------------- 床の形（柱・欠けた角・中央の壁など） ----------------
    ふさがったマス（BLOCK）は最初から「塗り済み」扱いにして、囲いの壁としても働かせる。
-   ストーリーのステージは毎回同じ形（ステージ番号で決まる）、ENDLESSと今日のステージは自動生成で無限に変わる */
+   ストーリーのステージは毎回同じ形（ステージ番号で決まる）、ENDLESSは自動生成で無限に変わる */
 const BLOCK=new Uint8Array(GN);let nBlock=0;
 const prog=()=>(painted-nBlock)/Math.max(1,GN-nBlock); // 塗りの進み具合（ふさがったマスを除く）
 function srand(seed){let s=(seed>>>0)||1;return()=>{s^=s<<13;s^=s>>>17;s^=s<<5;return(s>>>0)/4294967296}}
@@ -887,7 +887,7 @@ function drawPick(){
   if(own.length){const line='所持：'+own.join(' / ');const L1=line.slice(0,30),L2=line.slice(30);txt(L1,W/2,690,11,'#c9cfdc','center',JP,null,false,700);if(L2)txt(L2,W/2,706,11,'#c9cfdc','center',JP,null,false,700)}
   txt(touchMode?'カードをタップして決定':'1・2・3キー ／ 矢印で選んでEnter',W/2,740,12,'#8b93a8','center',JP,null,false,700);
   if(G.pickAgain)txt('このあと、もう1枚選べる',W/2,650,15,'#ffd54a','center',JP,['#000',3],false,900);
-  else if(!G.pickAdUsed&&!G.daily)button(SCR.pextra,'▶ 動画でもう1枚選ぶ','rgba(20,80,110,.95)');
+  else if(!G.pickAdUsed)button(SCR.pextra,'▶ 動画でもう1枚選ぶ','rgba(20,80,110,.95)');
   g.globalAlpha=1;
 }
 
@@ -1403,9 +1403,9 @@ const SCR={endless:{x:W/2,y:612,w:260,h:52},title:{x:W/2,y:682,w:260,h:44},ptitl
 const inC=(p,c,pad)=>Math.hypot(p.x-c.x,p.y-c.y)<c.r+(pad||0);
 const inR=(p,r)=>Math.abs(p.x-r.x)<r.w/2&&Math.abs(p.y-r.y)<r.h/2;
 function toLocal(ev){const r=cv.getBoundingClientRect();return{x:(ev.clientX-r.left)*W/r.width,y:(ev.clientY-r.top)*H/r.height}}
-Object.assign(SCR,{tdaily:{x:W/2-132,y:628,w:124,h:38},tendless:{x:W/2,y:628,w:124,h:38},tshop:{x:W/2+132,y:628,w:124,h:38},
+Object.assign(SCR,{tendless:{x:W/2-66,y:628,w:124,h:38},tshop:{x:W/2+66,y:628,w:124,h:38},
   orevive:{x:W/2,y:556,w:290,h:50},oretry:{x:W/2,y:614,w:240,h:44},oshare:{x:W/2-64,y:668,w:120,h:38},otitle:{x:W/2+64,y:668,w:120,h:38},
-  pextra:{x:W/2,y:650,w:300,h:40},cshare:{x:W/2,y:552,w:200,h:40},sback:{x:W/2,y:716,w:220,h:44},dshare:{x:W/2,y:560,w:220,h:46},dtitle:{x:W/2,y:620,w:220,h:42}});
+  pextra:{x:W/2,y:650,w:300,h:40},cshare:{x:W/2,y:552,w:200,h:40},sback:{x:W/2,y:716,w:220,h:44}});
 
 /* ---------------- ごほうび広告の受け口 ----------------
    投稿サイト（Poki / CrazyGames）のSDKが読み込まれていれば、その動画広告を最後まで見た時にごほうびを渡す。
@@ -1424,18 +1424,18 @@ function rewardAd(cb){
 function drawAd(){dim(.92);txt('広告（テスト表示）',W/2,H/2-20,22,'#fff','center',JP,null,false,900);
   txt('本番では、ここに動画広告が流れます',W/2,H/2+14,13,'#8b93a8','center',JP,null,false,700);
   txt(Math.max(0,Math.ceil(AD_T-stateT))+'',W/2,H/2+70,30,'#ffd54a','center',EN,null,true)}
-// 動画を見て復活：その場でライフ半分、周りの敵を吹き飛ばして2.5秒無敵（1回の挑戦で1回まで。今日のステージでは不可）
-const canRevive=()=>!G.revived&&!G.daily&&!G.tutMode;
+// 動画を見て復活：その場でライフ半分、周りの敵を吹き飛ばして2.5秒無敵（1回の挑戦で1回まで）
+const canRevive=()=>!G.revived&&!G.tutMode;
 function revive(){
   G.revived=true;Object.assign(P,{dead:false,hp:Math.round(P.maxhp*.5),inv:2.5,blinkT:0,vx:0,vy:0,kx:0,ky:0,atk:null});G.deathT=0;G.slowT=0;state='play';stateT=0;B.length=0;
   for(const e of E){if(e.boss)continue;const a=Math.atan2(e.y-P.y,e.x-P.x);if(dist(e.x,e.y,P.x,P.y)<180){e.vx=Math.cos(a)*520;e.vy=Math.sin(a)*520;e.stun=Math.max(e.stun,1)}}
   RINGS.push({x:P.x,y:P.y,r:10,R:190,t:0,dur:.5,col:'255,40,70',w:16});addShake(14);G.flash=.6;G.flashCol='255,30,60';
   callout('復 活','怒りは、まだ消えない','#ff2f5f');G.callout.dur=1.6;SFX.heal();
 }
-const restartRun=()=>G.daily?newDaily():newGame(G.tutMode);
+const restartRun=()=>G.endless?newEndless():newGame(G.tutMode);
 
 /* ---------------- 怨念の祭壇（遊ぶたびに貯まるポイントで、永続の強化を買う） ----------------
-   スコア200ごとに怨念1。ゲームオーバー・クリア・今日のステージの終了時に加算（復活後の分は差分だけ足す） */
+   スコア200ごとに怨念1。ゲームオーバー・クリアの時に加算（復活後の分は差分だけ足す） */
 const SHOP=[{id:'hp',name:'不死の肉体',desc:'最大ライフ +10',max:5,cost:[100,200,350,550,800]},
   {id:'soul',name:'怨念の残り火',desc:'開始時のSOUL +20',max:3,cost:[150,300,500]},
   {id:'blood',name:'濃い血',desc:'床の塗り +6%',max:3,cost:[200,400,700]},
@@ -1461,34 +1461,11 @@ function drawShop(){
   button(SCR.sback,'タイトルへ戻る','rgba(30,32,44,.92)');
 }
 
-/* ---------------- 今日のステージ ----------------
-   日付で決まる床の形・場所で、1ステージだけ挑戦する（誰が遊んでも同じ形）。クリアタイムをその日の自己ベストとして残す */
-function todayYMD(){const d=new Date();return d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate()}
-const DAILY_STAGES=[2,3,4,6,7,8,9];
-function newDaily(){const ymd=todayYMD();resetRun();G.daily=true;G.dailySeed=ymd;G.runSeed=ymd;state='play';stateT=0;SFX.ui();startWave(DAILY_STAGES[ymd%DAILY_STAGES.length])}
-function dailyEnd(){
-  const ymd=G.dailySeed,k='dg_daily_'+ymd,prev=parseFloat(lsGet(k)),tm=G.res?G.res.time:0;G.dailyNew=!(prev>0)||tm<prev;if(G.dailyNew)lsSet(k,tm.toFixed(1));
-  G.dailyBest=G.dailyNew?tm:prev;grantMeta();state='dres';stateT=0;SFX.just();
-}
-function drawDailyRes(){
-  const a=clamp(stateT/.6,0,1),R=G.res||{},ymd=G.dailySeed;dim(.86*a);g.globalAlpha=a;
-  txt('今日のステージ',W/2,200,18,'#ffd54a','center',JP,null,false,900);
-  txt((ymd/100%100|0)+'月'+(ymd%100)+'日　クリア！',W/2,246,32,'#fff','center',JP,null,false,900);
-  txt('RANK '+R.rank,W/2,312,40,R.rank==='S'?'#ffd54a':'#ff2f5f','center',EN,['#000',5],true);
-  txt('TIME '+(R.time||0).toFixed(1)+'s',W/2,360,22,'#fff','center',EN,null,true);
-  txt(G.dailyNew?'★ 今日の自己ベスト更新 ★':'今日の自己ベスト '+G.dailyBest.toFixed(1)+'s',W/2,396,14,G.dailyNew?'#ffd54a':'#8b93a8','center',JP,null,false,900);
-  txt('怨念 +'+(G.metaGain||0),W/2,440,16,'#ff8aa0','center',JP,null,false,900);
-  txt('明日はまた違う形のステージ',W/2,476,12,'#8b93a8','center',JP,null,false,700);
-  if(stateT>.8){button(SCR.dshare,'結果をシェア','rgba(20,80,110,.95)');button(SCR.dtitle,'タイトルへ','rgba(30,32,44,.92)')}
-  g.globalAlpha=1;
-}
-
 /* ---------------- 結果のシェア ----------------
    スマホは共有メニュー（LINE・Xなど）、PCは X の投稿画面を開く。公開したページのURLも一緒に載せる */
 function shareText(){
-  if(G.daily&&state==='dres'){const y=G.dailySeed;return '【DEAD GIRL】今日のステージ（'+(y/100%100|0)+'/'+(y%100)+'）をクリア！ TIME '+G.res.time.toFixed(1)+'秒 RANK '+G.res.rank+' #DEADGIRL'}
   if(state==='clear')return '【DEAD GIRL】鬼頭組を一夜で壊滅させた。SCORE '+G.score+' #DEADGIRL';
-  return '【DEAD GIRL】'+(G.daily?'今日のステージ':'STAGE '+pad2(G.wave))+'で力尽きた……SCORE '+G.score+' 次こそ復讐を。#DEADGIRL';
+  return '【DEAD GIRL】STAGE '+pad2(G.wave)+'で力尽きた……SCORE '+G.score+' 次こそ復讐を。#DEADGIRL';
 }
 function shareResult(){
   const t=shareText(),url=/^https?:/.test(location.href)?location.href.split('#')[0]:'';
@@ -1499,9 +1476,8 @@ function shareResult(){
 function pressAttack(a){P.atkBuf=.25;P.atkA=a==null?null:a}
 function screenAction(p,key){
   if(state==='ad')return;
-  if(state==='pick'){if(p){if(!G.pickAdUsed&&!G.daily&&stateT>.5&&inR(p,SCR.pextra)){rewardAd(()=>{G.pickAdUsed=true;G.pickAgain=true;state='pick';stateT=.6});return}const i=cardAt(p);if(i>=0)pickCard(i)}else pickCard(G.cardSel);return}
+  if(state==='pick'){if(p){if(!G.pickAdUsed&&stateT>.5&&inR(p,SCR.pextra)){rewardAd(()=>{G.pickAdUsed=true;G.pickAgain=true;state='pick';stateT=.6});return}const i=cardAt(p);if(i>=0)pickCard(i)}else pickCard(G.cardSel);return}
   if(state==='shop'){if(p){for(let i=0;i<SHOP.length;i++)if(inR(p,SHOP_R(i))){buyShop(i);return}if(!inR(p,SCR.sback))return}state='title';stateT=LOGO_T+.9;SFX.ui();return}
-  if(state==='dres'){if(stateT<.8)return;if(p&&inR(p,SCR.dshare)){shareResult();return}if(p&&!inR(p,SCR.dtitle))return;state='title';stateT=0;resetRun();skipPrologue();return}
   if(state==='tutintro'){if(stateT>.3){state='play';stateT=0;SFX.ui()}return}
   if(state==='tutend'){if(stateT>.8){state='title';stateT=0;resetRun();skipPrologue();SFX.ui()}return}
   if(state==='stintro'){if(stateT>.3){SFX.ui();stateT=0;if(++G.cardI>=G.cards.length){G.cards=null;state='play'}}return}
@@ -1510,7 +1486,7 @@ function screenAction(p,key){
   // プロローグ中のタップ（クリック・キー）は読み飛ばし：すぐロゴとボタンを出す（音の準備もこのタップで済ませる）
   if(state==='title'&&stateT<LOGO_T+.6){skipPrologue();return}
   if(state==='title'){if(!muted&&!(AC&&AC.state==='running')&&!G.titleTap){G.titleTap=1;return}
-    if(p){if(inR(p,SCR.tstart))newGame(false);else if(inR(p,SCR.ttut))newGame(true);else if(inR(p,SCR.tdaily))newDaily();else if(inR(p,SCR.tendless)){if(endlessOpen())newEndless();else SFX.wall()}else if(inR(p,SCR.tshop)){state='shop';stateT=0;SFX.ui()}return}
+    if(p){if(inR(p,SCR.tstart))newGame(false);else if(inR(p,SCR.ttut))newGame(true);else if(inR(p,SCR.tendless)){if(endlessOpen())newEndless();else SFX.wall()}else if(inR(p,SCR.tshop)){state='shop';stateT=0;SFX.ui()}return}
     newGame(key==='tut');return}
   if(state==='over'){if(stateT<.9)return;
     if(p){if(canRevive()&&inR(p,SCR.orevive)){rewardAd(revive);return}
@@ -2077,7 +2053,7 @@ function update(rdt){
   if(state!=='play')return;
   // チュートリアルで倒れたら、ゲームオーバーにせず、その場で復活して今の手順からやり直す（成功回数はそのまま）
   if(P.dead&&G.tutMode&&G.tut){G.deathT+=rdt;if(G.deathT>1.6){Object.assign(P,{dead:false,hp:P.maxhp,inv:1.5,blinkT:0,vx:0,vy:0,kx:0,ky:0,atk:null});G.deathT=0;G.slowT=0;const r=G.tut.rep;tutSetup(G.tut.step);G.tut.rep=r;callout('再挑戦','この手順からやり直し','#ffd54a');G.callout.dur=1.5;SFX.heal()}}
-  else if(P.dead){G.deathT+=rdt;if(G.deathT>1.9){state='over';stateT=0;if(!G.daily)saveBest();grantMeta()}}
+  else if(P.dead){G.deathT+=rdt;if(G.deathT>1.9){state='over';stateT=0;saveBest();grantMeta()}}
   if(G.hitstop>0){G.hitstop-=rdt;return}
   if(G.slowT>0){G.slowT-=rdt;G.ts=G.slowScale}else G.ts=lerp(G.ts,1,1-Math.exp(-9*rdt));
   const dt=rdt*G.ts;G.time+=dt;
@@ -2617,7 +2593,7 @@ function drawHUD(){
     const cm=1+Math.min(1.2,G.chain/20);if(cm>1.04)txt('塗り x'+cm.toFixed(1),bx+bw,22,10,'#ffd54a','right',JP,null,false,800);
     rr(bx,28,bw,10,3,'#2a1018');rr(bx,28,bw*pr,10,3,pr>.9&&Math.floor(G.time*8)%2?'#ffffff':'#d4142e');
     txt(Math.floor(pr*100)+'%',bx+bw+6,38,13,'#fff','left',EN,null,true);  }
-  txt(G.tutMode?'TUTORIAL':G.daily?'DAILY':G.isBossWave?'BOSS':'STAGE '+pad2(G.wave),W-50,24,15,G.tutMode?'#7ff3ff':G.daily?'#ffd54a':G.isBossWave?'#ff2f5f':'#b8ff5a','right',EN,null,true);
+  txt(G.tutMode?'TUTORIAL':G.isBossWave?'BOSS':'STAGE '+pad2(G.wave),W-50,24,15,G.tutMode?'#7ff3ff':G.isBossWave?'#ff2f5f':'#b8ff5a','right',EN,null,true);
   txt(String(G.score).padStart(7,'0'),W-50,42,14,'#fff','right',EN);
   if(!G.isBossWave&&!G.tutMode)txt('TIME '+G.waveTime.toFixed(0)+'s',W-50,57,10,'rgba(220,225,240,.6)','right',EN);
   // pause / mute
@@ -2769,9 +2745,6 @@ function drawTitle(){
     button(SCR.tstart,'ゲームスタート','rgba(160,20,45,.92)');
     if(first)glow(SCR.ttut.x,SCR.ttut.y,150,'#40c8ff',.18+Math.sin(stateT*4)*.08);
     button(SCR.ttut,first?'チュートリアル（初めての方）':'チュートリアル',first?'rgba(20,80,110,.95)':'rgba(30,32,44,.92)');
-    // 今日のステージ（クリア済みなら自己ベストを添える）／怨念の祭壇（所持ポイント）
-    const db=parseFloat(lsGet('dg_daily_'+todayYMD()));
-    button(SCR.tdaily,'今日のステージ','rgba(110,70,10,.95)');if(db>0)txt('ベスト '+db.toFixed(1)+'s',SCR.tdaily.x,SCR.tdaily.y+32,10,'#ffd54a','center',JP,null,false,700);
     // ENDLESS：全20ステージクリアで開放（それまでは鍵付きで見せて、目標にする）
     if(endlessOpen())button(SCR.tendless,'ENDLESS','rgba(160,20,45,.95)',EN);
     else{g.globalAlpha=la*.55;button(SCR.tendless,'🔒 ENDLESS','rgba(40,40,50,.95)',EN);g.globalAlpha=la;txt('20ステージ制覇で開放',SCR.tendless.x,SCR.tendless.y+32,10,'#8b93a8','center',JP,null,false,700)}
@@ -2816,7 +2789,7 @@ function drawOver(){
   if(G.metaGain)txt('怨念 +'+G.metaGain+'（所持 '+META.pts+'）',W/2,506,14,'#ff8aa0','center',JP,null,false,900);
   if(stateT>.9){
     if(canRevive()){glow(SCR.orevive.x,SCR.orevive.y,170,'#ff2f5f',.18+Math.sin(stateT*4)*.08);button(SCR.orevive,'▶ 動画を見て復活','rgba(160,20,45,.95)')}
-    button(SCR.oretry,G.daily?'今日のステージに再挑戦':'最初からやり直す','rgba(30,32,44,.92)');
+    button(SCR.oretry,'最初からやり直す','rgba(30,32,44,.92)');
     button(SCR.oshare,'シェア','rgba(20,80,110,.95)');button(SCR.otitle,'タイトルへ','rgba(30,32,44,.92)');
     if(!touchMode)txt('Enter：やり直す　Esc：タイトルへ',W/2,716,11,'#8b93a8','center',JP,null,false,700)}
   g.globalAlpha=1;
@@ -2847,7 +2820,7 @@ function draw(){
   drawHUD();drawTutPanel();
   if(touchMode&&state==='play')drawControls();
   drawSea();drawBanner();drawCallout();
-  if(state==='pause')drawPause();else if(state==='over')drawOver();else if(state==='clear')drawClear();else if(state==='pick')drawPick();else if(state==='tutmenu')drawTutMenu();else if(state==='tutintro')drawTutIntro();else if(state==='stintro')drawStIntro();else if(state==='tutend')drawTutEnd();else if(state==='dres')drawDailyRes();else if(state==='ad')drawAd();
+  if(state==='pause')drawPause();else if(state==='over')drawOver();else if(state==='clear')drawClear();else if(state==='pick')drawPick();else if(state==='tutmenu')drawTutMenu();else if(state==='tutintro')drawTutIntro();else if(state==='stintro')drawStIntro();else if(state==='tutend')drawTutEnd();else if(state==='ad')drawAd();
 }
 function loop(ts){
   const rdt=Math.min(.05,(ts-last)/1000||0);last=ts;
