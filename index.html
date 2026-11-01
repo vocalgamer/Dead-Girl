@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.77 2026-11-01';
+const VERSION='v0.78 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -1919,7 +1919,7 @@ const tutText=st=>({1:['① 塗る','敵を倒すと、血で床が染まる。�
   4:['④ ジャストガード','攻撃が当たる直前にガード！相手がよろけ、次の一撃がクリティカル'],
   5:['⑤ 弾き返し','銃撃手の弾は、当たる直前に攻撃すると跳ね返せる'],
   6:['⑥ 怨念解放','SOULが満タン！'+(touchMode?'光る主人公をタップ':'L／Eキー')+'で周りを一掃'],
-  7:['⑦ 怨霊の手','紫のSOUL満タン！'+(touchMode?'光る主人公をタップ':'Q／Kキー')+'で血の床の敵を一掃'],
+  7:['⑦ 怨霊の手','紫のSOUL満タン！'+(touchMode?'光る主人公をタップ':'L／Eキー')+'で血の床の敵を一掃'],
   8:['⑧ 掃除屋','塗った血を消しに来る。消される前に倒せ！'],9:['⑨ クリア','光るマスを塗れ。床をすべて血で塗るとステージクリア']})[st];
 function tutWave(n){
   if(!G.tutMode||n!==1){G.tut=null;return}
@@ -2033,7 +2033,7 @@ function drawTutWorld(){
   if(T_.step===8)for(const e of E)if(e.type==='cleaner'&&!(e.spot>0))pointer(e.x,e.y-e.r-22,'消される前に倒せ！','#5ab8ff');
   if((T_.step===3||T_.step===4||T_.step===5)&&T_.foe&&!T_.foe.dead&&!(T_.foe.spot>0))pointer(T_.foe.x,T_.foe.y-T_.foe.r-22,T_.step===3?'攻撃に合わせてガード':T_.step===4?'斬られる直前にガード！':'弾を跳ね返せ');
   if(T_.step===6&&!P.dead)pointer(P.x,P.y-74,touchMode?'タップ！':'L／E');
-  if(T_.step===7&&!P.dead&&!T_.later)pointer(P.x,P.y-74,touchMode?'タップ！':'Q／K');
+  if(T_.step===7&&!P.dead&&!T_.later)pointer(P.x,P.y-74,touchMode?'タップ！':'L／E');
 }
 function drawTutPanel(){
   const T_=G.tut,intro=state==='tutintro';if(!T_||(state!=='play'&&!intro)||!tutText(T_.step))return;
@@ -2301,7 +2301,7 @@ cv.addEventListener('pointermove',ev=>{
 function pUp(ev){
   const tt=TOUCH.get(ev.pointerId);
   // 光る主人公のタップ：金なら怨念解放、紫（2段目まで満タン）なら怨霊の手
-  if(tt&&tt.mode==='rage'&&ev.type==='pointerup'&&state==='play'){if(G.soul>=SOUL_MAX)useHands();else inp.ragePress=true}
+  if(tt&&tt.mode==='rage'&&ev.type==='pointerup'&&state==='play')inp.ragePress=true;
   // 右半分を素早く下へスワイプ（0.7秒以内に50px以上）：怨霊の手
   else if(tt&&tt.sy!=null&&ev.type==='pointerup'&&state==='play'&&tt.y-tt.sy>50&&Math.abs(tt.x-tt.sx)<tt.y-tt.sy&&performance.now()-tt.t<700)useHands();
   if(ev.type==='lostpointercapture'&&ev.pointerType==='mouse')return;
@@ -2412,6 +2412,7 @@ function doHit(a){
 // 怨念解放：一撃の必殺技。周囲の雑魚を一掃し、敵弾を弾き返し、足元一帯を一気に血で染める（持続する強化は無し）
 function tryRage(){
   if(G.soul<100||P.dead)return;
+  if(G.soul>=SOUL_MAX){useHands();return} // 紫まで満タンなら、同じ操作で怨霊の手（スマホのタップ・PCのL/E・パッドで共通）
   tutComplete(6,1);
   const R=novaR();
   // 弾き返しと同じくらいのスローで、範囲（床の赤い円）と、波が届いて敵が燃え上がっていく様子を見せる
@@ -2438,8 +2439,8 @@ function updatePlayer(dt){
     G.flash=Math.max(G.flash,.45);G.flashCol='255,215,80';addShake(10);slow(.35,.3);G.zoom=Math.max(G.zoom,.04);
     for(let i=0;i<30;i++){const a=rand(-Math.PI*.95,-Math.PI*.05),v=rand(120,380),l=rand(.4,.8);fx({k:'gold',x:P.x+rand(-10,10),y:P.y+rand(-6,10),vx:Math.cos(a)*v*.5,vy:Math.sin(a)*v,life:l,max:l,sz:rand(6,12)})}}
   if(G.soul>=SOUL_MAX&&!G.soulReady2&&!P.dead){G.soulReady2=true;SFX.powerup();SFX.handGet();
-    if(!SEEN.has('hands')){markSeen('hands');callout('怨霊 MAX','怨霊の手：血の床の上の敵を、すべて引きずり込む——'+(touchMode?'紫に光る主人公をタップ':'Q／Kキー'),'#c890ff');G.callout.dur=2.8}
-    else callout('怨霊 MAX',touchMode?'紫に光る主人公をタップで「怨霊の手」':'Q／Kキーで「怨霊の手」','#c890ff');
+    if(!SEEN.has('hands')){markSeen('hands');callout('怨霊 MAX','怨霊の手：血の床の上の敵を、すべて引きずり込む——'+(touchMode?'紫に光る主人公をタップ':'L／Eキー'),'#c890ff');G.callout.dur=2.8}
+    else callout('怨霊 MAX',touchMode?'紫に光る主人公をタップで「怨霊の手」':'L／Eキーで「怨霊の手」','#c890ff');
     RINGS.push({x:P.x,y:P.y,r:12,R:150,t:0,dur:.55,col:'190,110,255',w:12});RINGS.push({x:P.x,y:P.y,r:8,R:95,t:-.12,dur:.45,col:'235,210,255',w:6});
     G.flash=Math.max(G.flash,.45);G.flashCol='170,90,255';addShake(12);slow(.35,.3);G.zoom=Math.max(G.zoom,.05);
     for(let i=0;i<30;i++){const a=rand(-Math.PI*.95,-Math.PI*.05),v=rand(120,380),l=rand(.4,.8);fx({k:'powder',x:P.x+rand(-10,10),y:P.y+rand(-6,10),vx:Math.cos(a)*v*.5,vy:Math.sin(a)*v,life:l,max:l,sz:rand(4,8),col:'#c890ff'})}}
@@ -3337,7 +3338,7 @@ function drawWorld(){
         if(rdy)drawGoldAura(P.x,P.y,G.soul>=SOUL_MAX);
         const blink=P.blinkT>0&&Math.floor(G.time*30)%2===0;drawGirl(P.x,P.y,P.face,blink?.35:1);
         if(P.guardLock&&(inp.guardKey||inp.guardMouse||inp.guardTouch!=null||inp.padGuard))txt('離して押し直し',P.x,P.y-56,12,'#7ff3ff','center',JP,['#000',4],false,900);
-        if(rdy){const pl=.5+Math.sin(G.time*8)*.5,p2=G.soul>=SOUL_MAX;g.globalAlpha=.75+pl*.25;txt(p2?(touchMode?'タップで怨霊の手！':'怨霊の手 OK!（Q）'):(touchMode?'タップで怨念解放！':'怨念解放 OK!'),P.x,P.y-70-pl*3,15,p2?'#e0c0ff':'#ffe27a','center',JP,[p2?'#2a0040':'#3a1a00',4],false,900);g.globalAlpha=1}
+        if(rdy){const pl=.5+Math.sin(G.time*8)*.5,p2=G.soul>=SOUL_MAX;g.globalAlpha=.75+pl*.25;txt(p2?(touchMode?'タップで怨霊の手！':'怨霊の手 OK!（L／E）'):(touchMode?'タップで怨念解放！':'怨念解放 OK!'),P.x,P.y-70-pl*3,15,p2?'#e0c0ff':'#ffe27a','center',JP,[p2?'#2a0040':'#3a1a00',4],false,900);g.globalAlpha=1}
       }
       if(P.guard&&!P.dead){
         glow(P.x+Math.cos(P.face)*24,P.y+Math.sin(P.face)*24,46,'#40d8ff',P.guardFx>0?.5:.22);
@@ -3493,7 +3494,7 @@ function drawHUD(){
     g.fillStyle=col;g.beginPath();g.moveTo(u.x-8,u.y-9);g.lineTo(u.x-8,u.y+5);g.lineTo(u.x-4.5,u.y+1.5);g.lineTo(u.x-2,u.y+7);g.lineTo(u.x,u.y+6);g.lineTo(u.x-2.5,u.y+.5);g.lineTo(u.x+2,u.y+.5);g.closePath();g.fill();
     rr(u.x+1,u.y,9,7,1.5,col);g.strokeStyle=col;g.lineWidth=1.6;g.beginPath();if(on)g.arc(u.x+5.5,u.y,3,Math.PI,TAU);else g.arc(u.x+5.5,u.y-1.5,3,Math.PI*1.15,TAU*1.02);g.stroke()}
   if(touchMode&&state==='play'&&G.wave===1)txt('左ドラッグ:移動  右タップ:攻撃  右長押し:ガード  光る主人公タップ:怨念',W/2,H-8,10,'rgba(220,225,240,.45)','center',JP,null,false,700);
-  if(!touchMode&&state==='play')txt('移動:WASD  攻撃:J/左クリック  ガード:U/右クリック  怨念:L/E  怨霊の手:Q',W/2,H-8,10,'rgba(220,225,240,.45)','center',JP,null,false,700);
+  if(!touchMode&&state==='play')txt('移動:WASD  攻撃:J/左クリック  ガード:U/右クリック  怨念/怨霊の手:L/E',W/2,H-8,10,'rgba(220,225,240,.45)','center',JP,null,false,700);
 }
 // タッチ中だけ、指の位置にうっすら目印を出す（常設のボタンは無し）
 function drawControls(){
@@ -3630,7 +3631,7 @@ function drawTitle(){
   g.globalAlpha=la*.85;
   // 操作説明（15px・6行）
   const L=touchMode?['目的：血で床を塗りつぶせ。囲めば一気に制圧','左半分をドラッグ：移動','右半分をタップ：攻撃（連打で連撃）','右半分を長押し：ガード（1回防ぐと解除）','光る主人公をタップ：怨念解放（紫なら怨霊の手）']
-    :['目的：血で床を塗りつぶせ。囲めば一気に制圧','WASD／矢印：移動　Enter：スタート　T：チュートリアル','J／左クリック：攻撃（連打で連撃）','U／右クリック長押し：ガード（1回防ぐと解除）','L／E：怨念解放　Q：怨霊の手　P：ポーズ　パッド対応'];
+    :['目的：血で床を塗りつぶせ。囲めば一気に制圧','WASD／矢印：移動　Enter：スタート　T：チュートリアル','J／左クリック：攻撃（連打で連撃）','U／右クリック長押し：ガード（1回防ぐと解除）','L／E：怨念解放（紫なら怨霊の手）　P：ポーズ'];
   L.push('ステージクリアで強化を1つ選択');
   L.forEach((l,i)=>txt(l,W/2,682+i*19,14,i>=5?'#ffd54a':'#c9cfdc','center',JP,null,false,700));
   if(best>0)txt('BEST '+best,W/2,H-8,12,'#b8ff5a','center',EN);
