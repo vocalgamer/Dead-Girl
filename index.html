@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.90 2026-11-02';
+const VERSION='v0.92 2026-11-02';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -94,7 +94,7 @@ const THEMES=[
   {name:'中庭',             base:'#1c201b',grid:'170,190,150',refl:['180,210,255','255,220,160'],hi:'205,215,195',rain:.6,ground:'garden',gcol:'#3c3d38',blk:'pond'},
   {name:'事務所フロア',     base:'#2a3038',grid:'170,185,205',refl:['200,220,255','255,240,200'],hi:'205,215,230',gim:'ext',win:true,floor:'carpet',blk:'desk'},
   {name:'畳の大広間',       base:'#2a2818',grid:'210,190,130',refl:['255,220,150','255,200,120'],hi:'225,215,180',floor:'tatami',blk:'wpillar'},
-  {name:'賭場',             base:'#2a0b10',grid:'220,170,90',refl:['255,200,90','255,60,90'],hi:'240,200,190',win:true,floor:'casino',blk:'table'},
+  {name:'賭場',             base:'#121a36',grid:'220,180,100',refl:['255,210,110','120,160,255'],hi:'210,220,240',win:true,floor:'casino',blk:'table'},
   {name:'武器庫',           base:'#222420',grid:'180,190,150',refl:['220,230,180','255,210,120'],hi:'205,210,190',gim:'dyn',floor:'conc',blk:'ammo'},
   {name:'改装中のフロア',   base:'#2b2927',grid:'200,190,170',refl:['255,210,90','180,190,210'],hi:'225,215,195',gim:'beam',floor:'raw',blk:'pillar'},
   {name:'厨房',             base:'#272b2d',grid:'190,200,205',refl:['220,235,255','255,230,200'],hi:'210,220,225',gim:'oil',can:true,floor:'ktile',blk:'counter'},
@@ -225,7 +225,7 @@ function drawFloor(b,T_,sr){
     dots(9000,.05,.12,1);b.strokeStyle='rgba(0,0,0,.18)';b.lineWidth=1;for(let x=x0;x<=x1;x+=46){b.beginPath();b.moveTo(x+.5,y0);b.lineTo(x+.5,y1);b.stroke()}for(let y=AY0;y<y1;y+=46){b.beginPath();b.moveTo(x0,y+.5);b.lineTo(x1,y+.5);b.stroke()}
     stains(3,.2,'60,35,15');
   }else if(fl==='casino'){
-    // 賭場：深紅の絨毯に、金の菱形の柄
+    // 賭場：濃紺の絨毯に、金の菱形の柄（赤だと血と、緑だと賭博台の羅紗と見分けが付かないため紺にした）
     dots(8000,.04,.15,1);
     b.strokeStyle='rgba(215,165,70,.22)';b.lineWidth=1.5;for(let y=y0;y<y1;y+=46)for(let x=x0;x<x1;x+=46){b.beginPath();b.moveTo(x+23,y);b.lineTo(x+46,y+23);b.lineTo(x+23,y+46);b.lineTo(x,y+23);b.closePath();b.stroke();
       b.fillStyle='rgba(215,165,70,.2)';b.beginPath();b.arc(x+23,y+23,3,0,TAU);b.fill()}
@@ -707,7 +707,7 @@ function pickType(n){
   for(const p of pool){r-=p[1];if(r<=0)return p[0]}
   return 'grunt';
 }
-const CLEANER_INFO={mop:['掃除屋 出現','血を拭き取られる前に始末しろ！'],washer:['高圧洗浄機 出現','射線上の血を一気に洗い流す——撃たれる前に潰せ'],bleach:['漂白剤 出現','周囲13マスの血を一気に洗い流す——撒かれる前に潰せ']};
+const CLEANER_INFO={mop:['掃除屋 出現','血を拭き取られる前に始末しろ！'],washer:['高圧洗浄機 出現','射線上の血を一気に洗い流す——撃たれる前に潰せ'],bleach:['漂白剤 出現','周りの血を一気に洗い流す——撒かれる前に潰せ']};
 function queueSpawn(type,sub){
   // 陰陽師：必ず主人公から一番遠い壁際に現れる（現れた瞬間に斬られて、式神を出す前に終わらないように）
   if(type==='onmyo'){let best=null,bd=-1;
@@ -773,10 +773,11 @@ function updateWave(dt){
       if(G.wave>=2&&!theme.ground){const nc=E.filter(e=>e.type==='cleaner').length+MARKS.filter(m=>m.type==='cleaner').length;
         // 掃除屋は必ず集団で来る：WAVE2で2人、WAVEごとに+1人（上限6人）
         // 種類：モップ係（WAVE2〜）／高圧洗浄機（WAVE3〜）／漂白剤（WAVE4〜）。解禁済みの種類は最低1人ずつ混ざる
-        const crew=Math.min(6,G.wave),kinds=['mop'].concat(G.wave>=3?['washer']:[],G.wave>=4?['bleach']:[]);
+        // 掃除屋の人数：2人から始まり、5ステージごとに1人増える（最大4人。6人だと塗りが押し戻され続けて終わらなくなるため）
+        const crew=Math.min(4,2+Math.floor((G.wave-2)/5)),kinds=['mop'].concat(G.wave>=3?['washer']:[],G.wave>=4?['bleach']:[]);
         // 全滅させた瞬間から休憩タイマーを開始（間隔はランダム）。ただし床が7割以上塗られていると早めに戻ってくる
         if(G.crewOut&&nc===0){G.crewOut=false;const late=prog()>=.7;
-          G.cleanT=late?rand(4,7):Math.max(6,rand(9,15)-G.wave*.3);
+          G.cleanT=late?rand(7,10):Math.max(8,rand(10,16)-G.wave*.2);
           popText(P.x,P.y-64,'掃除屋 全滅！','#5ab8ff',18,1.1);G.score+=200*crew}
         G.cleanT-=dt;
         if(!G.crewOut&&G.cleanT<=0&&painted>=10&&nc===0){G.crewOut=true;
@@ -1060,7 +1061,7 @@ function washLine(x,y,a){
 function washCount(x,y,a){let n=0;const hit=new Set();for(let l=0;l<=WASH_LEN;l+=10){const i=tileAt(x+Math.cos(a)*l,y+Math.sin(a)*l);if(i>=0&&!hit.has(i)){hit.add(i);if(DONE[i])n++}}return n}
 // 漂白剤：対象タイルを中心に、ひし形（中心から2マス以内・13マス）を一気に消す
 const BLEACH_T=.8; // 撒き終わるまでの秒数
-const BLEACH_TILES=i=>{const cx=i%GC,cy=Math.floor(i/GC),out=[];for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){if(Math.abs(dx)+Math.abs(dy)>2)continue;const nx=cx+dx,ny=cy+dy;if(nx>=0&&ny>=0&&nx<GC&&ny<GR)out.push(ny*GC+nx)}return out};
+const BLEACH_TILES=i=>{const cx=i%GC,cy=Math.floor(i/GC),out=[];for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){if(Math.abs(dx)+Math.abs(dy)>1)continue;/* 漂白剤：十字の5マス（旧13マス） */const nx=cx+dx,ny=cy+dy;if(nx>=0&&ny>=0&&nx<GC&&ny<GR)out.push(ny*GC+nx)}return out};
 function bleachArea(i){
   const c=tileRect(i),ox=c.x+c.w/2,oy=c.y+c.h/2;
   for(const j of BLEACH_TILES(i)){if(DONE[j]||PAINT[j]>.15){cleanTile(j,true);PAINT[j]=0}
@@ -2204,7 +2205,8 @@ function drawTutMenu(){
   txt(tutText(T_.step)[0]+' クリア！',W/2,330,26,'#ffd54a','center',JP,['#000',5],false,900);
   txt(last?'これで一通りの操作を体験しました':'次は '+tutText(T_.step+1)[0],W/2,368,14,'#fff','center',JP,null,false,700);
   button(SCR.tnext,last?'タイトルへ':'次へ ▶','rgba(160,20,45,.92)');button(SCR.tretry,'もう一度','rgba(30,32,44,.92)');
-  if(!touchMode)txt('Enter：'+(last?'タイトルへ':'次へ')+'　R：もう一度',W/2,540,12,'#8b93a8','center',JP,null,false,700);
+  if(!last)button(SCR.tquit,'チュートリアルを終える','rgba(50,30,40,.92)');
+  if(!touchMode)txt('Enter：'+(last?'タイトルへ':'次へ')+'　R：もう一度'+(last?'':'　Esc：終える'),W/2,600,12,'#8b93a8','center',JP,null,false,700);
   g.globalAlpha=1;
 }
 
@@ -2224,6 +2226,7 @@ const inR=(p,r)=>Math.abs(p.x-r.x)<r.w/2&&Math.abs(p.y-r.y)<r.h/2;
 function toLocal(ev){const r=cv.getBoundingClientRect();return{x:(ev.clientX-r.left)*W/r.width,y:(ev.clientY-r.top)*H/r.height}}
 Object.assign(SCR,{tendless:{x:W/2-66,y:628,w:124,h:38},tshop:{x:W/2+66,y:628,w:124,h:38},
   orevive:{x:W/2,y:556,w:290,h:50},oretry:{x:W/2,y:614,w:240,h:44},oshare:{x:W/2-64,y:668,w:120,h:38},otitle:{x:W/2+64,y:668,w:120,h:38},
+  tquit:{x:W/2,y:548,w:240,h:40},tsback:{x:W/2,y:700,w:220,h:42},
   oad:{x:W/2,y:490,w:310,h:52},onext:{x:W/2,y:560,w:240,h:44},cshare:{x:W/2,y:552,w:200,h:40},sback:{x:W/2,y:716,w:220,h:44}});
 
 /* ---------------- ごほうび広告の受け口 ----------------
@@ -2303,12 +2306,16 @@ function screenAction(p,key){
   if(state==='tutintro'){if(stateT>.3){state='play';stateT=0;SFX.ui()}return}
   if(state==='tutend'){if(stateT>.8){state='title';stateT=0;resetRun();skipPrologue();SFX.ui()}return}
   if(state==='stintro'){if(stateT>.3){SFX.ui();stateT=0;if(++G.cardI>=G.cards.length){G.cards=null;state='play'}}return}
-  if(state==='tutmenu'){if(stateT<.3)return;if(p){if(inR(p,SCR.tnext))tutChoice(true);else if(inR(p,SCR.tretry))tutChoice(false);return}tutChoice(key!=='retry');return}
+  if(state==='tutmenu'){if(stateT<.3)return;if(p){if(inR(p,SCR.tnext))tutChoice(true);else if(inR(p,SCR.tretry))tutChoice(false);else if(inR(p,SCR.tquit))tutQuit();return}if(key==='quit'){tutQuit();return}tutChoice(key!=='retry');return}
+  if(state==='tutsel'){
+    if(p){for(let n=1;n<=TUT_STEPS;n++)if(inR(p,TUTSEL(n))){startTutAt(n);return}if(inR(p,SCR.tsback)){state='title';stateT=0;skipPrologue();SFX.ui()}return}
+    if(key==='title'){state='title';stateT=0;skipPrologue()}return}
   // タイトル：音がまだ鳴らせない状態なら、最初の1回は「音をONにするだけ」（BGMを聴かせるため）。2回目で開始
   // プロローグ中のタップ（クリック・キー）は読み飛ばし：すぐロゴとボタンを出す（音の準備もこのタップで済ませる）
   if(state==='title'&&stateT<LOGO_T+.6){skipPrologue();return}
   if(state==='title'){if(!muted&&!(AC&&AC.state==='running')&&!G.titleTap){G.titleTap=1;return}
-    if(p){if(inR(p,SCR.tstart)){if(DEVSHIFT)openDev();else devHold={t:performance.now()}}else if(inR(p,SCR.ttut))newGame(true);else if(inR(p,SCR.tendless)){if(endlessOpen())newEndless();else SFX.wall()}else if(inR(p,SCR.tshop)){state='shop';stateT=0;SFX.ui()}return}
+    if(p){if(inR(p,SCR.tstart)){if(DEVSHIFT)openDev();else devHold={t:performance.now()}}else if(inR(p,SCR.ttut)){if(tutDone){state='tutsel';stateT=0;SFX.ui()}else newGame(true)}else if(inR(p,SCR.tendless)){if(endlessOpen())newEndless();else SFX.wall()}else if(inR(p,SCR.tshop)){state='shop';stateT=0;SFX.ui()}return}
+    if(key==='tut'&&tutDone){state='tutsel';stateT=0;SFX.ui();return}
     newGame(key==='tut');return}
   if(state==='dev'){
     if(!p){if(key==='title'){state='title';stateT=0;skipPrologue()}return}
@@ -2450,7 +2457,8 @@ addEventListener('keydown',ev=>{
   if(state!=='play'){
     if(state==='tutend'){screenAction(null,'go');return}
     if(state==='tutintro'||state==='stintro'){if(k==='enter'||k===' '||k==='j'||k==='z')screenAction(null,'go');return}
-    if(state==='tutmenu'){if(k==='r')screenAction(null,'retry');else if(k==='enter'||k===' '||k==='j'||k==='z')screenAction(null,'go');return}
+    if(state==='tutmenu'){if(k==='r')screenAction(null,'retry');else if(k==='escape')screenAction(null,'quit');else if(k==='enter'||k===' '||k==='j'||k==='z')screenAction(null,'go');return}
+    if(state==='tutsel'){const n=+k;if(n>=1&&n<=TUT_STEPS)startTutAt(n);else if(k==='escape')screenAction(null,'title');return}
     if(state==='dev'){if(k==='escape')screenAction(null,'title');return}
   if(state==='title'){if(k==='t')screenAction(null,'tut');else if(k==='enter'||k===' '||k==='j'||k==='z')screenAction(null,'go');return}
     if(k==='escape'||k==='t')screenAction(null,state==='pause'&&k==='escape'?null:'title');
@@ -2991,7 +2999,7 @@ function update(rdt){
   if(state!=='play'&&locked())document.exitPointerLock(); // メニュー・カード選びの間はカーソルを戻す
   updateRain(rdt);
   if(state==='title'&&devHold&&performance.now()-devHold.t>900){devHold=null;openDev()}
-  if(state==='title'||state==='shop'||state==='dev'){G.time+=rdt;return}
+  if(state==='title'||state==='shop'||state==='dev'||state==='tutsel'){G.time+=rdt;return}
   if(state==='ad'){if(stateT>AD_T&&adCb){const f=adCb;adCb=null;f()}return}
   if(state==='bres'){updateBres(rdt);return}
   updateHands(rdt);
@@ -3578,8 +3586,22 @@ const DEV_UI={endless:{x:W/2-80,y:548,w:150,h:44},god:{x:W/2+80,y:548,w:150,h:44
 const DEV_TUT=n=>({x:W/2+(n-5)*45,y:632,w:40,h:40}); // チュートリアルの手順①〜⑨
 function openDev(){devHold=null;state='dev';stateT=0;SFX.ui()}
 function devStart(n){resetRun();G.tutMode=false;G.runSeed=1+Math.floor(Math.random()*1e6);G.endless=n>20;state='play';stateT=0;SFX.ui();startWave(n)}
-// チュートリアルを、指定した手順から始める
-function devTut(n){newGame(true);G.tut.step=n;G.tut.rep=0;tutSetup(n);state='tutintro';stateT=0}
+// チュートリアルを、指定した手順から始める（開発者モード・手順選択の画面から）
+function startTutAt(n){newGame(true);G.tut.step=n;G.tut.rep=0;tutSetup(n);state='tutintro';stateT=0}
+const devTut=startTutAt;
+// チュートリアルを途中でやめてタイトルへ
+function tutQuit(){G.tut=null;state='title';stateT=0;resetRun();skipPrologue();SFX.ui()}
+// 手順の選択画面（チュートリアルを一度最後までやった人だけ。タイトルの「チュートリアル」から開く）
+const TUTSEL=n=>({x:W/2,y:142+(n-1)*58,w:370,h:50});
+function drawTutSel(){
+  g.fillStyle='#08090d';g.fillRect(0,0,W,H);
+  txt('チュートリアル',W/2,72,26,'#7ff3ff','center',JP,null,false,900);txt('練習したい操作を選ぶ（選んだ手順から最後まで続けられます）',W/2,100,11,'#8b93a8','center',JP,null,false,700);
+  for(let n=1;n<=TUT_STEPS;n++){const r=TUTSEL(n),t=tutText(n);
+    rr(r.x-r.w/2,r.y-r.h/2,r.w,r.h,8,'rgba(20,40,55,.95)');g.strokeStyle='rgba(127,243,255,.35)';g.lineWidth=1;rrPath(r.x-r.w/2,r.y-r.h/2,r.w,r.h,8);g.stroke();
+    txt(t[0],r.x-r.w/2+14,r.y-3,16,'#fff','left',JP,null,false,900);txt(t[1],r.x-r.w/2+14,r.y+15,10,'#9fb0c4','left',JP,null,false,700,r.w-28)}
+  button(SCR.tsback,'戻る','rgba(30,32,44,.95)');
+  if(!touchMode)txt('1〜9キー：選ぶ　Esc：戻る',W/2,748,12,'#8b93a8','center',JP,null,false,700);
+}
 function devBonus(k){resetRun();G.tutMode=false;G.wave=[5,10,15][k];G.bonusFor=G.wave;SFX.ui();startBonus(['gun','gunaxe','shiki'][k])}
 function drawDev(){
   g.fillStyle='#08090d';g.fillRect(0,0,W,H);
@@ -3809,6 +3831,7 @@ function draw(){
   g.setTransform(cv.width/W,0,0,cv.height/H,0,0);g.globalAlpha=1;g.globalCompositeOperation='source-over';
   if(state==='title'){TXT_SCALE=1;drawTitle();return}
   if(state==='dev'){TXT_SCALE=1;drawDev();return}
+  if(state==='tutsel'){TXT_SCALE=1;drawTutSel();return}
   if(state==='shop'){TXT_SCALE=1;drawShop();return}
   TXT_SCALE=1.2;
   g.save();
