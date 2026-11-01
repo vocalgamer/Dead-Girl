@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.32 2026-11-01';
+const VERSION='v0.34 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -261,11 +261,13 @@ function titleStep(s,t){
   if(s===56)noise(1.8,.07,'bandpass',300,1300,t,musG,2);
 }
 function playStep(s,t){
-  const bar=Math.floor(s/16)%4,st=s%16,hype=(!G.isBossWave&&G.phase==='fight'&&(painted/GN>=.75||G.rush>0));
+  // 塗るほど曲が激しくなる：40%で刻みが細かく、60%でスネアの合いの手、75%（と大群ラッシュ中）で全開
+  const fight=!G.isBossWave&&G.phase==='fight',pr=painted/GN,mid=fight&&pr>=.4,hot=fight&&pr>=.6;
+  const bar=Math.floor(s/16)%4,st=s%16,hype=fight&&(pr>=.75||G.rush>0);
   const roots=G.boss?[82.41,87.31,65.41,61.74]:[82.41,82.41,65.41,73.42];
   if(st%4===0||(hype&&st%4===2)||(st===14&&bar===3))kick(t);
-  if(st===4||st===12)snare(t);
-  if(st%2===1||hype)noise(.035,st%4===3?.08:.045,'highpass',7500,0,t,musG);
+  if(st===4||st===12||(hot&&st===15))snare(t);
+  if(st%2===1||mid||hype)noise(.035,st%4===3?.08:st%2?.045:.03,'highpass',7500,0,t,musG);
   if(BASS[st])bass(roots[bar]*(OCT[st]?2:1),t);
   if(hype&&st%8===0)tone(roots[bar]*4,roots[bar]*4,.12,'square',.04,t,musG);
 }
@@ -301,7 +303,7 @@ function resetRun(){
   Object.assign(G,{score:0,kills:0,wave:0,chain:0,chainT:0,maxChain:0,chainPop:0,mult:1,soul:0,
     hitstop:0,slowT:0,slowScale:1,ts:1,shake:0,zoom:0,aimer:null,shotGap:0,crests:[],cleanT:8,seenSub:{},soulReady:false,waveTime:0,flash:0,flashCol:'255,40,70',time:0,
     toSpawn:0,spawnT:0,breakT:0,addsT:0,banner:null,callout:null,boss:null,bossInfo:null,bossPending:0,isBossWave:false,
-    phase:'fight',tutMode:false,endless:false,deathT:0,endT:0,newBest:false,tut:null,propSpot:0,rush:0,rushT:99,res:null,mis:null,gim:null,intro:[],cards:null,cardSel:0,lastMis:null,beamT:0,cause:null});
+    phase:'fight',tutMode:false,endless:false,deathT:0,endT:0,newBest:false,tut:null,propSpot:0,rush:0,rushT:99,res:null,gim:null,intro:[],cards:null,cardSel:0,beamT:0,cause:null});
   Object.assign(P,{x:W/2,y:540,vx:0,vy:0,kx:0,ky:0,lx:0,ly:0,lt:0,r:14,hp:100,hpLag:100,maxhp:100,face:-Math.PI/2,
     atk:null,stage:0,comboWin:0,recover:0,atkBuf:0,atkA:null,inv:0,blinkT:0,
     crit:false,walk:0,trail:[],ghostT:0,dead:false,guard:false,guardLock:false,guardFx:0});
@@ -319,16 +321,14 @@ function startWave(n){
   G.wave=n;G.sea=null;G.phase='fight';G.spawnT=1.3;G.bossPending=0;G.bossInfo=null;G.aimer=null;G.shotGap=0;G.cleanT=rand(5,9);G.crewOut=false;G.waveTime=0;G.crests=[];
   const bk=n%5===0?(n%10===5?'kirishima':'kito'):null;
   G.isBossWave=!!bk;
-  washFloor();setTheme(G.tutMode?TUT_THEME:n);setupGimmick();setupMission();G.mile=0;capNew=[];CAPQ=[];G.wk=0;G.wchain=0;G.wcap=0;G.rushT=rand(22,34);G.rush=0;G.rushSp=0;
-  // 開始の表示が終わったら、仕掛けとお題を順に案内
+  washFloor();setTheme(G.tutMode?TUT_THEME:n);setupGimmick();G.mile=0;capNew=[];CAPQ=[];G.wk=0;G.wchain=0;G.wcap=0;G.rushT=rand(22,34);G.rush=0;G.rushSp=0;
+  // 開始の表示が終わったら、仕掛けを案内
   tutWave(n);if(G.gim&&!SEEN.has('gim_'+G.gim)){markSeen('gim_'+G.gim);G.propSpot=6}else G.propSpot=0;
-  // ステージ名の帯のあと、ゲームを止めて「ルール／仕掛け」→「お題」をタップで1枚ずつ見せる
+  // ステージ名の帯のあと、ゲームを止めて「ルール／仕掛け」のカードを見せる（タップで閉じる）
   G.intro=[];G.cards=[];G.cardI=0;
   if(!G.tutMode){
     if(G.gim)G.cards.push({tag:'GIMMICK',title:GIMMICKS[G.gim].name,body:GIMMICKS[G.gim].hint,col:'#7ff3ff'});
-    else if(n===1)G.cards.push({tag:'RULE',title:'囲い込み制圧',body:'塗ったマスで囲むと、中が一気に血で染まる',col:'#ff4d6d'});
-    if(G.mis)G.cards.push({tag:'MISSION',title:'お題',body:G.mis.text,foot:'達成でボーナス',col:'#ffd54a'});
-  }
+    else if(n===1)G.cards.push({tag:'RULE',title:'囲い込み制圧',body:'塗ったマスで囲むと、中が一気に血で染まる',col:'#ff4d6d'});  }
   if(bk){G.addsT=5;G.bossPending=1.9;G.bossInfo={kind:bk,...BOSSES[bk]};
     G.banner={top:'WARNING — BOSS — '+theme.name,main:BOSSES[bk].name,sub:BOSSES[bk].sub,t:0,dur:2.6,col:'#ff2f5f'};SFX.alarm()}
   else{
@@ -387,9 +387,7 @@ function spawnBoss(kind){
 function updateWave(dt){
   if(G.phase==='fight'){
     updateTut(dt);if(G.propSpot>0)G.propSpot-=dt;for(const e of E)if(e.spot>0)e.spot-=dt;
-    for(const it of G.intro){it.t-=dt;if(it.t<=0&&!it.shown){it.shown=true;callout(it.txt,it.sub,it.col);G.callout.dur=it.dur||2.2}}
-    if(G.mis&&G.mis.id==='time'&&!G.mis.done&&!G.mis.fail&&G.waveTime>G.mis.need)G.mis.fail=true;
-    if(G.bossPending>0){G.bossPending-=dt;if(G.bossPending<=0)spawnBoss(G.bossInfo.kind)}
+    for(const it of G.intro){it.t-=dt;if(it.t<=0&&!it.shown){it.shown=true;callout(it.txt,it.sub,it.col);G.callout.dur=it.dur||2.2}}    if(G.bossPending>0){G.bossPending-=dt;if(G.bossPending<=0)spawnBoss(G.bossInfo.kind)}
     const alive=E.length+MARKS.length;
     if(G.isBossWave){
       if(G.boss){G.addsT-=dt;if(G.addsT<=0&&alive<5){G.addsT=rand(3,4.5);queueSpawn(pickType(Math.max(4,G.wave-1)))}}
@@ -410,9 +408,10 @@ function updateWave(dt){
           const fresh=kinds.filter(k=>!G.seenSub[k]);for(const k of kinds)G.seenSub[k]=true;
           if(fresh.length){const f=CLEANER_INFO[fresh[fresh.length-1]];callout(f[0],f[1],'#5ab8ff');G.callout.dur=2.4}
           else popText(W/2,AY0+40,'掃除屋 ×'+crew,'#5ab8ff',16,1.2)}}
-      // 大群ラッシュ：WAVE2以降、WAVEの途中で一度（長引けばもう一度）、HP半分の雑魚が8秒間押し寄せる
-      if(G.wave>=2&&!G.tut){G.rushT-=dt;if(G.rushT<=0&&G.rush<=0&&painted/GN<.9){G.rush=8;G.rushT=rand(40,55);callout('大群襲来！','雑魚の群れが押し寄せる——一気に薙ぎ払え','#ff8a30');G.callout.dur=1.8;SFX.alarm()}}
-      if(G.rush>0){G.rush-=dt;G.rushSp-=dt;if(G.rushSp<=0&&alive<Math.min(5+Math.ceil(G.wave*.7),11)+8){G.rushSp=.22;queueSpawn(Math.random()<.6?'runner':'grunt');MARKS[MARKS.length-1].horde=true}}
+      // 大群ラッシュ：STAGE2以降、ステージの途中で一度（長引けばもう一度）、一撃で倒れる雑魚が8秒間どっと押し寄せる
+      // まとめ斬り（まとめ倒しの血の判）を気持ちよく決めるための息抜き
+      if(G.wave>=2&&!G.tut){G.rushT-=dt;if(G.rushT<=0&&G.rush<=0&&painted/GN<.9){G.rush=8;G.rushT=rand(40,55);callout('大群襲来！','一撃で倒れる雑魚の群れ——まとめて薙ぎ払え','#ff8a30');G.callout.dur=1.8;SFX.alarm()}}
+      if(G.rush>0){G.rush-=dt;G.rushSp-=dt;if(G.rushSp<=0&&alive<Math.min(5+Math.ceil(G.wave*.7),11)+16){G.rushSp=.28;for(let k=0;k<2;k++){queueSpawn(Math.random()<.6?'runner':'grunt');MARKS[MARKS.length-1].horde=true}}}
       // 同時に出る敵の上限：WAVE1で6体〜最大11体（旧8〜15体）。まとめて薙ぎ払える集団湧きは残す
       G.spawnT-=dt;const cap=Math.min(5+Math.ceil(G.wave*.7),11)*waveEase();
       // チュートリアル中は通常の敵は出さない（各手順で必要な敵だけを出す）
@@ -421,8 +420,8 @@ function updateWave(dt){
   }else if(G.phase==='break'){G.breakT-=dt;if(G.breakT<=0)openPick()}
   else if(G.phase==='ending'){G.endT-=dt;if(G.endT<=0){state='clear';stateT=0;saveBest()}}
 }
+const SEA_FOCUS=.75; // 血の海達成の前に、最後の1マスへ寄って見せる秒数
 function waveClear(){
-  if(G.mis&&G.mis.id==='time'&&!G.mis.done&&!G.mis.fail&&G.waveTime<=G.mis.need)misDone();
   G.phase='break';G.breakT=3.2;healP(20);slow(.9,.2);SFX.clear();addShake(16);G.flash=.5;G.flashCol='255,20,50';
   for(const o of [...E])killEnemy(o,Math.atan2(o.y-P.y,o.x-P.x),700,{});
   MARKS.length=0;B.length=0;
@@ -432,7 +431,10 @@ function waveClear(){
   G.res={rank:rk,time:tm,kills:G.wk,chain:G.wchain,cap:G.wcap,best:isNew?tm:prev,isNew,first:!(prev>0)};
   G.banner={top:'STAGE '+pad2(G.wave)+'  —  RANK '+rk,main:'CLEAR',sub:'TIME '+tm.toFixed(1)+'s   BONUS +'+bonus+'   HP +20',t:0,dur:2.6,col:rk==='S'?'#ffd54a':'#ff2f5f'};
   // 床を100%塗ってのクリアは「血の海達成！」がクリア表示を兼ねる（CLEARの帯は出さず、結果はこの演出の中に出す）
-  if(!G.isBossWave&&painted>=GN){G.sea={t:0,drips:seaDrips(),info:'RANK '+rk+'　TIME '+tm.toFixed(1)+'s　BONUS +'+bonus+'　HP +20',col:rk==='S'?'#ffd54a':'#fff'};G.banner=null;G.breakT=3.8;addShake(24);SFX.boom()}
+  if(!G.isBossWave&&painted>=GN){G.sea={t:-SEA_FOCUS,drips:seaDrips(),info:'RANK '+rk+'　TIME '+tm.toFixed(1)+'s　BONUS +'+bonus+'　HP +20',col:rk==='S'?'#ffd54a':'#fff'};G.banner=null;G.breakT=3.8+SEA_FOCUS;addShake(24);SFX.boom();
+    // 最後の1マスにカメラが寄り、スローで「とどめ」を見せてから血の海の演出へ
+    if(G.lastTile!=null){const t=tileRect(G.lastTile),x=t.x+t.w/2,y=t.y+t.h/2;G.zc={x,y};G.zoom=.22;G.zHold=SEA_FOCUS*.75;slow(SEA_FOCUS+.3,.12);
+      G.flash=.8;G.flashCol='255,255,255';RINGS.push({x,y,r:6,R:90,t:0,dur:.5,col:'255,255,255',w:10});RINGS.push({x,y,r:6,R:160,t:-.1,dur:.6,col:'255,30,60',w:16});tone(55,30,1.2,'sine',.8)}}
 }
 
 /* ---------------- helpers: fx ---------------- */
@@ -446,6 +448,23 @@ function bloodBurst(x,y,ang,n,spd){
 function spark(x,y,ang,big){
   const n=big?9:5;for(let i=0;i<n;i++){const a=ang+rand(-1.1,1.1),s=rand(350,big?850:600),l=rand(.08,.18);fx({k:'s',x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:l,max:l})}
   fx({k:'f',x,y,r:big?42:26,life:.09,max:.09,a:rand(0,TAU)});
+}
+// まとめ倒しの血の判：MK_GAP秒以内に3体以上倒すと、倒した場所の中心に大きな血の跡を押し、半径内のマスを塗り切る
+// 文字は出さず、跡の大きさと手応え（揺れ・ヒットストップ・音）だけで伝える
+const MK_GAP=.2;
+function multiStamp(list){
+  const n=list.length;let x=0,y=0;for(const p of list){x+=p.x;y+=p.y}x/=n;y/=n;
+  const R=Math.min(105,50+(n-3)*15),d=decG;
+  // 血の判：中心の濃い溜まり＋放射状の飛沫
+  d.fillStyle='rgba(95,0,12,.75)';d.beginPath();d.arc(x,y,R*.42,0,TAU);d.fill();
+  for(let k=0;k<22;k++){const a=k/22*TAU+rand(-.12,.12),l=R*rand(.55,1.05);
+    d.fillStyle=`rgba(${irand(100,150)},0,${irand(8,20)},${rand(.5,.8).toFixed(2)})`;
+    d.beginPath();d.moveTo(x+Math.cos(a-.09)*R*.35,y+Math.sin(a-.09)*R*.35);d.lineTo(x+Math.cos(a)*l,y+Math.sin(a)*l);d.lineTo(x+Math.cos(a+.09)*R*.35,y+Math.sin(a+.09)*R*.35);d.fill();
+    d.beginPath();d.arc(x+Math.cos(a)*l,y+Math.sin(a)*l,rand(2.5,6),0,TAU);d.fill()}
+  for(let i=0;i<GN;i++){if(DONE[i])continue;const t=tileRect(i);if(dist(x,y,t.x+t.w/2,t.y+t.h/2)<R)fillTile(i)}
+  RINGS.push({x,y,r:R*.3,R:R+30,t:0,dur:.4,col:'255,40,70',w:14});
+  bloodBurst(x,y,rand(0,TAU),24+n*4,520);
+  addShake(10+n*2);G.hitstop=Math.max(G.hitstop,.08);G.flash=Math.max(G.flash,.25);G.flashCol='255,20,50';SFX.boom();
 }
 function splat(x,y,r,ang){
   const d=decG;
@@ -478,7 +497,7 @@ function fillTile(i){
   for(let k=0;k<6;k++){d.fillStyle=`rgba(${irand(90,140)},0,${irand(8,20)},${rand(.3,.55).toFixed(2)})`;d.beginPath();d.arc(t.x+rand(8,t.w-8),t.y+rand(8,Math.max(9,t.h-8)),rand(5,9),0,TAU);d.fill()}
   // 塗り切った瞬間はマスの枠を白く光らせ、「今ここが塗れた」と分かるようにする（制圧の波で埋まる分は控えめ）
   fx({k:'tile',x:t.x,y:t.y,w:t.w,h:t.h,life:capFilling?.35:.6,max:capFilling?.35:.6,cap:capFilling});SFX.tile();
-  if(!G.isBossWave&&G.phase==='fight'&&state==='play'&&!P.dead&&painted>=GN&&!G.tutMode)waveClear();
+  if(!G.isBossWave&&G.phase==='fight'&&state==='play'&&!P.dead&&painted>=GN&&!G.tutMode){G.lastTile=i;waveClear()}
 }
 function tileAt(x,y){const cx=Math.floor((x-AX0)/TS),cy=Math.floor((y-AY0)/TS);return cx<0||cy<0||cx>=GC||cy>=GR?-1:cy*GC+cx}
 // 掃除屋がタイルの血を拭き取る（塗り済みが取り消される）
@@ -544,7 +563,7 @@ function hitEnemy(e,dmg,ang,kb,o){
     if(k>=420){e.fly=.45;e.bset=new Set([e])}
   }
   e.vx=Math.cos(ang)*k;e.vy=Math.sin(ang)*k;
-  G.chain++;G.chainT=2.4;G.chainPop=1;G.maxChain=Math.max(G.maxChain,G.chain);G.wchain=Math.max(G.wchain||0,G.chain);misAdd('chain',G.chain);
+  G.chain++;G.chainT=2.4;G.chainPop=1;G.maxChain=Math.max(G.maxChain,G.chain);G.wchain=Math.max(G.wchain||0,G.chain);
   G.mult=1+Math.min(4,Math.floor(G.chain/10)*.5);
   if([10,25,50,100,150,200,300].includes(G.chain))callout(rankOf(G.chain)+'!',G.chain+' HITS  x'+G.mult.toFixed(1));
   G.soul=Math.min(100,G.soul+soulMul()*(o.fin?3:1.6));
@@ -560,18 +579,15 @@ function killEnemy(e,ang,spd,o){
   o=o||{};if(e.dead)return;e.dead=true;
   const i=E.indexOf(e);if(i>=0)E.splice(i,1);
   if(e.boss){bossDown(e,ang);return}
+  // まとめ倒しの記録（ほぼ同時の撃破を数える。怨念解放・囲い込みの撃破は数えない）
+  if(G.phase==='fight'&&G.cause!=='rage'&&G.cause!=='cap'){if(G.time-(G.mkT||0)>MK_GAP)G.mk=[];G.mk.push({x:e.x,y:e.y});G.mkT=G.time}
   G.wk=(G.wk||0)+1;
   if(G.tut){const gl=G.tut.step===2&&G.tut.gap>=0?[G.tut.gap]:G.tut.step===7&&G.tut.targets?G.tut.targets:[];
     for(const i of gl)if(!DONE[i]){const t=tileRect(i);if(dist(e.x,e.y,t.x+t.w/2,t.y+t.h/2)<95)fillTile(i)}}
-  // お題用：仕掛け・怨念解放中・掃除屋の撃破を数える
-  const cause=G.cause||(e.smoked>0?'ext':null);if(cause&&cause===G.gim)misAdd('gim');
-  if(G.cause==='rage')misAdd('rage');
   if(lv('drain'))P.hp=Math.min(P.maxhp,P.hp+1.4*lv('drain'));
   if(o.fall){for(let i=0;i<8;i++){const a=rand(0,TAU),v=rand(30,120),l=rand(.3,.6);fx({k:'smoke',x:e.x,y:e.y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:l,max:l,sz:rand(8,14)})}}
   // 連続撃破ほど血しぶきが大きくなる（25連で最大1.8倍）
-  else{const cs=1+Math.min(.8,G.chain/25);splat(e.x,e.y,e.r*1.5*cs,ang);bloodBurst(e.x,e.y,ang,Math.round(18*cs),440*cs)}
-  if(e.type==='cleaner')misAdd('cleaner');
-  {
+  else{const cs=1+Math.min(.8,G.chain/25);splat(e.x,e.y,e.r*1.5*cs,ang);bloodBurst(e.x,e.y,ang,Math.round(18*cs),440*cs)}  {
     if(!o.fall)CORPSES.push({e,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,rot:0,vr:rand(-16,16),t:0,hit:new Set()});
     G.kills++;const pts=Math.round(e.val*G.mult);G.score+=pts;
     G.soul=Math.min(100,G.soul+soulMul()*(e.type==='brute'?20:10));
@@ -607,7 +623,7 @@ function reflect(b){
   b.friendly=true;b.life=2;b.perfect=pf;b.kills=0;b.hits=new Set();b.trail=[];let t=null,bd=1e9;
   for(const e of E){const d=dist(b.x,b.y,e.x,e.y);if(d<bd){bd=d;t=e}}
   const sp=Math.hypot(b.vx,b.vy)*(pf?2.6:2.1)*(lv('perfect')?1.14:1),a=t?Math.atan2(t.y-b.y,t.x-b.x):Math.atan2(-b.vy,-b.vx);
-  b.vx=Math.cos(a)*sp;b.vy=Math.sin(a)*sp;misAdd('reflect');
+  b.vx=Math.cos(a)*sp;b.vy=Math.sin(a)*sp;
   // 拡散反射（強化カード）：左右に2発追加
   if(lv('split')&&!b.rocket)for(const da of [-.3,.3])B.push({...b,vx:Math.cos(a+da)*sp,vy:Math.sin(a+da)*sp,hits:new Set(),trail:[],kills:0,noPierce:true});
   spark(b.x,b.y,a,true);spark(b.x,b.y,a+.6,true);spark(b.x,b.y,a-.6,true);SFX.reflect();if(pf)SFX.just();
@@ -632,7 +648,7 @@ function hurtPlayer(dmg,sx,sy){
   if(P.guard&&!front)popText(P.x,P.y-50,'背後を取られた！','#ffb44a',13,.8);
   if(P.guard&&front){
     // ガード：ダメージを完全に防ぎ、受けるはずだったダメージのGUARD_HEAL倍だけ回復。ノックバック小、連撃は途切れない
-    const heal=dmg*GUARD_HEAL;P.hp=Math.min(P.maxhp,P.hp+heal);misAdd('guard');P.guardLock=true;tutComplete(3,.6);
+    const heal=dmg*GUARD_HEAL;P.hp=Math.min(P.maxhp,P.hp+heal);P.guardLock=true;tutComplete(3,.6);
     if(lv('counter')&&!P.crit){P.crit=.7;popText(P.x,P.y-48,'COUNTER!','#7fd8ff',15,.7)}
     // 防いだ相手（近接攻撃なら攻撃元の近くの敵）を弾き飛ばして少し怯ませ、間合いを作る
     let foe=null,fd=48;for(const e of E){if(e.boss)continue;const dd=dist(e.x,e.y,sx,sy);if(dd<fd){fd=dd;foe=e}}
@@ -741,13 +757,13 @@ function drawPick(){
 /* ---------------- ステージの仕掛け ----------------
    場所（床のテーマ）ごとに1種類。殴る・撃たせる・誘い込むことで、敵をまとめて倒せる */
 const GIMMICKS={
-  bottle: {name:'一升瓶',      hint:'瓶を殴ると倒れて酒がこぼれ、火が付いて敵を焼く',mis:'酒の炎で敵を%n体倒せ',     n:3},
-  dyn:    {name:'ダイナマイト',hint:'殴る・撃たせると爆発、近くにも誘爆（近いと自分も被弾）',mis:'ダイナマイトの爆発で敵を%n体倒せ',n:4},
-  oil:    {name:'ドラム缶',    hint:'殴ると穴が開いて油が漏れ出し、引火して広く燃える',mis:'ドラム缶の炎で敵を%n体倒せ',n:3},
-  car:    {name:'放置車両',    hint:'車を殴ると滑り出し、敵を撥ね飛ばす',         mis:'車で敵を%n体倒せ',          n:3},
-  beam:   {name:'落下する鉄骨',hint:'影の下に敵を誘い込め——自分は避けろ',       mis:'鉄骨で敵を%n体潰せ',        n:3},
-  edge:   {name:'柵のない屋上',hint:'左右の端へ吹き飛ばすと、敵は転落する',       mis:'敵を%n体突き落とせ',        n:4},
-  ext:    {name:'消火器',      hint:'殴ると煙が噴き出し、中の敵は動けなくなる',   mis:'煙に巻かれた敵を%n体倒せ',  n:4}
+  bottle: {name:'一升瓶',      hint:'瓶を殴ると倒れて酒がこぼれ、火が付いて敵を焼く'},
+  dyn:    {name:'ダイナマイト',hint:'殴る・撃たせると爆発、近くにも誘爆（近いと自分も被弾）'},
+  oil:    {name:'ドラム缶',    hint:'殴ると穴が開いて油が漏れ出し、引火して広く燃える'},
+  car:    {name:'放置車両',    hint:'車を殴ると滑り出し、敵を撥ね飛ばす'},
+  beam:   {name:'落下する鉄骨',hint:'影の下に敵を誘い込め——自分は避けろ'},
+  edge:   {name:'柵のない屋上',hint:'左右の端へ吹き飛ばすと、敵は転落する'},
+  ext:    {name:'消火器',      hint:'殴ると煙が噴き出し、中の敵は動けなくなる'}
 };
 const DYN_FUSE=1.55; // ダイナマイトが点火から爆発するまでの秒数（弾が当たった場合は0.45秒短い。誘爆は0.18秒）
 const PROP_N={bottle:3,dyn:4,oil:2,car:2,ext:3};
@@ -762,7 +778,7 @@ function setupGimmick(){
   G.gim=G.isBossWave?null:(theme.gim||null);
   if(G.gim&&PROP_N[G.gim])for(let i=0;i<PROP_N[G.gim];i++)PROPS.push(newProp(G.gim));
 }
-// 仕掛けによるダメージ（倒した数をお題で数えるため、原因を付けて当てる）
+// 仕掛けによるダメージ（原因を付けて当てる）
 function gimHit(cause,e,dmg,ang,kb,o){const pc=G.cause;G.cause=cause;hitEnemy(e,dmg,ang,kb,o);G.cause=pc}
 function hitProp(pr,ang){
   if(pr.k==='car'){pr.vx=Math.cos(ang)*560;pr.vy=Math.sin(ang)*560;pr.hits=new Set();SFX.wall();addShake(6);return}
@@ -802,9 +818,9 @@ function updateGimmicks(dt){
   SMOKES=SMOKES.filter(sm=>sm.t>0);
   for(const sp of SPILLS){sp.t+=dt;const L=sp.len*Math.min(1,sp.t/sp.grow),c=Math.cos(sp.a),sn=Math.sin(sp.a);
     if(sp.oil&&!sp.lit&&Math.random()<.8){const a=sp.a+rand(-.35,.35),v=rand(90,200),l=rand(.2,.4);fx({k:'oild',x:sp.x,y:sp.y-6,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:l,max:l})}
-    if(!sp.lit&&sp.t>(sp.ign||.75)){sp.lit=true;SFX.boom();addShake(7);popText(sp.x+c*L*.5,sp.y+sn*L*.5-20,'着火！','#ffb040',16,.8);
-      for(let l=0;l<L;l+=12){const v=rand(40,120),q=rand(-1,1);fx({k:'fire',x:sp.x+c*l,y:sp.y+sn*l,vx:-sn*v*q,vy:c*v*q-60,life:.5,max:.5,sz:rand(10,18)})}}
-    if(sp.lit){if(Math.random()<.9*sp.w/46){const l=rand(0,L),q=rand(-.4,.4)*sp.w;fx({k:'fire',x:sp.x+c*l-sn*q,y:sp.y+sn*l+c*q,vx:rand(-10,10),vy:rand(-80,-40),life:.5,max:.5,sz:rand(6,12)})}
+    if(!sp.lit&&sp.t>(sp.ign||.75)){sp.lit=true;SFX.boom();addShake(7);popText(sp.x+c*L*.5,sp.y+sn*L*.5-20,'着火！',sp.oil?'#7fb8ff':'#ffb040',16,.8);
+      for(let l=0;l<L;l+=12){const v=rand(40,120),q=rand(-1,1);fx({k:'fire',x:sp.x+c*l,y:sp.y+sn*l,vx:-sn*v*q,vy:c*v*q-60,life:.5,max:.5,sz:rand(10,18),blue:sp.oil})}}
+    if(sp.lit){if(Math.random()<.9*sp.w/46){const l=rand(0,L),q=rand(-.4,.4)*sp.w;fx({k:'fire',x:sp.x+c*l-sn*q,y:sp.y+sn*l+c*q,vx:rand(-10,10),vy:rand(-80,-40),life:.5,max:.5,sz:rand(6,12),blue:sp.oil})}
       sp.tick-=dt;if(sp.tick<=0){sp.tick=.4;for(const e of [...E]){const rx=e.x-sp.x,ry=e.y-sp.y,al=rx*c+ry*sn,sd=Math.abs(-rx*sn+ry*c);
         if(al>-14&&al<L+8&&sd<sp.w/2+e.r*.6)gimHit(sp.cause,e,e.boss?.4:e.max*sp.dmg,0,0,{})}}}}
   SPILLS=SPILLS.filter(sp=>sp.t<sp.dur);
@@ -824,6 +840,39 @@ function updateGimmicks(dt){
     for(const b of B)if(!b.friendly&&Math.abs(dist(sh.x,sh.y,b.x,b.y)-sh.r)<20)reflect(b)}
   SHOCKS=SHOCKS.filter(sh=>sh.r<sh.R);
 }
+// ドラム缶の油溜まり：大きさの違う楕円を流れる向きに並べて、いびつに広がる溜まりにする（当たり判定は従来どおりの帯）
+// 火が付く前は黒い油に虹色の油膜が揺らぎ、注ぎ口から油の筋が流れ落ちる。着火後は青い炎の舌が揺らめく
+function drawOilSpill(sp,L,f){
+  if(!sp.blobs){sp.blobs=[];const n=12;for(let k=0;k<n;k++){const r=sp.w*rand(.22,.36)*(k===0?.8:1);sp.blobs.push({l:k/(n-1)*sp.len*.92,q:rand(-.2,.2)*sp.w,rx:r,ry:r*rand(.55,.85),rot:rand(-.6,.6),s:rand(0,TAU)})}}
+  const c=Math.cos(sp.a),sn=Math.sin(sp.a),grown=b=>clamp((L-b.l)/40+.25,0,1);
+  g.save();g.translate(sp.x,sp.y);g.rotate(sp.a);g.globalAlpha=f;
+  g.fillStyle=sp.lit?'rgba(14,18,48,.78)':'rgba(16,11,7,.84)';g.beginPath();
+  for(const b of sp.blobs){const k=grown(b);if(k<=0)continue;g.moveTo(b.l+Math.cos(b.rot)*b.rx*k,b.q+Math.sin(b.rot)*b.rx*k);g.ellipse(b.l,b.q,b.rx*k,b.ry*k,b.rot,0,TAU)}
+  g.fill();
+  if(!sp.lit){
+    // 油膜の虹色の照りと、濡れた光沢
+    g.lineWidth=4;g.lineCap='round';
+    for(const b of sp.blobs){const k=grown(b);if(k<.5||b.s<2)continue;const h=(b.s*57+G.time*25)%360;
+      g.strokeStyle=`hsla(${h},60%,55%,.09)`;g.beginPath();g.ellipse(b.l-b.rx*.12,b.q-b.ry*.18,b.rx*k*.58,b.ry*k*.42,b.rot,Math.PI*1.1,Math.PI*1.7);g.stroke();
+      g.strokeStyle=`hsla(${(h+120)%360},60%,55%,.06)`;g.beginPath();g.ellipse(b.l+b.rx*.1,b.q+b.ry*.1,b.rx*k*.38,b.ry*k*.26,b.rot,Math.PI*.15,Math.PI*.75);g.stroke();
+      g.fillStyle='rgba(255,255,255,.08)';g.beginPath();g.ellipse(b.l-b.rx*.3*k,b.q-b.ry*.35*k,b.rx*k*.18,b.ry*k*.1,b.rot,0,TAU);g.fill()}}
+  g.restore();g.globalAlpha=1;
+  // 注ぎ口から流れ落ちる油の筋（漏れている間）
+  if(sp.t<sp.dur*.55){const sx=sp.x-c*4,sy=sp.y-12,ex=sp.x+c*16,ey=sp.y+sn*16+1,w=3+Math.sin(G.time*20)*.6;
+    g.strokeStyle=sp.lit?`rgba(120,190,255,${.75*f})`:`rgba(22,14,8,${.92*f})`;g.lineWidth=w;g.lineCap='round';g.beginPath();g.moveTo(sx,sy);g.quadraticCurveTo(sx+c*14,sy-2,ex,ey);g.stroke()}
+  if(sp.lit){g.save();g.globalCompositeOperation='lighter';
+    for(const b of sp.blobs){const k=grown(b);if(k<=0)continue;const x=sp.x+c*b.l-sn*b.q,y=sp.y+sn*b.l+c*b.q;
+      glow(x,y,b.rx*2.2,'#2f6dff',.3*f);g.globalCompositeOperation='lighter';
+      for(let j=0;j<3;j++){const ph=G.time*(8+j*3.3)+b.s*3+j*2.1,h=(10+b.rx*.55)*(.55+.45*Math.abs(Math.sin(ph)))*k;
+        flameTongue(x+(j-1)*b.rx*.4,y+(j===1?-2:1),h,b.rx*.14+2,f*.75,Math.sin(ph*1.3)*.3)}}
+    g.restore()}
+}
+// 炎の舌1本（根元が白く、先へ行くほど青く透ける）
+function flameTongue(x,y,h,w,al,lean){
+  const tx=x+lean*h,ty=y-h,gr=g.createLinearGradient(x,y,tx,ty);
+  gr.addColorStop(0,`rgba(150,215,255,${.55*al})`);gr.addColorStop(.3,`rgba(70,140,255,${.45*al})`);gr.addColorStop(1,'rgba(30,60,255,0)');
+  g.fillStyle=gr;g.beginPath();g.moveTo(x-w,y);g.bezierCurveTo(x-w*1.1,y-h*.35,tx-w*.2,ty+h*.3,tx,ty);g.bezierCurveTo(tx+w*.2,ty+h*.3,x+w*1.1,y-h*.35,x+w,y);g.quadraticCurveTo(x,y+w*.7,x-w,y);g.fill();
+}
 function drawGimmicks(){
   for(const w of WARNS){
     if(!w.done){const p=clamp(w.t/w.dur,0,1),rr_=w.r*(1.3-p*.3);
@@ -832,7 +881,7 @@ function drawGimmicks(){
       if(p>.55){const fy=w.y-(1-p)*420;g.save();g.translate(w.x,fy);g.rotate(w.a);rr(-52,-9,104,18,2,'#6a707c');g.restore()}}
     else{g.globalAlpha=1-clamp((w.t-w.dur)/1.2,0,1);g.save();g.translate(w.x,w.y);g.rotate(w.a);rr(-52,-9,104,18,2,'#6a707c');g.strokeStyle='#2a2d33';g.lineWidth=2;g.strokeRect(-52,-9,104,18);g.restore();g.globalAlpha=1}
   }
-  for(const sp of SPILLS){const L=sp.len*Math.min(1,sp.t/sp.grow),f=Math.min(1,(sp.dur-sp.t)/.6);g.save();g.translate(sp.x,sp.y);g.rotate(sp.a);g.globalAlpha=f;
+  for(const sp of SPILLS){const L=sp.len*Math.min(1,sp.t/sp.grow),f=Math.min(1,(sp.dur-sp.t)/.6);if(sp.oil){drawOilSpill(sp,L,f);continue}g.save();g.translate(sp.x,sp.y);g.rotate(sp.a);g.globalAlpha=f;
     rr(0,-sp.w/2,L,sp.w,sp.w/2,sp.lit?'rgba(255,110,20,.28)':sp.oil?'rgba(24,16,10,.72)':'rgba(190,130,40,.5)');
     if(sp.oil&&!sp.lit){g.fillStyle='rgba(150,110,200,.16)';g.fillRect(L*.15,-sp.w*.18,L*.6,sp.w*.12);g.fillStyle='rgba(90,200,170,.1)';g.fillRect(L*.25,sp.w*.05,L*.5,sp.w*.08)}
     g.restore();g.globalAlpha=1;
@@ -876,32 +925,6 @@ function drawSmokes(){
     for(let i=0;i<6;i++){const an=i/6*TAU+G.time*.4;g.fillStyle=`rgba(230,235,240,${a*.5})`;g.beginPath();g.arc(sm.x+Math.cos(an)*sm.r*.45,sm.y+Math.sin(an)*sm.r*.45,sm.r*.55,0,TAU);g.fill()}}
 }
 
-/* ---------------- WAVEごとのお題（達成でボーナス。失敗してもペナルティなし） ---------------- */
-const MIS_GEN=[
-  {id:'reflect',n:w=>2+Math.floor(w/3),t:'弾丸を%n回弾き返せ'},
-  {id:'chain',  n:w=>20+w*4,           t:'%n連撃を達成せよ'},
-  {id:'cleaner',n:w=>Math.min(10,w+1), t:'掃除屋を%n人倒せ',ok:w=>w>=2},
-  {id:'time',   n:()=>60,              t:'%n秒以内にクリアせよ'},
-  {id:'guard',  n:w=>4+w,              t:'ガードで%n回防げ'},
-  {id:'crash',  n:w=>3+Math.floor(w/2),t:'死体をぶつけて%n回CRASHさせろ'},
-  {id:'rage',   n:w=>3+Math.floor(w/3), t:'怨念解放の一撃で%n体倒せ'},
-  {id:'capture',n:w=>4+w*2,            t:'囲い込みで%nマス制圧せよ'}
-];
-function setupMission(){
-  G.mis=null;if(G.isBossWave)return;const w=G.wave;let m;
-  if(G.gim&&Math.random()<.6){const gm=GIMMICKS[G.gim];m={id:'gim',need:gm.n+Math.floor(w/5),text:gm.mis}}
-  else{const c=pick(MIS_GEN.filter(x=>(!x.ok||x.ok(w))&&x.id!==G.lastMis));m={id:c.id,need:c.n(w),text:c.t}}
-  m.text=m.text.replace('%n',m.need);m.cnt=0;m.done=false;m.fail=false;G.mis=m;G.lastMis=m.id;
-}
-function misAdd(id,v,add){
-  const m=G.mis;if(!m||m.done||m.fail||m.id!==id||G.phase!=='fight')return;
-  m.cnt=add?m.cnt+add:v==null?m.cnt+1:Math.max(m.cnt,v);if(m.cnt>=m.need)misDone();
-}
-function misDone(){
-  const m=G.mis;m.done=true;m.cnt=m.need;const b=1500*G.wave;G.score+=b;healP(15);G.soul=Math.min(100,G.soul+30);
-  callout('お題達成！','+'+b+'　HP+15　SOUL+30','#ffd54a');G.callout.dur=1.8;SFX.just();
-  RINGS.push({x:P.x,y:P.y,r:12,R:110,t:0,dur:.45,col:'255,213,74',w:9});
-}
 
 
 /* ---------------- 囲い込み制圧 ----------------
@@ -978,7 +1001,7 @@ function capture(tiles){
   const cx=sx/n,cy=sy/n,dd=new Map([[tiles[0],0]]),q=[tiles[0]];
   while(q.length){const j=q.shift(),x=j%GC,y=(j/GC)|0;for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){const k=(y+dy)*GC+(x+dx);if(x+dx<0||x+dx>=GC||y+dy<0||y+dy>=GR||!set.has(k)||dd.has(k))continue;dd.set(k,dd.get(j)+1);q.push(k)}}
   for(const j of tiles){const k=dd.get(j)||0;CAPQ.push({i:j,at:G.time+k*.045,k,n,cx,cy})}
-  const pts=100*n*G.wave;G.score+=pts;misAdd('capture',null,n);tutComplete(2,.7);
+  const pts=100*n*G.wave;G.score+=pts;tutComplete(2,.7);
   // 囲った範囲の外周を光らせて、「どこを・なぜ取れたか」を見せる
   fx({k:'capline',set,cx,cy,R:Math.sqrt(n)*TS*.8+30,life:1,max:1});
   if(n>=3){
@@ -994,9 +1017,10 @@ function updateCapQ(){
     if(q.at>G.time)return true;
     if(!DONE[q.i]){capFilling=true;fillTile(q.i);capFilling=false}
     if(q.n>=3&&Math.random()<.5)tone(240+q.k*45,360+q.k*60,.07,'triangle',.06);
+    const pc=G.cause;G.cause='cap'; // 囲い込みの撃破は「まとめ倒し」に数えない
     for(const e of [...E]){if(tileAt(e.x,e.y)!==q.i)continue;const a=Math.atan2(e.y-q.cy,e.x-q.cx);
       if(q.n>=3)hitEnemy(e,e.boss?6:e.armor?6:e.hp+1,a,420,{fin:true});else hitEnemy(e,2,a,260,{})}
-    return false;
+    G.cause=pc;return false;
   });
 }
 // 塗りの進み具合が25%・50%・75%を超えたら告知（演出のみ。75%からはBGMも激しくなる）
@@ -1022,7 +1046,7 @@ const tutText=st=>({1:['① 塗る','敵を倒すと、血で床が染まる。�
   6:['⑥ 掃除屋','塗った血を消しに来る。消される前に倒せ！'],7:['⑦ クリア','光るマスを塗って血溜まりを100%に。100%でステージクリア']})[st];
 function tutWave(n){
   if(!G.tutMode||n!==1){G.tut=null;return}
-  G.tut={step:1,t:0,gap:-1,rep:0};G.mis=null;tutSetup(1);state='tutintro';stateT=0;
+  G.tut={step:1,t:0,gap:-1,rep:0};tutSetup(1);state='tutintro';stateT=0;
 }
 // 手順を始める（「もう一度」でも同じ準備をやり直す）。②以降は前の敵を煙とともに消し、その手順に必要な敵だけを出す
 function tutSetup(st){
@@ -1150,7 +1174,7 @@ function wrapJP(s,size,maxW){
   for(const ch of s){if(line&&!'、。，．）」』！？ー'.includes(ch)&&g.measureText(line+ch).width>maxW){out.push(line);line=ch}else line+=ch}
   if(line)out.push(line);return out;
 }
-// ステージ開始のカード（ルール／仕掛け → お題）。枠で囲み、タップで次へ。最後のタップでゲーム開始
+// ステージ開始のカード（ルール／仕掛け）。枠で囲み、タップで次へ。最後のタップでゲーム開始
 function drawStIntro(){
   const c=G.cards&&G.cards[G.cardI];if(!c)return;
   const a=clamp(stateT/.2,0,1),last=G.cardI>=G.cards.length-1,x=22,w=W-44,lines=wrapJP(c.body,24,w-44);
@@ -1489,7 +1513,7 @@ function bowl(e,sp){
     if(o===e||e.bset.has(o))continue;
     if(dist(e.x,e.y,o.x,o.y)<e.r+o.r+2){
       e.bset.add(o);const a=Math.atan2(o.y-e.y,o.x-e.x);G.score+=Math.round(50*G.mult);
-      popText(o.x,o.y-26,'CRASH!','#ffd54a',13,.6);misAdd('crash');hitEnemy(o,2.5,a,sp*.8,{fin:sp>600});e.vx*=.7;e.vy*=.7;
+      popText(o.x,o.y-26,'CRASH!','#ffd54a',13,.6);hitEnemy(o,2.5,a,sp*.8,{fin:sp>600});e.vx*=.7;e.vy*=.7;
     }
   }
 }
@@ -1699,7 +1723,7 @@ function update(rdt){
   stateT+=rdt;
   for(const r of RAIN){r.y+=r.s*rdt;r.x-=r.s*.25*rdt;if(r.y>H){r.y=-20;r.x=rand(0,W+200)}}
   if(state==='title'){G.time+=rdt;return}
-  G.shake*=Math.exp(-11*rdt);G.zoom*=Math.exp(-7*rdt);G.flash=Math.max(0,G.flash-rdt*2.2);
+  G.shake*=Math.exp(-11*rdt);if(G.zHold>0)G.zHold-=rdt;else{G.zoom*=Math.exp(-7*rdt);if(G.zoom<.004)G.zc=null}G.flash=Math.max(0,G.flash-rdt*2.2);
   if(G.banner){G.banner.t+=rdt;if(G.banner.t>G.banner.dur)G.banner=null}
   if(G.sea){G.sea.t+=rdt;if(G.sea.t>.45&&!G.sea.b){G.sea.b=1;SFX.just();addShake(10)}if(G.sea.t>3.4)G.sea=null}
   if(G.callout){G.callout.t+=rdt;if(G.callout.t>G.callout.dur)G.callout=null}
@@ -1720,12 +1744,13 @@ function update(rdt){
   updatePlayer(dt);
   if(G.aimer&&(G.aimer.dead||G.aimer.state!=='aim'))G.aimer=null;
   G.shotGap-=dt;
-  for(const m of MARKS){m.t-=dt;if(m.t<=0){const e=makeEnemy(m.type,m.ox,m.oy);if(m.sub)e.sub=m.sub;if(m.horde){e.horde=true;e.hp*=.5;e.max*=.5}spotNew(e)}}
+  for(const m of MARKS){m.t-=dt;if(m.t<=0){const e=makeEnemy(m.type,m.ox,m.oy);if(m.sub)e.sub=m.sub;if(m.horde){e.horde=true;e.hp=e.max=.5}spotNew(e)}}
   MARKS=MARKS.filter(m=>m.t>0);
   for(const e of [...E])updateEnemy(e,dt);
   updateGimmicks(dt);
   if(capNew.length)captureCheck();
   updateCapPreview(dt);
+  if(G.mk&&G.mk.length&&G.time-G.mkT>MK_GAP){const l=G.mk;G.mk=[];if(l.length>=3&&G.phase==='fight')multiStamp(l)}
   updateCapQ();
   checkMilestones();
   // separation
@@ -1742,7 +1767,7 @@ function update(rdt){
     c.t+=dt;const e=c.e;e.x+=c.vx*dt;e.y+=c.vy*dt;const f=Math.exp(-3*dt);c.vx*=f;c.vy*=f; // 死体は遠くまで滑る
     const sp=Math.hypot(c.vx,c.vy);c.rot+=c.vr*dt*Math.min(1,sp/300);
     // ビリヤード：滑る死体が敵に当たると吹き飛ばす。勢いがあれば雑魚は一撃で倒れ、さらに次の敵へ連鎖する
-    if(sp>220)for(const o of [...E]){if(c.hit.has(o))continue;if(dist(e.x,e.y,o.x,o.y)<e.r+o.r+6){c.hit.add(o);G.score+=Math.round(50*G.mult);popText(o.x,o.y-26,'CRASH!','#ffd54a',13,.6);misAdd('crash');hitEnemy(o,sp>450?3.8:2.5,Math.atan2(o.y-e.y,o.x-e.x),sp*.85,{fin:sp>550});c.vx*=.6;c.vy*=.6}}
+    if(sp>220)for(const o of [...E]){if(c.hit.has(o))continue;if(dist(e.x,e.y,o.x,o.y)<e.r+o.r+6){c.hit.add(o);G.score+=Math.round(50*G.mult);popText(o.x,o.y-26,'CRASH!','#ffd54a',13,.6);hitEnemy(o,sp>450?3.8:2.5,Math.atan2(o.y-e.y,o.x-e.x),sp*.85,{fin:sp>550});c.vx*=.6;c.vy*=.6}}
     let wall=false;
     if(e.x<AX0+e.r){e.x=AX0+e.r;c.vx=Math.abs(c.vx)*.4;wall=true}else if(e.x>AX1-e.r){e.x=AX1-e.r;c.vx=-Math.abs(c.vx)*.4;wall=true}
     if(e.y<AY0+e.r){e.y=AY0+e.r;c.vy=Math.abs(c.vy)*.4;wall=true}else if(e.y>AY1-e.r){e.y=AY1-e.r;c.vy=-Math.abs(c.vy)*.4;wall=true}
@@ -2130,7 +2155,7 @@ function drawWorld(){
     if(f.k==='b'){g.globalAlpha=Math.min(1,a*1.5);circ(f.x,f.y,f.sz*(.4+a*.6),f.col)}
     else if(f.k==='s'){g.globalAlpha=a;g.strokeStyle='#fff6c8';g.lineWidth=2;g.beginPath();g.moveTo(f.x,f.y);g.lineTo(f.x-f.vx*.03,f.y-f.vy*.03);g.stroke()}
     else if(f.k==='f'){g.globalAlpha=1;glow(f.x,f.y,f.r,'#fff3d0',a);g.save();g.translate(f.x,f.y);g.rotate(f.a);g.fillStyle=`rgba(255,255,255,${a})`;g.beginPath();const r=f.r*.8;for(let i=0;i<8;i++){const rr2=i%2?r*.18:r;const an=i*Math.PI/4;g.lineTo(Math.cos(an)*rr2,Math.sin(an)*rr2)}g.closePath();g.fill();g.restore()}
-    else if(f.k==='fire'){glow(f.x,f.y,f.sz*(1.4-a*.4),a>.5?'#ffd27a':'#ff5a1a',a)}
+    else if(f.k==='fire'){glow(f.x,f.y,f.sz*(1.4-a*.4),f.blue?(a>.5?'#d8f4ff':'#2f6dff'):(a>.5?'#ffd27a':'#ff5a1a'),a)}
     else if(f.k==='gold'){glow(f.x,f.y,f.sz*1.6,'#ffd23a',a*.9);circ(f.x,f.y,Math.max(.6,f.sz*.22*a),'#fff6c8')}
     else if(f.k==='wash'){g.fillStyle=`rgba(120,200,255,${a*.4})`;g.fillRect(f.x,f.y,f.w,f.h)}
     else if(f.k==='drop'){g.globalAlpha=a;circ(f.x,f.y,2,'#9fd8ff')}
@@ -2200,12 +2225,9 @@ function drawHUD(){
     else{txt('DEAD GIRL',bx,36,25,'#f4f6fb','left',EN,null,true)}
   }else{
     const pr=painted/GN;txt('血溜まり',bx,22,12,'#ff4d6d','left',JP,null,false,900);
-    const cm=1+Math.min(1,G.chain/40);if(cm>1.04)txt('塗り x'+cm.toFixed(1),bx+bw,22,10,'#ffd54a','right',JP,null,false,800);
+    const cm=1+Math.min(1.2,G.chain/20);if(cm>1.04)txt('塗り x'+cm.toFixed(1),bx+bw,22,10,'#ffd54a','right',JP,null,false,800);
     rr(bx,28,bw,10,3,'#2a1018');rr(bx,28,bw*pr,10,3,pr>.9&&Math.floor(G.time*8)%2?'#ffffff':'#d4142e');
-    txt(Math.floor(pr*100)+'%',bx+bw+6,38,13,'#fff','left',EN,null,true);
-    if(G.mis){const m=G.mis,t=m.done?'✔ お題達成':m.fail?'✖ お題失敗':'お題：'+m.text+(m.id==='time'?'（残り'+Math.max(0,Math.ceil(m.need-G.waveTime))+'秒）':'　'+m.cnt+'/'+m.need);
-      txt(t,bx,56,10,m.done?'#b8ff5a':m.fail?'#8b93a8':'#ffd54a','left',JP,null,false,700)}
-  }
+    txt(Math.floor(pr*100)+'%',bx+bw+6,38,13,'#fff','left',EN,null,true);  }
   txt(G.tutMode?'TUTORIAL':G.isBossWave?'BOSS':'STAGE '+pad2(G.wave),W-50,24,15,G.tutMode?'#7ff3ff':G.isBossWave?'#ff2f5f':'#b8ff5a','right',EN,null,true);
   txt(String(G.score).padStart(7,'0'),W-50,42,14,'#fff','right',EN);
   if(!G.isBossWave&&!G.tutMode)txt('TIME '+G.waveTime.toFixed(0)+'s',W-50,57,10,'rgba(220,225,240,.6)','right',EN);
@@ -2259,6 +2281,9 @@ function drawControls(){
   g.restore();
 }
 function drawOverlays(){
+  // 塗るほど照明が赤く染まる（進み具合を数字でなく雰囲気で感じさせる）
+  if(state==='play'&&!G.isBossWave&&!G.tutMode&&G.phase==='fight'){const pr=painted/GN,a=pr*pr*.3;
+    if(a>.01){const vg=g.createRadialGradient(W/2,H*.55,H*.18,W/2,H*.55,H*.75);vg.addColorStop(0,`rgba(255,0,30,${a*.25})`);vg.addColorStop(1,`rgba(150,0,20,${a})`);g.fillStyle=vg;g.fillRect(0,0,W,H)}}
   // 連撃の熱：20連撃を超えると画面の縁が赤く脈打ち、伸びるほど濃くなる／大群ラッシュ中は橙色に
   if(state==='play'&&!P.dead&&(G.chain>=20||G.rush>0)){const heat=G.rush>0?.16:Math.min(.22,(G.chain-15)/250),a=heat+Math.sin(G.time*10)*.03,col=G.rush>0?'255,120,30':'255,20,40';
     const vg=g.createRadialGradient(W/2,H/2,H*.38,W/2,H/2,H*.72);vg.addColorStop(0,`rgba(${col},0)`);vg.addColorStop(1,`rgba(${col},${Math.max(0,a)})`);g.fillStyle=vg;g.fillRect(0,0,W,H)}
@@ -2285,7 +2310,7 @@ function drawBanner(){
 function seaDrips(){const n=30,a=[];for(let i=0;i<n;i++)a.push({x:(i+.5)*W/n+rand(-5,5),w:rand(9,30),v:rand(210,460),d:rand(0,.4)});return a}
 // 床100%のクリア演出：「血の海」を叩きつけ、続けて GOOD JOB!
 function drawSea(){
-  const s=G.sea;if(!s)return;const t=s.t,out=t>3?clamp(1-(t-3)/.4,0,1):1,y=H*.42;
+  const s=G.sea;if(!s||s.t<0)return;const t=s.t,out=t>3?clamp(1-(t-3)/.4,0,1):1,y=H*.42;
   g.save();g.globalAlpha=out;g.fillStyle='rgba(110,0,14,'+(.55*Math.min(1,t/.1))+')';g.fillRect(0,0,W,H);
   // 上から垂れ落ちる血（太さ・速さ・出だしを1本ずつ変え、加速しながら下へ伸びる）
   const gr=g.createLinearGradient(0,0,0,H);gr.addColorStop(0,'#3a0006');gr.addColorStop(.5,'#8a0016');gr.addColorStop(1,'#b0001e');
@@ -2361,7 +2386,7 @@ function drawTitle(){
   // 操作説明（16.5px。画面幅に収まるよう1行を短く分けて7行に）
   const L=touchMode?['目的：血で床を塗りつぶせ。囲めば一気に制圧','左半分をドラッグ：移動','右半分をタップ：攻撃（連打で連撃）','右半分を長押し：ガード（1回防ぐと解除）','光る主人公をタップ：怨念解放']
     :['目的：血で床を塗りつぶせ。囲めば一気に制圧','WASD／矢印：移動','J／左クリック：攻撃（連打で連撃）','U／右クリック長押し：ガード（1回防ぐと解除）','L／E：怨念解放　P：ポーズ　パッド対応'];
-  L.push('ステージクリアで強化を1つ選択','ステージの仕掛けとお題でボーナス');
+  L.push('ステージクリアで強化を1つ選択','ステージの仕掛けを利用して戦え');
   L.forEach((l,i)=>txt(l,W/2,644+i*22,16.5,i>=5?'#ffd54a':'#c9cfdc','center',JP,null,false,700));
   if(best>0)txt('BEST '+best,W/2,H-8,12,'#b8ff5a','center',EN);
   g.globalAlpha=1;txt(VERSION,W-10,H-8,11,'#8b93a8','right',EN,null,false,700);
@@ -2373,7 +2398,7 @@ function drawTitle(){
 function dim(a,col){g.fillStyle=`rgba(${col||'4,4,8'},${a})`;g.fillRect(0,0,W,H)}
 const RULES=[['塗る','敵を倒すと床に血。血溜まりを100%にするとクリア'],['囲う','囲むと中が一気に染まる。光る「囲える」マスを狙え（壁際も可）'],['掃除屋','塗った血を消しに来る。最優先で倒せ'],
   ['弾き返し','敵の弾やロケットは、攻撃で跳ね返せる'],['ガード','正面だけ防いで回復。1回防ぐと解除（押し直し）'],['怨念解放','SOUL満タンで発動。周囲の敵を一掃する'],
-  ['仕掛け','ステージの物を殴ると発動する'],['お題・カード','お題達成でボーナス。ステージクリアで強化を選ぶ'],['ボス','近づくと掴んで投げてくる（ガード不能）']];
+  ['仕掛け','ステージの物を殴ると発動する'],['強化カード','ステージクリアで強化を1つ選ぶ'],['ボス','近づくと掴んで投げてくる（ガード不能）']];
 function drawPause(){
   dim(.82);txt('PAUSED',W/2,104,40,'#fff','center',EN,null,true);
   txt('遊び方',W/2,140,13,'#ffd54a','center',JP,null,false,900);
@@ -2413,7 +2438,7 @@ function draw(){
   TXT_SCALE=1.2;
   g.save();
   const sh=G.shake;if(sh>.3)g.translate(rand(-sh,sh),rand(-sh,sh));
-  if(G.zoom>.002){g.translate(P.x,P.y);g.scale(1+G.zoom,1+G.zoom);g.translate(-P.x,-P.y)}
+  if(G.zoom>.002){const z=G.zc||P;g.translate(z.x,z.y);g.scale(1+G.zoom,1+G.zoom);g.translate(-z.x,-z.y)}
   drawWorld();drawSmokes();drawTutWorld();
   g.restore();
   drawOverlays();
