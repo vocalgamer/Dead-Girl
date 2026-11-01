@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.70 2026-11-01';
+const VERSION='v0.73 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -900,12 +900,15 @@ function drawBlocks(){
   if(!nBlock)return;const st=theme.blk||'',set=new Set();
   for(let i=0;i<GN;i++)if(BLOCK[i])set.add(i);
   if(st==='pond'||st==='barricade'){drawFlatBlocks(st,set);return}
-  const hh=BLK_H[st]==null?14:BLK_H[st];
+  // 影だけ先に床へ描く。物そのものは drawWorld で人物と一緒に足元の位置順に描く（奥の敵が手前の机に隠れるように）
   g.fillStyle='rgba(0,0,0,.45)';for(const i of set){const t=tileRect(i);g.fillRect(t.x+5,t.y+7,t.w,t.h)}
-  for(const i of set){const t=tileRect(i),below=i+GC<GN&&BLOCK[i+GC],h=hh,top={x:t.x,y:t.y-h,w:t.w,h:t.h};
-    const hs=(i*2654435761>>>0)%1000/1000; // マスごとに決まった乱数（見た目のばらつき用）
-    if(!below)blockFront(st,t.x,t.y+t.h-h,t.w,h,hs);
-    blockTop(st,top.x,top.y,top.w,top.h,hs,i)}
+}
+const blockFlat=()=>theme.blk==='pond'||theme.blk==='barricade';
+function drawBlockTile(i){
+  const st=theme.blk||'',hh=BLK_H[st]==null?14:BLK_H[st],t=tileRect(i),below=i+GC<GN&&BLOCK[i+GC],h=hh;
+  const hs=(i*2654435761>>>0)%1000/1000; // マスごとに決まった乱数（見た目のばらつき用）
+  if(!below)blockFront(st,t.x,t.y+t.h-h,t.w,h,hs);
+  blockTop(st,t.x,t.y-h,t.w,t.h,hs,i)
 }
 function blockFront(st,x,y,w,h,hs){
   const C={pillar:'#3c4048',wpillar:'#3e2a18',crate:'#5e4526',ammo:'#353b20',machine:'#2c3035',desk:'#4d5259',table:'#3a2412',counter:'#6c7178',shelf:'#8c939a',hvac:'#80858b',trash:'#2a2b2e',planter:'#4a3320'}[st]||'#1c1d24';
@@ -1122,8 +1125,6 @@ function hurtPlayer(dmg,sx,sy){
   // ボーナス面は1発でも被弾したら即終了（ライフは減らない）
   if(G.bonus){if(!G.bonus.end)bonusEnd(false);P.inv=.8;return}
   P.hp-=dmg;P.inv=.8*(1+.5*lv('dodge'));P.blinkT=P.inv;
-  // 復讐の血：被弾した瞬間、周りの敵を吹き飛ばす
-  if(lv('spite')){RINGS.push({x:P.x,y:P.y,r:10,R:110,t:0,dur:.3,col:'255,40,70',w:10});for(const e of E){if(e.boss)continue;const ka=Math.atan2(e.y-P.y,e.x-P.x);if(dist(e.x,e.y,P.x,P.y)<110){e.vx=Math.cos(ka)*460;e.vy=Math.sin(ka)*460;e.stun=Math.max(e.stun,.6)}}}
   P.kx=Math.cos(a)*300;P.ky=Math.sin(a)*300;
   bloodBurst(P.x,P.y,a,14,300);addShake(11);G.flash=Math.max(G.flash,.35);G.flashCol='255,30,60';G.hitstop=Math.max(G.hitstop,.07);SFX.hurt();
   popText(P.x,P.y-30,'-'+Math.round(dmg),'#ff4060',18,.8);
@@ -1175,7 +1176,7 @@ const CARDS=[
   {id:'greed',  name:'血の宴',      desc:'撃破スコア+25%',                          max:2,col:'#ffd54a'},
   {id:'quick',  name:'速い爪',      desc:'攻撃の速さ+8%',                           max:2,col:'#ffd0d6'},
   {id:'brink',  name:'背水',        desc:'HPが30%以下の間、攻撃力+40%',             max:1,col:'#ff5a78'},
-  {id:'spite',  name:'復讐の血',    desc:'被弾すると、周りの敵を吹き飛ばす',        max:1,col:'#ff4060'},
+  {id:'mire',   name:'血の沼',      desc:'血で塗った床の上の敵は、足を取られて18%遅くなる',max:2,col:'#ff4060'},
   {id:'seed',   name:'怨念の種',    desc:'ステージ開始時にSOUL+25',                 max:2,col:'#b8ff5a'},
   {id:'dodge',  name:'受け流し',    desc:'被弾後の無敵時間+50%',                    max:1,col:'#d0d6ff'},
   // 何度でも選べるカード：通常の強化が3枚に満たない時だけ出る（ENDLESSで取り尽くしても「もう1枚」が空にならない）
@@ -1970,7 +1971,7 @@ const keys=new Set();
 let touchMode=!!(window.matchMedia&&matchMedia('(pointer:coarse)').matches);
 // ガードは押している間だけ。ただし正面の攻撃を1回防いで回復すると、押したままでも解ける（一度離して押し直すと再びガード）
 function guarding(){const held=inp.guardKey||inp.guardMouse||inp.guardTouch!=null||inp.padGuard;if(!held)P.guardLock=false;return held&&!P.guardLock}
-const UI={pause:{x:W-24,y:22,r:15},mute:{x:W-60,y:22,r:15}};
+const UI={pause:{x:W-24,y:22,r:15},mute:{x:W-60,y:22,r:15},lock:{x:W-96,y:22,r:15}};
 // マウス：左=攻撃、右=ガード（同時押しは pointermove で来るので buttons から判定）
 function mouseBtn(ev){const a=!!(ev.buttons&1),gd=!!(ev.buttons&2);if(a&&!inp.atkMouse)pressAttack();inp.atkMouse=a;inp.guardMouse=gd}
 const SCR={endless:{x:W/2,y:612,w:260,h:52},title:{x:W/2,y:682,w:260,h:44},ptitle:{x:W/2,y:560,w:240,h:46},tstart:{x:W/2,y:522,w:250,h:46},tnext:{x:W/2,y:430,w:240,h:48},tretry:{x:W/2,y:492,w:240,h:42},ttut:{x:W/2,y:578,w:250,h:40}};
@@ -2093,15 +2094,24 @@ function screenAction(p,key){
 // 指の状態をすべて捨てる（離した通知が届かなかった指が残って、移動できなくなるのを防ぐ）
 function resetTouch(){inp.stick=null;inp.tx=inp.ty=0;inp.atkMouse=false;inp.guardMouse=false;inp.guardTouch=null;TOUCH.clear()}
 // why：止まった理由（ポーズ画面の下に小さく出す。意図しない停止の原因を突き止めるため）
+/* マウス固定（PC）：プレイ中はカーソルをゲーム画面の中に閉じ込めて、画面の外へ出て操作が効かなくなるのを防ぐ。
+   ESCキーで解除できる（解除されたら自動でポーズ）。メニューやカード選びの間はカーソルを戻す。上部のボタンで機能そのものを切り替えられる */
+let mouseLock=lsGet('dg_mlock')!=='0';
+const locked=()=>document.pointerLockElement===cv;
+function wantLock(){if(!mouseLock||touchMode||state!=='play'||locked()||!cv.requestPointerLock)return;try{const r=cv.requestPointerLock();if(r&&r.catch)r.catch(()=>{})}catch(e){}}
+document.addEventListener('pointerlockchange',()=>{if(!locked()&&state==='play')pauseGame('lock')});
 function pauseGame(why){if(state==='play'&&!P.dead){state='pause';stateT=0;G.pauseWhy=why||'';resetTouch()}}
 cv.addEventListener('pointerdown',ev=>{
   ev.preventDefault();const p=toLocal(ev);
   if(ev.pointerType==='touch'||ev.pointerType==='pen'){touchMode=true;lockPortrait()}
-  if(state!=='play'){DEVSHIFT=ev.shiftKey;screenAction(p);return}
-  if(inC(p,UI.pause,6)){pauseGame('btn');return}
-  if(inC(p,UI.mute,6)){toggleMute();return}
+  if(state!=='play'){DEVSHIFT=ev.shiftKey;screenAction(p);if(ev.pointerType==='mouse')wantLock();return}
+  // マウス固定中はカーソル位置が止まっているので、上部のボタンは押せない（クリックはすべて攻撃・ガード）
+  if(!locked()){
+    if(inC(p,UI.pause,6)){pauseGame('btn');return}
+    if(inC(p,UI.mute,6)){toggleMute();return}
+    if(!touchMode&&inC(p,UI.lock,6)){mouseLock=!mouseLock;lsSet('dg_mlock',mouseLock?'1':'0');SFX.ui();popText(P.x,P.y-60,mouseLock?'マウス固定 ON（ESCで解除）':'マウス固定 OFF','#7ff3ff',14,1.2);wantLock();return}}
   try{cv.setPointerCapture(ev.pointerId)}catch(e){}
-  if(ev.pointerType==='mouse'){mouseBtn(ev);return}
+  if(ev.pointerType==='mouse'){wantLock();mouseBtn(ev);return}
   // 上部のHUD帯をタップ：SOUL満タンなら怨念解放（床を隠すボタンは置かない）
   const now=performance.now();
   // SOUL満タン中に主人公の上を触ったら、まず「怨念解放の候補」として扱う（離したら発動。滑らせたら移動／長押しならガード）
@@ -2339,6 +2349,7 @@ const MAX_MELEE=3;
 const waveEase=()=>G.wave===1?.75:1;
 function meleeBusy(){let n=0;for(const o of E)if((o.type==='grunt'||o.type==='runner')&&(o.state==='windup'||o.state==='strike'))n++;return n}
 function mv(e,a,s,dt){if(e.boss&&e.onBlood)s*=.75; // 血溜まりの上のボスは足を取られて遅い
+if(!e.boss&&lv('mire')){const i=tileAt(e.x,e.y);if(i>=0&&DONE[i]&&!BLOCK[i])s*=1-.18*lv('mire')} // 血の沼（強化カード）：塗った床の上の雑魚も遅くなる
 e.x+=Math.cos(a)*s*dt;e.y+=Math.sin(a)*s*dt;e.walk+=s*dt*.13}
 function wallCheck(e,sp){
   let hit=false,nx=0,ny=0;
@@ -2692,6 +2703,7 @@ function drawRain(k){
 }
 function update(rdt){
   stateT+=rdt;
+  if(state!=='play'&&locked())document.exitPointerLock(); // メニュー・カード選びの間はカーソルを戻す
   updateRain(rdt);
   if(state==='title'&&devHold&&performance.now()-devHold.t>900){devHold=null;openDev()}
   if(state==='title'||state==='shop'||state==='dev'){G.time+=rdt;return}
@@ -2722,6 +2734,8 @@ function update(rdt){
   for(const m of MARKS){m.t-=dt;if(m.t<=0){const e=makeEnemy(m.type,m.ox,m.oy);if(m.sub)e.sub=m.sub;if(m.horde){e.horde=true;e.shiki=true;e.hp=e.max=.5;e.r=12}spotNew(e)}}
   MARKS=MARKS.filter(m=>m.t>0);
   for(const e of [...E])updateEnemy(e,dt);
+  // 歩き・突進・押し合いのあとで障害物に食い込んでいたら、最後にもう一度押し出す（出現途中の敵は除く）
+  for(const e of E)if(e.state!=='enter'&&!e.dead)blockPush(e);
   updateGimmicks(dt);
   if(capNew.length)captureCheck();
   updateCapPreview(dt);updatePillars(dt);
@@ -3127,8 +3141,11 @@ function drawWorld(){
   for(const f of FX)if(f.k==='ghost'){g.globalAlpha=f.life/f.max*.4;g.fillStyle='#ffffff';g.beginPath();g.arc(f.x,f.y,f.e.r,0,TAU);g.fill();g.globalAlpha=1}
   // entities sorted by y
   const list=E.concat(TIRES);list.push(null);
+  // 高さのある障害物も、マスの下端を足元として一緒に並べる
+  if(nBlock&&!blockFlat())for(let i=0;i<GN;i++)if(BLOCK[i]){const t=tileRect(i);list.push({blk:i,y:t.y+t.h-.5})}
   list.sort((a,b)=>(a?a.y:P.y)-(b?b.y:P.y));
   for(const e of list){
+    if(e&&e.blk!=null){drawBlockTile(e.blk);continue}
     if(e&&e.tire){drawTire(e.x,e.y,e.z,e.hd,e.lean,e.rot,e.sd,e.ph==='flat'?clamp((2.4-e.ft)/.6,0,1):1);continue}
     if(e===null){
       glow(P.x,P.y,46,'#48f1d2',.12);
@@ -3278,7 +3295,7 @@ function drawHUD(){
   const hg=g.createLinearGradient(0,0,0,44);hg.addColorStop(0,'rgba(4,4,8,.72)');hg.addColorStop(1,'rgba(4,4,8,0)');g.fillStyle=hg;g.fillRect(0,0,W,44);
   if(DEV.god)txt('無敵',12,46,10,'#6dff9c','left',JP,['#000',3],false,900);
   txt(G.tutMode?'TUTORIAL':G.bonus?'BONUS':G.isBossWave?'BOSS':'STAGE '+pad2(G.wave),12,27,15,G.tutMode?'#7ff3ff':G.isBossWave?'#ff2f5f':'#b8ff5a','left',EN,['#000',3],true);
-  if(G.isBossWave&&G.boss){const b=G.boss,x=112,w=W-112-84;txt(BOSSES[b.bk].name,x,15,10,'#fff','left',JP,['#000',3],false,900);if(b.onBlood)txt('血に弱る！',x+w,15,10,'#ff4d6d','right',JP,['#000',3],false,900);
+  if(G.isBossWave&&G.boss){const b=G.boss,x=112,w=W-112-(touchMode?84:120);txt(BOSSES[b.bk].name,x,15,10,'#fff','left',JP,['#000',3],false,900);if(b.onBlood)txt('血に弱る！',x+w,15,10,'#ff4d6d','right',JP,['#000',3],false,900);
     rr(x,20,w,8,3,'rgba(40,10,20,.85)');rr(x,20,w*clamp(b.hp/b.max,0,1),8,3,b.hp<b.max*.5?'#ff2040':'#ff5a7a')}
   // pause / mute
   circ(UI.pause.x,UI.pause.y,UI.pause.r,'rgba(0,0,0,.45)');g.fillStyle='#cfd6e4';g.fillRect(UI.pause.x-5,UI.pause.y-6,3.5,12);g.fillRect(UI.pause.x+1.5,UI.pause.y-6,3.5,12);
@@ -3286,6 +3303,10 @@ function drawHUD(){
   g.fillStyle='#cfd6e4';g.beginPath();const mx=UI.mute.x-7,my=UI.mute.y;g.moveTo(mx,my-3);g.lineTo(mx+4,my-3);g.lineTo(mx+9,my-8);g.lineTo(mx+9,my+8);g.lineTo(mx+4,my+3);g.lineTo(mx,my+3);g.closePath();g.fill();
   if(muted){g.strokeStyle='#ff4060';g.lineWidth=2.2;g.beginPath();g.moveTo(mx-1,my-9);g.lineTo(mx+16,my+9);g.stroke()}
   else{g.strokeStyle='#cfd6e4';g.lineWidth=1.5;g.beginPath();g.arc(mx+9,my,5,-.9,.9);g.stroke()}
+  // マウス固定の切り替え（PCのみ）：矢印カーソルと錠前。固定ONは水色、OFFは灰色で錠前が開く
+  if(!touchMode){const u=UI.lock,on=mouseLock,col=on?'#7ff3ff':'#8b93a8';circ(u.x,u.y,u.r,'rgba(0,0,0,.45)');
+    g.fillStyle=col;g.beginPath();g.moveTo(u.x-8,u.y-9);g.lineTo(u.x-8,u.y+5);g.lineTo(u.x-4.5,u.y+1.5);g.lineTo(u.x-2,u.y+7);g.lineTo(u.x,u.y+6);g.lineTo(u.x-2.5,u.y+.5);g.lineTo(u.x+2,u.y+.5);g.closePath();g.fill();
+    rr(u.x+1,u.y,9,7,1.5,col);g.strokeStyle=col;g.lineWidth=1.6;g.beginPath();if(on)g.arc(u.x+5.5,u.y,3,Math.PI,TAU);else g.arc(u.x+5.5,u.y-1.5,3,Math.PI*1.15,TAU*1.02);g.stroke()}
   if(touchMode&&state==='play'&&G.wave===1)txt('左ドラッグ:移動  右タップ:攻撃  右長押し:ガード  光る主人公タップ:怨念',W/2,H-8,10,'rgba(220,225,240,.45)','center',JP,null,false,700);
   if(!touchMode&&state==='play')txt('移動:WASD  攻撃:J/左クリック  ガード:U/右クリック  怨念:L/E',W/2,H-8,10,'rgba(220,225,240,.45)','center',JP,null,false,700);
 }
@@ -3443,8 +3464,9 @@ function drawPause(){
   RULES.forEach(([h,b],i)=>{const y=172+i*31;txt(h,28,y,13,'#ff4d6d','left',JP,null,false,900);txt(b,136,y,12,'#e6e9f0','left',JP,null,false,700,W-150)});
   txt(touchMode?'タップで再開':'P / Enter で再開',W/2,478,15,'#c9cfdc','center',JP,null,false,700);
   button(SCR.ptitle,'タイトルへ戻る','rgba(60,20,30,.9)');
-  const why={btn:'ポーズボタン',key:'キー操作',blur:'画面のフォーカスが外れた',hidden:'アプリ切替・画面オフ',rotate:'画面の回転',pad:'コントローラー',back:'戻る操作（画面端のスワイプ）'}[G.pauseWhy];
+  const why={btn:'ポーズボタン',key:'キー操作',blur:'画面のフォーカスが外れた',hidden:'アプリ切替・画面オフ',rotate:'画面の回転',pad:'コントローラー',back:'戻る操作（画面端のスワイプ）',lock:'ESCでマウスの固定を解除'}[G.pauseWhy];
   if(why)txt('停止の理由：'+why,W/2,H-40,11,'#8b93a8','center',JP,null,false,700);
+  if(!touchMode&&mouseLock)txt('再開すると、マウスは再びゲーム画面に固定されます（ESCで解除）',W/2,H-22,10,'#6a7288','center',JP,null,false,700);
 }
 function drawStats(y){
   const rows=[['SCORE',G.score],['KILLS',G.kills],['MAX CHAIN',G.maxChain],['STAGE',G.wave]];
