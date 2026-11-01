@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.59 2026-11-01';
+const VERSION='v0.61 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -78,23 +78,24 @@ function glow(x,y,r,col,a){if(a<=0)return;g.globalCompositeOperation='lighter';g
 /* ---------------- background (pre-rendered) ---------------- */
 // ステージ（WAVE）ごとの床の色味。血の赤が映えるよう、床そのものは赤系にしない。11WAVE目以降は繰り返し
 // base:床の地色 grid:目地の色 refl:濡れた路面に映るネオン2色 hi:未塗りタイルの浮き上がり色 tube:（未使用）mark:路面標示
+// ground:屋外の地面（alley=路地のアスファルト street=繁華街の車道 concrete=コンクリート舗装 roof=屋上 stone=石畳）gcol:その地面の色。無い場所は屋内の床（タイル）
 // rain:雨の強さ（屋外のステージだけ。1=どしゃ降り＋遠雷 .6=小雨。屋内は降らない。ただの雰囲気で、遊びには影響しない）
 const THEMES=[
-  {name:'雨の路地裏',     base:'#0c0e15',grid:'120,140,175',refl:['60,150,255','255,50,130'],hi:'175,205,240',tube:['#ff2f7a','#29e6ff','#b45cff'],mark:'止まれ',rain:1},
-  {name:'歌舞伎町',       base:'#1f0f33',grid:'175,125,215',refl:['255,60,210','80,200,255'],hi:'215,180,255',tube:['#ff3fd0','#3fd8ff','#ffd23f'],mark:'徐行',gim:'bottle',win:true,rain:.6},
-  {name:'港の倉庫街',     base:'#082428',grid:'100,175,180',refl:['40,220,210','255,150,60'],hi:'150,235,230',tube:['#2fffe0','#ff9a3f','#2f8cff'],mark:'立入禁止',gim:'dyn',rain:.6},
-  {name:'赤提灯の横丁',   base:'#2a1a0b',grid:'200,155,100',refl:['255,150,50','255,215,120'],hi:'245,215,165',tube:['#ffa02f','#ffd76a','#ff6a3f'],mark:'一方通行',gim:'oil',win:true,rain:.6},
-  {name:'霧島の縄張り',   base:'#171a24',grid:'190,195,215',refl:['220,230,255','150,170,255'],hi:'215,222,240',tube:['#e8ecff','#7f9cff','#c0c8ff'],mark:'霧島組',rain:.6},
+  {name:'雨の路地裏',     base:'#0c0e15',grid:'120,140,175',refl:['60,150,255','255,50,130'],hi:'175,205,240',tube:['#ff2f7a','#29e6ff','#b45cff'],mark:'止まれ',rain:1,ground:'alley',gcol:'#16171b'},
+  {name:'歌舞伎町',       base:'#1f0f33',grid:'175,125,215',refl:['255,60,210','80,200,255'],hi:'215,180,255',tube:['#ff3fd0','#3fd8ff','#ffd23f'],mark:'徐行',gim:'bottle',win:true,rain:.6,ground:'street',gcol:'#18161d'},
+  {name:'港の倉庫街',     base:'#082428',grid:'100,175,180',refl:['40,220,210','255,150,60'],hi:'150,235,230',tube:['#2fffe0','#ff9a3f','#2f8cff'],mark:'立入禁止',gim:'dyn',rain:.6,ground:'concrete',gcol:'#23292b'},
+  {name:'赤提灯の横丁',   base:'#2a1a0b',grid:'200,155,100',refl:['255,150,50','255,215,120'],hi:'245,215,165',tube:['#ffa02f','#ffd76a','#ff6a3f'],mark:'一方通行',gim:'oil',win:true,rain:.6,ground:'stone',gcol:'#30261d'},
+  {name:'霧島の縄張り',   base:'#171a24',grid:'190,195,215',refl:['220,230,255','150,170,255'],hi:'215,222,240',tube:['#e8ecff','#7f9cff','#c0c8ff'],mark:'霧島組',rain:.6,ground:'alley',gcol:'#191a1f'},
   {name:'立体駐車場',     base:'#132213',grid:'150,180,140',refl:['170,255,90','255,230,80'],hi:'195,235,180',tube:['#b8ff5a','#ffe85a','#5affb0'],mark:'P',gim:'tires'},
   {name:'廃工場',         base:'#261f0d',grid:'190,165,95',refl:['255,190,60','120,200,255'],hi:'235,215,160',tube:['#ffc23f','#ff7a2f','#6fc8ff'],mark:'危険',gim:'beam'},
-  {name:'雨のビル屋上',   base:'#0b1834',grid:'115,150,225',refl:['80,140,255','190,110,255'],hi:'165,195,250',tube:['#4f8cff','#b46cff','#ffffff'],mark:'H',gim:'edge',rain:1},
+  {name:'雨のビル屋上',   base:'#0b1834',grid:'115,150,225',refl:['80,140,255','190,110,255'],hi:'165,195,250',tube:['#4f8cff','#b46cff','#ffffff'],mark:'H',gim:'edge',rain:1,ground:'roof',gcol:'#25282e'},
   {name:'地下駐車場',     base:'#0b2419',grid:'115,195,150',refl:['80,255,160','230,255,120'],hi:'165,240,200',tube:['#4fffa0','#d8ff5a','#4fd0ff'],mark:'出口',gim:'ext'},
   {name:'鬼頭組 本家',    base:'#21102c',grid:'210,175,95',refl:['255,200,70','170,90,255'],hi:'235,210,160',tube:['#ffd23f','#a05cff','#ff9a3f'],mark:'鬼頭組'},
   // STAGE 11〜20 用
   {name:'霧島組 事務所',   base:'#1a1418',grid:'200,190,200',refl:['230,230,255','255,80,110'],hi:'225,215,230',tube:['#f0f0ff','#ff4d6d','#c8c8ff'],mark:'霧島組'},
   {name:'高架下の闇市',   base:'#1d0f0a',grid:'210,140,110',refl:['255,120,60','255,60,90'],hi:'240,190,170',tube:['#ff7a3f','#ff3f6a','#ffd06a'],mark:'闇市',gim:'bottle',win:true},
-  {name:'中華街',         base:'#2a0a0e',grid:'220,120,110',refl:['255,60,60','255,200,80'],hi:'245,185,175',tube:['#ff3a3a','#ffd23f','#ff8a3f'],mark:'中華街',gim:'dyn',win:true,rain:.6},
-  {name:'埠頭のコンテナ置き場',base:'#0a1a26',grid:'110,160,200',refl:['60,170,255','255,120,60'],hi:'160,205,240',tube:['#3fa8ff','#ff7a3f','#7fffd0'],mark:'コンテナ',gim:'cart',rain:.6},
+  {name:'中華街',         base:'#2a0a0e',grid:'220,120,110',refl:['255,60,60','255,200,80'],hi:'245,185,175',tube:['#ff3a3a','#ffd23f','#ff8a3f'],mark:'中華街',gim:'dyn',win:true,rain:.6,ground:'stone',gcol:'#33201f'},
+  {name:'埠頭のコンテナ置き場',base:'#0a1a26',grid:'110,160,200',refl:['60,170,255','255,120,60'],hi:'160,205,240',tube:['#3fa8ff','#ff7a3f','#7fffd0'],mark:'コンテナ',gim:'cart',rain:.6,ground:'concrete',gcol:'#20262c'},
   {name:'解体中のビル',   base:'#1e1c1a',grid:'190,180,160',refl:['255,210,90','150,160,180'],hi:'225,215,195',tube:['#ffd23f','#c8c8c8','#ff9a3f'],mark:'工事中',gim:'beam'},
   {name:'白鷺クリーニング工場',base:'#0f1c22',grid:'170,215,230',refl:['120,220,255','230,250,255'],hi:'200,235,245',tube:['#7fe0ff','#e8fbff','#4fb0ff'],mark:'白鷺'}
 ];
@@ -105,22 +106,83 @@ const themeFor=n=>THEMES[THEME_ORDER[((Math.max(1,n)-1)%20)+1]];
 const TUT_THEME={name:'訓練場',base:'#11161d',grid:'140,170,200',refl:['90,200,255','120,255,200'],hi:'190,220,245',tube:['#4fd8ff','#7fffc8','#4fd8ff'],mark:'練習'};
 let theme=THEMES[0];
 function setTheme(n){const t=typeof n==='object'?n:THEMES[(Math.max(1,n)-1)%THEMES.length];if(t===theme)return;theme=t;renderBG()}
+/* 屋外の地面（renderBG から呼ぶ）。描く順：路面標示 → 骨材の粒（標示をすり減らす）→ 補修跡・ひび → 側溝・縁石 → 水たまり */
+function drawGround(b,T_,sr){
+  const gd=T_.ground,x0=AX0,x1=AX1,y0=40,y1=H,paint=a=>`rgba(232,232,226,${a})`;
+  const roadText=(t,y,a)=>{b.save();b.fillStyle=paint(a);b.font='900 '+(t.length>3?50:62)+'px '+JP;b.textAlign='center';b.translate(225,y);b.scale(1,1.7);b.fillText(t,0,0);b.restore()};
+  // 舗装の種類ごとの下地
+  if(gd==='stone'){
+    // 石畳：目地を暗くし、大きさのそろわない石を並べる（1段ずつずらす）
+    b.fillStyle='rgba(0,0,0,.5)';b.fillRect(x0,y0,x1-x0,y1-y0);
+    for(let y=y0;y<y1;y+=23){let x=x0-sr()*24;while(x<x1){const w=18+sr()*22,l=sr();b.fillStyle=T_.gcol;rrB(b,x+1.5,y+1.5,w-3,20,5);b.fill();
+      b.fillStyle=l<.5?`rgba(0,0,0,${(.5-l)*.5})`:`rgba(255,240,220,${(l-.5)*.14})`;rrB(b,x+1.5,y+1.5,w-3,20,5);b.fill();
+      b.fillStyle='rgba(255,255,255,.06)';b.fillRect(x+4,y+2.5,w-9,1.5);x+=w}}
+  }else if(gd==='concrete'||gd==='roof'){
+    // コンクリート：3マスごとの目地と、しみ
+    for(let i=0;i<5000;i++){b.fillStyle=sr()<.5?`rgba(255,255,255,${.02+sr()*.04})`:`rgba(0,0,0,${.1+sr()*.15})`;b.fillRect(sr()*W,y0+sr()*(y1-y0),1.2,1.2)}
+    for(let i=0;i<10;i++){const x=x0+sr()*(x1-x0),y=y0+sr()*(y1-y0),r=20+sr()*50,gr=b.createRadialGradient(x,y,0,x,y,r);gr.addColorStop(0,'rgba(0,0,0,.22)');gr.addColorStop(1,'rgba(0,0,0,0)');b.fillStyle=gr;b.fillRect(x-r,y-r,r*2,r*2)}
+    b.lineWidth=2;for(let x=x0+138;x<x1;x+=138){b.strokeStyle='rgba(0,0,0,.5)';b.beginPath();b.moveTo(x,y0);b.lineTo(x,y1);b.stroke();b.strokeStyle='rgba(255,255,255,.05)';b.beginPath();b.moveTo(x+1.5,y0);b.lineTo(x+1.5,y1);b.stroke()}
+    for(let y=AY0+138;y<y1;y+=138){b.strokeStyle='rgba(0,0,0,.5)';b.beginPath();b.moveTo(x0,y);b.lineTo(x1,y);b.stroke();b.strokeStyle='rgba(255,255,255,.05)';b.beginPath();b.moveTo(x0,y+1.5);b.lineTo(x1,y+1.5);b.stroke()}
+    if(gd==='concrete'){
+      // 港・埠頭：黄色の通路線と、立入禁止の斜線帯
+      b.fillStyle='rgba(235,190,40,.32)';b.fillRect(x0+40,y0,5,y1-y0);b.fillRect(x1-45,y0,5,y1-y0);
+      b.save();b.beginPath();b.rect(x0+60,240,x1-x0-120,40);b.clip();b.fillStyle='rgba(235,190,40,.26)';for(let x=x0;x<x1+40;x+=22){b.beginPath();b.moveTo(x,280);b.lineTo(x+11,280);b.lineTo(x+51,240);b.lineTo(x+40,240);b.fill()}b.restore();
+      b.strokeStyle='rgba(235,190,40,.32)';b.lineWidth=3;b.strokeRect(x0+60,240,x1-x0-120,40);
+      roadText(T_.mark,690,.2);
+    }else{
+      // 屋上：ヘリポートの円とH
+      b.strokeStyle=paint(.25);b.lineWidth=7;b.beginPath();b.arc(225,600,92,0,TAU);b.stroke();
+      b.save();b.fillStyle=paint(.25);b.font='900 120px '+EN;b.textAlign='center';b.fillText('H',225,645);b.restore();
+    }
+  }else{
+    // アスファルト：路面標示（あとで粒を重ねて、すり減らす）
+    b.fillStyle=paint(.36);b.fillRect(x0+28,y0,4,y1-y0);b.fillRect(x1-32,y0,4,y1-y0);
+    if(gd==='alley'){b.fillRect(x0+28,560,x1-x0-56,12);roadText(T_.mark,665,.3)}
+    else{for(let y=y0;y<y1;y+=60)b.fillRect(223,y,4,30);for(let i=0;i<7;i++)b.fillRect(70+i*46,410,24,86);roadText(T_.mark,665,.26)}
+    // 骨材の粒
+    for(let i=0;i<11000;i++){const x=sr()*W,y=y0+sr()*(y1-y0),r=sr();b.fillStyle=r<.45?`rgba(205,210,220,${.04+sr()*.08})`:`rgba(0,0,0,${.2+sr()*.3})`;b.fillRect(x,y,r<.9?1:1.8,r<.9?1:1.8)}
+    // 補修跡（色の違う四角いアスファルト）
+    for(let i=0;i<3;i++){const x=x0+30+sr()*(x1-x0-160),y=150+sr()*560,w=60+sr()*90,h=40+sr()*70;b.fillStyle='rgba(0,0,0,.2)';b.fillRect(x,y,w,h);b.strokeStyle='rgba(0,0,0,.45)';b.lineWidth=1.5;b.strokeRect(x,y,w,h)}
+    // ひび（タールで埋めた黒い筋）
+    for(let i=0;i<12;i++){let x=x0+sr()*(x1-x0),y=y0+sr()*(y1-y0);b.strokeStyle='rgba(4,4,6,.75)';b.lineWidth=1.6+sr()*1.4;b.beginPath();b.moveTo(x,y);for(let k=0;k<6;k++){x+=(sr()-.5)*40;y+=(sr()-.5)*40;b.lineTo(x,y)}b.stroke()}
+    // 路地の左は側溝（コンクリートの蓋と鉄格子）、右は縁石
+    if(gd==='alley'){b.fillStyle='#3a3d43';b.fillRect(x0,y0,16,y1-y0);b.fillStyle='rgba(0,0,0,.35)';b.fillRect(x0+15,y0,2,y1-y0);
+      for(let y=AY0;y<y1;y+=46){b.fillStyle='rgba(0,0,0,.4)';b.fillRect(x0,y,16,1.5);if(((y-AY0)/46)%3===1){b.fillStyle='#121316';b.fillRect(x0+2,y+6,12,34);b.fillStyle='#4a4e56';for(let k=y+9;k<y+38;k+=5)b.fillRect(x0+2,k,12,1.6)}}
+      b.fillStyle='#34373d';b.fillRect(x1-9,y0,9,y1-y0);b.fillStyle='rgba(255,255,255,.08)';b.fillRect(x1-9,y0,1.5,y1-y0)}
+  }
+  // 水たまり：濡れて黒く光り、ネオンが縦に伸びて映り込む（雨の降る場所ほど多い）
+  const np=Math.round((T_.rain||0)*(gd==='alley'?9:6));
+  for(let i=0;i<np;i++){const cx=x0+40+sr()*(x1-x0-80),cy=140+sr()*620,r=16+sr()*34,pts=[];
+    for(let k=0;k<14;k++){const a=k/14*TAU,q=r*(.7+sr()*.45);pts.push([cx+Math.cos(a)*q*1.5,cy+Math.sin(a)*q*.8])}
+    b.save();b.beginPath();pts.forEach((p,k)=>k?b.lineTo(p[0],p[1]):b.moveTo(p[0],p[1]));b.closePath();
+    b.fillStyle='rgba(3,5,10,.55)';b.fill();b.strokeStyle='rgba(170,195,235,.13)';b.lineWidth=1;b.stroke();b.clip();
+    for(let k=0;k<2;k++){const sx=cx-r*.9+sr()*r*1.8,w=8+sr()*10,col=T_.refl[k%2];b.save();b.translate(sx,cy);b.scale(1,3);
+      const gr=b.createRadialGradient(0,0,0,0,0,w);gr.addColorStop(0,`rgba(${col},.3)`);gr.addColorStop(1,`rgba(${col},0)`);b.fillStyle=gr;b.beginPath();b.arc(0,0,w,0,TAU);b.fill();b.restore()}
+    b.fillStyle='rgba(200,215,240,.05)';b.beginPath();pts.forEach((p,k)=>k?b.lineTo(p[0],p[1]-2):b.moveTo(p[0],p[1]-2));b.closePath();b.fill();
+    b.restore()}
+  // 濡れた路面のつや（全体にうっすら）
+  if(T_.rain){const gr=b.createLinearGradient(0,AY0,0,H);gr.addColorStop(0,`rgba(${T_.refl[0]},.04)`);gr.addColorStop(1,`rgba(${T_.refl[1]},.05)`);b.fillStyle=gr;b.fillRect(x0,y0,x1-x0,y1-y0)}
+}
+function rrB(b,x,y,w,h,r){b.beginPath();b.moveTo(x+r,y);b.arcTo(x+w,y,x+w,y+h,r);b.arcTo(x+w,y+h,x,y+h,r);b.arcTo(x,y+h,x,y,r);b.arcTo(x,y,x+w,y,r);b.closePath()}
 function renderBG(){
   const b=bgG;let seed=11;const sr=()=>(seed=(seed*16807)%2147483647)/2147483647;
-  const T_=theme;b.fillStyle=T_.base;b.fillRect(0,0,W,H);
+  const T_=theme;b.fillStyle=T_.gcol||T_.base;b.fillRect(0,0,W,H);
   for(let i=0;i<3200;i++){const x=sr()*W,y=sr()*H,s=sr()*2+.4;b.fillStyle=sr()<.5?'rgba(255,255,255,.03)':'rgba(0,0,0,.28)';b.fillRect(x,y,s,s)}
   for(let i=0;i<16;i++){const x=sr()*W,y=AY0+sr()*(H-AY0),r=25+sr()*80;const gr=b.createRadialGradient(x,y,0,x,y,r);gr.addColorStop(0,'rgba(0,0,0,.4)');gr.addColorStop(1,'rgba(0,0,0,0)');b.fillStyle=gr;b.beginPath();b.arc(x,y,r,0,TAU);b.fill()}
   // wet reflections
   for(let i=0;i<6;i++){const x=sr()*W,y=AY0+sr()*(H-AY0),r=30+sr()*60;const gr=b.createRadialGradient(x,y,0,x,y,r);gr.addColorStop(0,`rgba(${T_.refl[i%2]},${i%2?.07:.06})`);gr.addColorStop(1,'rgba(0,0,0,0)');b.fillStyle=gr;b.beginPath();b.ellipse(x,y,r*1.4,r*.7,0,0,TAU);b.fill()}
-  b.strokeStyle=`rgba(${T_.grid},.09)`;b.lineWidth=1;
-  for(let x=AX0;x<=AX1;x+=46){b.beginPath();b.moveTo(x+.5,AY0);b.lineTo(x+.5,H);b.stroke()}
-  for(let y=AY0;y<=H;y+=46){b.beginPath();b.moveTo(0,y+.5);b.lineTo(W,y+.5);b.stroke()}
-  b.fillStyle='rgba(225,225,235,.055)';for(let i=0;i<7;i++)b.fillRect(66+i*46,430,26,92);
-  b.save();b.fillStyle='rgba(235,235,245,.065)';b.font='900 '+(T_.mark.length>3?56:70)+'px '+JP;b.textAlign='center';b.fillText(T_.mark,225,650);b.restore();
-  b.strokeStyle='rgba(0,0,0,.55)';b.lineWidth=1.3;
-  for(let i=0;i<14;i++){let x=sr()*W,y=AY0+sr()*(H-AY0);b.beginPath();b.moveTo(x,y);for(let k=0;k<5;k++){x+=(sr()-.5)*44;y+=(sr()-.5)*44;b.lineTo(x,y)}b.stroke()}
+  if(T_.ground)drawGround(b,T_,sr);
+  else{
+    // 屋内：タイルの床
+    b.strokeStyle=`rgba(${T_.grid},.09)`;b.lineWidth=1;
+    for(let x=AX0;x<=AX1;x+=46){b.beginPath();b.moveTo(x+.5,AY0);b.lineTo(x+.5,H);b.stroke()}
+    for(let y=AY0;y<=H;y+=46){b.beginPath();b.moveTo(0,y+.5);b.lineTo(W,y+.5);b.stroke()}
+    b.save();b.fillStyle='rgba(235,235,245,.065)';b.font='900 '+(T_.mark.length>3?56:70)+'px '+JP;b.textAlign='center';b.fillText(T_.mark,225,650);b.restore();
+    b.strokeStyle='rgba(0,0,0,.55)';b.lineWidth=1.3;
+    for(let i=0;i<14;i++){let x=sr()*W,y=AY0+sr()*(H-AY0);b.beginPath();b.moveTo(x,y);for(let k=0;k<5;k++){x+=(sr()-.5)*44;y+=(sr()-.5)*44;b.lineTo(x,y)}b.stroke()}
+  }
   const manhole=(x,y)=>{b.fillStyle='#090a0e';b.beginPath();b.arc(x,y,21,0,TAU);b.fill();b.strokeStyle='rgba(140,150,170,.25)';b.lineWidth=2;b.beginPath();b.arc(x,y,19,0,TAU);b.stroke();b.lineWidth=1;for(let k=-12;k<=12;k+=6){b.beginPath();b.moveTo(x-15,y+k);b.lineTo(x+15,y+k);b.stroke()}};
-  manhole(110,300);manhole(345,700);
+  if(T_.ground!=='stone'&&T_.ground!=='roof'){manhole(110,300);manhole(345,700)}
   // 屋上：左右は柵のない縁（黄黒の警告帯）
   if(T_.gim==='edge'){for(const x0 of [AX0,AX1-10]){for(let y=AY0;y<H;y+=16){b.fillStyle='#e8c020';b.fillRect(x0,y,10,8);b.fillStyle='#111';b.fillRect(x0,y+8,10,8)}}}
   // 床の左右の端：壁の代わりに、内側へ落ちる影と細い縁取りだけ（敵を叩きつける場所が分かるように）
@@ -452,7 +514,7 @@ function startWave(n){
   if(bk){G.addsT=5;G.bossPending=1.9;G.bossInfo={kind:bk,...BOSSES[bk]};
     G.banner={top:'WARNING — BOSS — '+theme.name,main:BOSSES[bk].name,sub:BOSSES[bk].sub,t:0,dur:2.6,col:'#ff2f5f'};SFX.alarm()}
   else{
-    if(!G.tutMode)pickCrests(); // チュートリアルの訓練場には代紋を置かない
+    if(!G.tutMode&&!theme.ground)pickCrests(); // チュートリアルの訓練場には代紋を置かない
     G.banner=G.tutMode?{top:'— 訓練場 —',main:'TUTORIAL',sub:'操作をひとつずつ体験しよう',t:0,dur:2.3,col:'#7ff3ff'}:
 {top:'— '+theme.name+' —　敵の血で、画面を塗りつぶせ',main:'STAGE '+pad2(n),sub:n>20?'復讐は終わらない —— ENDLESS':STORY[n],t:0,dur:2.3,col:'#b8ff5a'}}
 }
@@ -2374,7 +2436,7 @@ const RAIN=[];for(let i=0;i<160;i++){const d=Math.random();RAIN.push({x:rand(-60
 let SPL=[],splAcc=0,boltT=rand(8,16),bolt=0;
 const rainK=()=>state==='title'||state==='shop'?.4:G.tutMode||G.bonus?0:(theme.rain||0);
 function updateRain(rdt){
-  const rk=rainK();rainAudio(rdt,rk);for(const r of RAIN){r.y+=r.s*rdt;r.x-=r.s*.22*rdt;if(r.y>H+10){r.y=rand(-40,0);r.x=rand(-60,W+160)}}
+  const rk=rainK();rainAudio(rdt,state==='title'||state==='shop'?.6:rk); // タイトルは見た目は控えめ、音は小雨と同じくらいfor(const r of RAIN){r.y+=r.s*rdt;r.x-=r.s*.22*rdt;if(r.y>H+10){r.y=rand(-40,0);r.x=rand(-60,W+160)}}
   if(rk>0&&state!=='title'&&state!=='shop'){splAcc+=rdt*60*rk;while(splAcc>1){splAcc--;SPL.push({x:rand(AX0+4,AX1-4),y:rand(AY0+4,AY1-4),t:0})}}
   for(const p of SPL)p.t+=rdt;SPL=SPL.filter(p=>p.t<.42);
   // どしゃ降りのステージだけ、ときどき遠くで稲光（青白く2回またたく）と雷鳴
@@ -2392,9 +2454,9 @@ function rainAudio(rdt,k){
   RA.t+=rdt;RA.gt-=rdt;if(RA.gt<=0){RA.gt=rand(1.2,4.5);RA.tgt=rand(.5,1.4)}
   RA.gust+=(RA.tgt-RA.gust)*Math.min(1,rdt*.9);RA.lag+=(RA.gust-RA.lag)*Math.min(1,rdt*.4);
   const sh=1+Math.sin(RA.t*2.3)*.07+Math.sin(RA.t*5.7)*.05,now_=AC.currentTime;
-  RA.hi.gn.gain.setTargetAtTime(k*.065*RA.gust*sh,now_,.2);RA.hi.fl.frequency.setTargetAtTime(1700+RA.gust*1100,now_,.3);
-  RA.lo.gn.gain.setTargetAtTime(k*.045*RA.lag,now_,.3);
-  if(k>0){RA.dt-=rdt;if(RA.dt<=0){RA.dt=rand(.04,.3)/(k*RA.gust);noise(.025,rand(.008,.025)*k,'bandpass',rand(2500,6500),0,0,0,2)}}
+  RA.hi.gn.gain.setTargetAtTime(k*.04*RA.gust*sh,now_,.2);RA.hi.fl.frequency.setTargetAtTime(1700+RA.gust*1100,now_,.3);
+  RA.lo.gn.gain.setTargetAtTime(k*.028*RA.lag,now_,.3);
+  if(k>0){RA.dt-=rdt;if(RA.dt<=0){RA.dt=rand(.04,.3)/(k*RA.gust);noise(.025,rand(.005,.016)*k,'bandpass',rand(2500,6500),0,0,0,2)}}
 }
 function drawRainSplash(){
   if(!SPL.length)return;g.lineWidth=1;
@@ -2816,9 +2878,10 @@ function drawWorld(){
   drawRainSplash();
   if(!G.isBossWave&&G.phase==='fight'&&state==='play'){
     // まだ塗られていないタイルは床を明るく浮かせ、角マークでも示す（終盤ほど強く点滅）
-    const pg=prog(),al=pg>.75?.45+Math.sin(G.time*7)*.25:.3+pg*.15;
-    g.fillStyle=`rgba(${theme.hi},${pg>.75?.13+Math.sin(G.time*7)*.05:.11})`;
-    for(let i=0;i<GN;i++){if(DONE[i])continue;const t=tileRect(i);g.fillRect(t.x+1,t.y+1,t.w-2,t.h-2)}
+    // 屋外は地面をタイル張りに見せないよう、序盤は浮かせず角マークも薄く（75%を超えたら屋内と同じく強調）
+    const pg=prog(),out=!!theme.ground&&pg<=.75,al=pg>.75?.45+Math.sin(G.time*7)*.25:(.3+pg*.15)*(out?.55:1);
+    if(!out){g.fillStyle=`rgba(${theme.hi},${pg>.75?.13+Math.sin(G.time*7)*.05:.11})`;
+    for(let i=0;i<GN;i++){if(DONE[i])continue;const t=tileRect(i);g.fillRect(t.x+1,t.y+1,t.w-2,t.h-2)}}
     g.strokeStyle=`rgba(${theme.hi},${al})`;g.lineWidth=1.5;g.beginPath();
     for(let i=0;i<GN;i++){if(DONE[i])continue;const t=tileRect(i),m=5,L=8;
       g.moveTo(t.x+m,t.y+m+L);g.lineTo(t.x+m,t.y+m);g.lineTo(t.x+m+L,t.y+m);
