@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.80 2026-11-01';
+const VERSION='v0.84 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -404,16 +404,22 @@ const SFX={
   glass(){noise(.25,.5,'highpass',3500,7000);tone(2400,1400,.12,'triangle',.08);tone(3100,2100,.1,'triangle',.06,now(.04))},
   // 怨霊の手：低いうめき声と、床へ引きずり込む湿った音
   // 亡者の群れのうめき：声の高さ・母音・揺れの違う声を12人分、少しずつずらして重ねる（大きめの音量）
+  // 怨霊のうめき：高めの、風がうなるような声。細い帯域のノイズの「ひゅうぅ」と、震えるかすれた声の「おぉぉ」を10人分重ねる。
+  // どの声も尻上がりに高くなりながら遠ざかって消えていく（どこかへ連れ去られていく感じ）
   moans(){if(!AC)return;const t0=now();
-    for(let v=0;v<12;v++){const t=t0+v*.045+Math.random()*.08,dur=rand(1.5,2.4),f=rand(70,175),o=AC.createOscillator(),lf=AC.createOscillator(),lg=AC.createGain(),gn=AC.createGain(),
-        f1=AC.createBiquadFilter(),f2=AC.createBiquadFilter(),mix=AC.createGain();
-      o.type='sawtooth';o.frequency.setValueAtTime(f*1.08,t);o.frequency.linearRampToValueAtTime(f,t+.3);o.frequency.exponentialRampToValueAtTime(f*.78,t+dur);
-      lf.frequency.value=rand(3.5,6.5);lg.gain.value=f*.04;lf.connect(lg);lg.connect(o.frequency);
-      f1.type='bandpass';f1.frequency.value=rand(420,700);f1.Q.value=5;f2.type='bandpass';f2.frequency.value=rand(850,1250);f2.Q.value=6;mix.gain.value=.6;
-      o.connect(f1);o.connect(f2);f1.connect(gn);f2.connect(mix);mix.connect(gn);
-      gn.gain.setValueAtTime(.0001,t);gn.gain.exponentialRampToValueAtTime(.16,t+.25);gn.gain.setValueAtTime(.16,t+dur*.6);gn.gain.exponentialRampToValueAtTime(.0001,t+dur);
-      gn.connect(sfxG);o.start(t);lf.start(t);o.stop(t+dur+.05);lf.stop(t+dur+.05)}
-    noise(2,.22,'bandpass',600,300,t0,0,1.5)},
+    for(let v=0;v<10;v++){const t=t0+v*.06+Math.random()*.1,dur=rand(1.6,2.6),fc=rand(520,1100);
+      // 風の声：狭い帯域のノイズの中心を、上がって下がるようにうねらせる
+      const s=AC.createBufferSource();s.buffer=noiseBuf;s.loop=true;const bp=AC.createBiquadFilter(),gn=AC.createGain();bp.type='bandpass';bp.Q.value=rand(14,22);
+      bp.frequency.setValueAtTime(fc*.7,t);bp.frequency.linearRampToValueAtTime(fc*.85,t+dur*.4);bp.frequency.exponentialRampToValueAtTime(fc*2.1,t+dur);
+      gn.gain.setValueAtTime(.0001,t);gn.gain.exponentialRampToValueAtTime(.55,t+.3);gn.gain.exponentialRampToValueAtTime(.32,t+dur*.55);gn.gain.exponentialRampToValueAtTime(.0001,t+dur);
+      s.connect(bp);bp.connect(gn);gn.connect(sfxG);s.start(t,Math.random()*1.5);s.stop(t+dur+.05);
+      // かすれた声：高めの正弦波がゆっくり震えながら下がっていく
+      if(v%2===0){const o=AC.createOscillator(),lf=AC.createOscillator(),lg=AC.createGain(),g2=AC.createGain(),f=rand(330,620);o.type='sine';
+        o.frequency.setValueAtTime(f*.85,t);o.frequency.linearRampToValueAtTime(f,t+dur*.4);o.frequency.exponentialRampToValueAtTime(f*2,t+dur);
+        lf.frequency.value=rand(4,7);lg.gain.value=f*.035;lf.connect(lg);lg.connect(o.frequency);
+        g2.gain.setValueAtTime(.0001,t);g2.gain.exponentialRampToValueAtTime(.06,t+.35);g2.gain.exponentialRampToValueAtTime(.035,t+dur*.55);g2.gain.exponentialRampToValueAtTime(.0001,t+dur);
+        o.connect(g2);g2.connect(sfxG);o.start(t);lf.start(t);o.stop(t+dur+.05);lf.stop(t+dur+.05)}}
+    noise(2.4,.18,'bandpass',700,2600,t0,0,3)},
   hands(){const t=now();SFX.moans();tone(62,38,1.8,'sawtooth',.2,t);tone(93,58,1.7,'sawtooth',.12,t+.04);tone(124,70,1.5,'sine',.3,t+.08);
     noise(1.6,.32,'lowpass',420,90,t+.05,0,1.4);noise(1.2,.14,'bandpass',2600,1400,t+.1,0,6);noise(.9,.1,'bandpass',3400,2000,t+.5,0,7);noise(.6,.28,'bandpass',260,80,t+.7,0,2.5)},
   // 引きずり込まれる者の短い悲鳴（音程が落ちながら震える）
@@ -1708,37 +1714,41 @@ function handVanish(e){
   tone(90,40,.35,'sine',.35);
 }
 function updateHands(rdt){for(const h of HANDS){h.t+=rdt;if(h.e&&!h.e.dead){h.x=h.e.x;h.y=h.e.y}}HANDS=HANDS.filter(h=>h.t<h.dur);handGlow=Math.max(0,handGlow-rdt*1.2);handDark=Math.max(0,handDark-rdt*.55)}
-// ゾンビの腕1本：腐った灰緑の肌（まだらの染み・黒ずんだ傷・裂けて見える骨）、関節のふくらんだ骨ばった指、割れた黒い爪
+// 怨霊の腕1本：黒い影（シルエット）。骨ばった細い前腕、ぼろぼろに破れた付け根、関節で折れ曲がる長い指と鋭い鉤爪。
+// 暗い床でも沈まないよう、紫の淡い逆光の縁取りを付け、腕と指に細い光の筋を入れる。形は腕ごとにばらつかせる
 function zArm(bx,by,mx,my,tx,ty,R,curl,sd,tw){
-  const q=(k,a,b,c)=>(1-k)*(1-k)*a+2*(1-k)*k*b+k*k*c,P_=k=>[q(k,bx,mx,tx),q(k,by,my,ty)];
-  g.lineCap='round';g.lineJoin='round';
-  // 腕：黒い輪郭→腐った肌→まだらの染み
-  g.strokeStyle='#120c08';g.lineWidth=10*R;g.beginPath();g.moveTo(bx,by);g.quadraticCurveTo(mx,my,tx,ty);g.stroke();
-  g.strokeStyle='#6c7556';g.lineWidth=6.5*R;g.beginPath();g.moveTo(bx,by);g.quadraticCurveTo(mx,my,tx,ty);g.stroke();
-  g.strokeStyle='rgba(160,170,130,.35)';g.lineWidth=2*R;g.beginPath();g.moveTo(bx-1.5*R,by);g.quadraticCurveTo(mx-1.5*R,my,tx-1.5*R,ty);g.stroke();
-  for(let k=1;k<5;k++){const [x,y]=P_(k/5);circ(x+Math.sin(sd*7+k)*2*R,y,(1.4+((sd*13+k)%2))*R,k%2?'rgba(60,40,70,.55)':'rgba(40,55,30,.6)')}
-  // 裂けた傷口から、黒い血と白い骨
-  {const [wx,wy]=P_(.45);g.strokeStyle='#3a0a0c';g.lineWidth=4*R;g.beginPath();g.moveTo(wx-3*R,wy+1);g.lineTo(wx+3*R,wy-1);g.stroke();
-    g.strokeStyle='#e8e2cf';g.lineWidth=1.4*R;g.beginPath();g.moveTo(wx-1.5*R,wy+.5);g.lineTo(wx+2*R,wy-.5);g.stroke();
-    if(((sd*10)|0)%2)circ(wx+1,wy+4*R+((G.time*40+sd*50)%10),1.1*R,'#2a0406')}
-  // 手のひら（腕の向きに沿った骨ばった形）
-  const ang=Math.atan2(ty-my,tx-mx),c=Math.cos(ang),s_=Math.sin(ang);
-  g.save();g.translate(tx,ty);g.rotate(ang);
-  g.fillStyle='#120c08';g.beginPath();g.ellipse(2*R,0,6.5*R,5.2*R,0,0,TAU);g.fill();
-  g.fillStyle='#6c7556';g.beginPath();g.ellipse(2*R,0,5*R,4*R,0,0,TAU);g.fill();
-  circ(1*R,-1.5*R,1.2*R,'rgba(60,40,70,.6)');
-  // 指：根元・中・先の3節。つかむほど内側へ曲がる。関節はふくらみ、先には骨と割れた爪
-  for(let j=0;j<5;j++){
-    const thumb=j===0,base=thumb?-1.25:-.55+(j-1)*.37,len=(thumb?5:j===4?5.5:7.5)*R,spread=thumb?-1:1;
-    let x=2*R+Math.cos(base)*4*R,y=Math.sin(base)*4*R,a=base*.35+(thumb?-.9:0);
-    const pts=[[x,y]];
-    for(let k=0;k<3;k++){a+=(thumb?.35:.55)*curl*(k?1:.6)*(j<2?-1:1)*-spread+Math.sin(G.time*16+j+sd)*.05*tw;const l=len*(k===0?1:k===1?.8:.6);x+=Math.cos(a)*l;y+=Math.sin(a)*l;pts.push([x,y])}
-    g.strokeStyle='#120c08';g.lineWidth=3.6*R;g.beginPath();pts.forEach(([px,py],k)=>k?g.lineTo(px,py):g.moveTo(px,py));g.stroke();
-    g.strokeStyle='#76805e';g.lineWidth=2*R;g.beginPath();pts.forEach(([px,py],k)=>k?g.lineTo(px,py):g.moveTo(px,py));g.stroke();
-    for(let k=1;k<3;k++)circ(pts[k][0],pts[k][1],1.35*R,'#5a6247');
-    const [ex,ey]=pts[3],[px2,py2]=pts[2],na=Math.atan2(ey-py2,ex-px2);
-    if((j+((sd*7)|0))%4===1){g.strokeStyle='#ece6d4';g.lineWidth=1.3*R;g.beginPath();g.moveTo(px2,py2);g.lineTo(ex+Math.cos(na)*1.5*R,ey+Math.sin(na)*1.5*R);g.stroke()} // 肉が落ちて骨が出た指
-    else{g.fillStyle='#0a0806';g.beginPath();g.moveTo(ex-Math.sin(na)*1.2*R,ey+Math.cos(na)*1.2*R);g.lineTo(ex+Math.cos(na)*2.6*R,ey+Math.sin(na)*2.6*R);g.lineTo(ex+Math.sin(na)*1.2*R,ey-Math.cos(na)*1.2*R);g.closePath();g.fill()}}
+  const Lr=Math.hypot(tx-bx,ty-by)||1,ang=Math.atan2(ty-by,tx-bx),rn=k=>{const v=Math.sin(sd*12.9898+k*78.233)*43758.5453;return v-Math.floor(v)};
+  const bend=(rn(1)-.5)*.5*Lr,w0=3.3*R,w1=1.7*R;
+  // 前腕の輪郭（付け根は破れてギザギザ）
+  const arm=[];for(let k=0;k<=6;k++){const t=k/6,x=t*Lr,y=Math.sin(t*Math.PI)*bend*.3,w=lerp(w0,w1,t)*(1+Math.sin(t*11+sd)*.08);arm.push([x,y-w])}
+  const armB=[];for(let k=6;k>=0;k--){const t=k/6,x=t*Lr,y=Math.sin(t*Math.PI)*bend*.3,w=lerp(w0,w1,t)*(1+Math.sin(t*13+sd*2)*.08);armB.push([x,y+w])}
+  const rag=[[0,w0],[-1.6*R,w0*.55],[.4*R,w0*.15],[-2.2*R,-w0*.2],[-.2*R,-w0*.55],[-1.2*R,-w0*.9]];
+  // 指：4本＋親指。付け根→中→先の3節で、指ごとに曲がり方が違い、つかむほど深く折れる
+  const fingers=[];
+  for(let jx=0;jx<5;jx++){const thumb=jx===4,fy=thumb?-2.6*R:(-2.1+jx*1.4)*R,fx=thumb?Lr+.8*R:Lr+3.6*R;
+    let a=thumb?-1.05:(jx-1.5)*.2+(rn(jx+3)-.5)*.35,x=fx,y=fy;const pts=[[x,y]];
+    const lens=thumb?[3.2,2.6]:[4.2,3.4,2.8].map(v=>v*(jx===3?.8:1)*(.9+rn(jx+9)*.25));
+    for(let k=0;k<lens.length;k++){a+=(.35+rn(jx*3+k)*.45)*curl*(fy<0?1:-1)*(thumb?-1:1)+(k?(rn(jx+k*5)-.5)*.6:0)+Math.sin(G.time*15+jx*1.7+sd)*.05*tw;
+      x+=Math.cos(a)*lens[k]*R;y+=Math.sin(a)*lens[k]*R;pts.push([x,y])}
+    fingers.push({pts,a,thumb})}
+  g.save();g.translate(bx,by);g.rotate(ang);g.lineCap='round';g.lineJoin='round';
+  const shape=(col,ext)=>{
+    g.fillStyle=col;g.strokeStyle=col;
+    g.beginPath();rag.forEach(([x,y],k)=>k?g.lineTo(x,y):g.moveTo(x,y));arm.forEach(([x,y])=>g.lineTo(x,y));
+    // 手の甲（手首から指の付け根へ広がる）
+    g.lineTo(Lr+3.8*R,-2.9*R);g.lineTo(Lr+4.2*R,2.9*R);armB.forEach(([x,y])=>g.lineTo(x,y));g.closePath();g.fill();if(ext){g.lineWidth=ext;g.stroke()}
+    for(const fg of fingers){const n=fg.pts.length;
+      for(let k=1;k<n;k++){g.lineWidth=(fg.thumb?1.7:1.5)*R*(1-(k-1)*.22)+ext;g.beginPath();g.moveTo(fg.pts[k-1][0],fg.pts[k-1][1]);g.lineTo(fg.pts[k][0],fg.pts[k][1]);g.stroke()}
+      // 鋭い鉤爪：先へ細く伸び、少し下へ曲がる
+      const [ex,ey]=fg.pts[n-1],ca=fg.a+.35*(fg.pts[0][1]<0?1:-1),cl=2.4*R;
+      g.beginPath();g.moveTo(ex-Math.sin(fg.a)*.6*R,ey+Math.cos(fg.a)*.6*R);g.quadraticCurveTo(ex+Math.cos(fg.a)*cl*.7,ey+Math.sin(fg.a)*cl*.7,ex+Math.cos(ca)*cl,ey+Math.sin(ca)*cl);
+      g.lineTo(ex+Math.sin(fg.a)*.6*R,ey-Math.cos(fg.a)*.6*R);g.closePath();g.fill();if(ext)g.stroke()}};
+  shape('rgba(150,70,235,.55)',2.4); // 逆光の縁取り
+  shape('#09080b',0);                // 黒い影
+  // 細い光の筋（前腕と指の骨に沿って）
+  g.strokeStyle='rgba(215,205,235,.45)';g.lineWidth=.7;g.beginPath();
+  g.moveTo(Lr*.12,-w0*.35);g.quadraticCurveTo(Lr*.5,-w0*.5+bend*.15,Lr*.9,-w1*.4);
+  g.stroke();
   g.restore();
 }
 function drawHands(){
@@ -1751,20 +1761,26 @@ function drawHands(){
     g.strokeStyle=`rgba(150,60,220,${.55*fade})`;g.lineWidth=1.5;g.beginPath();g.ellipse(h.x,h.y+4,pr*(1+Math.sin(h.t*20)*.06),pr*.42,0,0,TAU);g.stroke();
     if(h.t<.25&&Math.random()<.5)fx({k:'b',x:h.x+rand(-pr,pr),y:h.y+4,vx:rand(-60,60),vy:rand(-160,-60),life:.35,max:.35,sz:rand(1.5,3),col:pick(['#2a1a10','#3a0a0c','#1a1208'])});
     if(!h.deco){glow(h.x,h.y,46,'#5a20b0',.4*fade);
-      // 沼の底から見上げる、腐った亡者の顔（落ちくぼんだ目・ひきつった口）
-      if(h.t>.15){const fa=Math.min(1,(h.t-.15)/.25)*fade,fy=h.y+5;g.globalAlpha=fa*.9;g.fillStyle='#7d8466';g.beginPath();g.ellipse(h.x,fy,9.5,6.5,0,0,TAU);g.fill();
-        g.fillStyle='#050008';g.beginPath();g.ellipse(h.x-3.6,fy-1.6,2.3,1.9,0,0,TAU);g.ellipse(h.x+3.6,fy-1.6,2.3,1.9,0,0,TAU);g.fill();
-        circ(h.x-3.6,fy-1.6,.7,'#d8d0b0');circ(h.x+3.6,fy-1.6,.7,'#d8d0b0');
-        g.beginPath();g.ellipse(h.x,fy+2.8,2.6,1.6+Math.abs(Math.sin(h.t*22))*1.2,0,0,TAU);g.fill();g.globalAlpha=fade}}
-    for(let k=0;k<h.n;k++){
-      // 沼の縁から四方に生え、敵の体（胴・脚・肩）を外側からつかむ。飾りの手は宙をかきむしる
-      const a=k/h.n*TAU+h.seed,tw=Math.sin(h.t*18+k*1.7)*3,bx=h.x+Math.cos(a)*(h.deco?4:24)*R,by=h.y+4+Math.sin(a)*9*R,
-        hh=h.deco?(26+((k*7+h.seed*3)%12))*grow*R:(6+((k*5+h.seed*3)%3)*7)*grow*R,
-        tx=h.deco?h.x+Math.cos(a)*10*R+tw:h.x+Math.cos(a)*11*R+tw,ty=h.deco?h.y-8*R-hh*.6+(1-grow)*24:h.y-hh+Math.sin(a)*4*R+(1-grow)*20,
-        mx=(bx+tx)/2+Math.cos(a)*(h.deco?10:7)*R,my=Math.min(by,ty)-(h.deco?hh*.25:10*R),curl=Math.min(1,h.t/.55)*(h.deco?.35:1);
-      zArm(bx,by,mx,my,tx,ty,R*.95,curl,h.seed+k,h.deco?.5:1)}
+      // 沼の中で、沈んだ亡者たちの青白い指先がうごめく
+      if(h.t>.1){g.globalAlpha=fade*.7;for(let k=0;k<5;k++){const ax=h.x+Math.cos(k*1.3+h.seed)*12,ay=h.y+5+Math.sin(k*1.7+h.seed)*3,ln=2+Math.abs(Math.sin(h.t*9+k))*3;
+        g.strokeStyle='#120a18';g.lineWidth=1.4;g.lineCap='round';g.beginPath();g.moveTo(ax,ay);g.lineTo(ax+Math.sin(h.t*7+k),ay-ln);g.stroke()}g.globalAlpha=fade}}
+    // 飾りの手（獲物のいない血の床）：沼から真上へ伸び、宙をかきむしる。腕は人物と一緒に後で描く（drawHandArms）
     // 立ちのぼる瘴気
     if(Math.random()<.3)fx({k:'powder',x:h.x+rand(-12,12),y:h.y,vx:rand(-10,10),vy:rand(-70,-30),life:.6,max:.6,sz:rand(2,4),col:'#5a3a70'});
+    g.restore()}
+}
+// 怨霊の腕：人物より後（手前）に描く。獲物の手は沼の縁の左右・手前から伸びて、体（腰・胸・肩）をつかむ
+function drawHandArms(){
+  for(const h of HANDS){if(h.t<0)continue;const p=clamp(h.t/h.dur,0,1),grow=easeOut(Math.min(1,h.t/.3)),fade=p>.82?(1-p)/.18:1;
+    g.save();g.globalAlpha=fade;
+    if(h.deco){const R=1.15,tw=Math.sin(h.t*12+h.seed)*3,L=(30+(h.seed*7)%12)*grow;
+      for(let k=0;k<h.n;k++){const a=-Math.PI/2+(k-(h.n-1)/2)*.5+Math.sin(h.seed+k)*.2,bx=h.x+Math.cos(a+Math.PI/2)*4*(k-(h.n-1)/2),by=h.y+4;
+        zArm(bx,by,bx+Math.cos(a)*L*.5+tw,by+Math.sin(a)*L*.5,bx+Math.cos(a)*L+tw,by+Math.sin(a)*L,R,Math.min(1,h.t/.5)*.45,h.seed+k,.6)}}
+    else{const R=1.25,n=h.e&&h.e.boss?3:2+((h.seed*10|0)%2);
+      // 左右（3本なら手前も）の沼の縁から、斜め上へ伸びて敵の肩・胴をつかむ
+      for(let k=0;k<n;k++){const side=n===3&&k===2?0:(k?1:-1),tw=Math.sin(h.t*16+k*1.7)*1.5,rise=grow;
+        const bx=h.x+side*20,by=h.y+8,tx=h.x+side*7+tw,ty=h.y+8-(26*rise)+(side?0:-4),mx=h.x+side*19,my=h.y-6*rise;
+        zArm(bx,by,mx,my,tx,ty,R,Math.min(1,h.t/.45),h.seed+k,1)}}
     g.restore()}
 }
 function drawHandDark(){if(handDark<=0)return;const a=Math.min(1,handDark*1.4);
@@ -3393,6 +3409,7 @@ function drawWorld(){
     }
   }
   if(!P.dead&&state!=='title')drawPlayerGauges();
+  drawHandArms(); // 怨霊の腕は人物の手前に重ねる
   // bullets
   for(const b of B){
     if(b.friendly){
