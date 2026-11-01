@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.57 2026-11-01';
+const VERSION='v0.58 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -77,23 +77,24 @@ function glow(x,y,r,col,a){if(a<=0)return;g.globalCompositeOperation='lighter';g
 
 /* ---------------- background (pre-rendered) ---------------- */
 // ステージ（WAVE）ごとの床の色味。血の赤が映えるよう、床そのものは赤系にしない。11WAVE目以降は繰り返し
-// base:床の地色 grid:目地の色 refl:濡れた路面に映るネオン2色 hi:未塗りタイルの浮き上がり色 tube:左右ネオン管 mark:路面標示
+// base:床の地色 grid:目地の色 refl:濡れた路面に映るネオン2色 hi:未塗りタイルの浮き上がり色 tube:（未使用）mark:路面標示
+// rain:雨の強さ（屋外のステージだけ。1=どしゃ降り＋遠雷 .6=小雨。屋内は降らない。ただの雰囲気で、遊びには影響しない）
 const THEMES=[
-  {name:'雨の路地裏',     base:'#0c0e15',grid:'120,140,175',refl:['60,150,255','255,50,130'],hi:'175,205,240',tube:['#ff2f7a','#29e6ff','#b45cff'],mark:'止まれ'},
-  {name:'歌舞伎町',       base:'#1f0f33',grid:'175,125,215',refl:['255,60,210','80,200,255'],hi:'215,180,255',tube:['#ff3fd0','#3fd8ff','#ffd23f'],mark:'徐行',gim:'bottle',win:true},
-  {name:'港の倉庫街',     base:'#082428',grid:'100,175,180',refl:['40,220,210','255,150,60'],hi:'150,235,230',tube:['#2fffe0','#ff9a3f','#2f8cff'],mark:'立入禁止',gim:'dyn'},
-  {name:'赤提灯の横丁',   base:'#2a1a0b',grid:'200,155,100',refl:['255,150,50','255,215,120'],hi:'245,215,165',tube:['#ffa02f','#ffd76a','#ff6a3f'],mark:'一方通行',gim:'oil',win:true},
-  {name:'霧島の縄張り',   base:'#171a24',grid:'190,195,215',refl:['220,230,255','150,170,255'],hi:'215,222,240',tube:['#e8ecff','#7f9cff','#c0c8ff'],mark:'霧島組'},
+  {name:'雨の路地裏',     base:'#0c0e15',grid:'120,140,175',refl:['60,150,255','255,50,130'],hi:'175,205,240',tube:['#ff2f7a','#29e6ff','#b45cff'],mark:'止まれ',rain:1},
+  {name:'歌舞伎町',       base:'#1f0f33',grid:'175,125,215',refl:['255,60,210','80,200,255'],hi:'215,180,255',tube:['#ff3fd0','#3fd8ff','#ffd23f'],mark:'徐行',gim:'bottle',win:true,rain:.6},
+  {name:'港の倉庫街',     base:'#082428',grid:'100,175,180',refl:['40,220,210','255,150,60'],hi:'150,235,230',tube:['#2fffe0','#ff9a3f','#2f8cff'],mark:'立入禁止',gim:'dyn',rain:.6},
+  {name:'赤提灯の横丁',   base:'#2a1a0b',grid:'200,155,100',refl:['255,150,50','255,215,120'],hi:'245,215,165',tube:['#ffa02f','#ffd76a','#ff6a3f'],mark:'一方通行',gim:'oil',win:true,rain:.6},
+  {name:'霧島の縄張り',   base:'#171a24',grid:'190,195,215',refl:['220,230,255','150,170,255'],hi:'215,222,240',tube:['#e8ecff','#7f9cff','#c0c8ff'],mark:'霧島組',rain:.6},
   {name:'立体駐車場',     base:'#132213',grid:'150,180,140',refl:['170,255,90','255,230,80'],hi:'195,235,180',tube:['#b8ff5a','#ffe85a','#5affb0'],mark:'P',gim:'tires'},
   {name:'廃工場',         base:'#261f0d',grid:'190,165,95',refl:['255,190,60','120,200,255'],hi:'235,215,160',tube:['#ffc23f','#ff7a2f','#6fc8ff'],mark:'危険',gim:'beam'},
-  {name:'雨のビル屋上',   base:'#0b1834',grid:'115,150,225',refl:['80,140,255','190,110,255'],hi:'165,195,250',tube:['#4f8cff','#b46cff','#ffffff'],mark:'H',gim:'edge'},
+  {name:'雨のビル屋上',   base:'#0b1834',grid:'115,150,225',refl:['80,140,255','190,110,255'],hi:'165,195,250',tube:['#4f8cff','#b46cff','#ffffff'],mark:'H',gim:'edge',rain:1},
   {name:'地下駐車場',     base:'#0b2419',grid:'115,195,150',refl:['80,255,160','230,255,120'],hi:'165,240,200',tube:['#4fffa0','#d8ff5a','#4fd0ff'],mark:'出口',gim:'ext'},
   {name:'鬼頭組 本家',    base:'#21102c',grid:'210,175,95',refl:['255,200,70','170,90,255'],hi:'235,210,160',tube:['#ffd23f','#a05cff','#ff9a3f'],mark:'鬼頭組'},
   // STAGE 11〜20 用
   {name:'霧島組 事務所',   base:'#1a1418',grid:'200,190,200',refl:['230,230,255','255,80,110'],hi:'225,215,230',tube:['#f0f0ff','#ff4d6d','#c8c8ff'],mark:'霧島組'},
   {name:'高架下の闇市',   base:'#1d0f0a',grid:'210,140,110',refl:['255,120,60','255,60,90'],hi:'240,190,170',tube:['#ff7a3f','#ff3f6a','#ffd06a'],mark:'闇市',gim:'bottle',win:true},
-  {name:'中華街',         base:'#2a0a0e',grid:'220,120,110',refl:['255,60,60','255,200,80'],hi:'245,185,175',tube:['#ff3a3a','#ffd23f','#ff8a3f'],mark:'中華街',gim:'dyn',win:true},
-  {name:'埠頭のコンテナ置き場',base:'#0a1a26',grid:'110,160,200',refl:['60,170,255','255,120,60'],hi:'160,205,240',tube:['#3fa8ff','#ff7a3f','#7fffd0'],mark:'コンテナ',gim:'cart'},
+  {name:'中華街',         base:'#2a0a0e',grid:'220,120,110',refl:['255,60,60','255,200,80'],hi:'245,185,175',tube:['#ff3a3a','#ffd23f','#ff8a3f'],mark:'中華街',gim:'dyn',win:true,rain:.6},
+  {name:'埠頭のコンテナ置き場',base:'#0a1a26',grid:'110,160,200',refl:['60,170,255','255,120,60'],hi:'160,205,240',tube:['#3fa8ff','#ff7a3f','#7fffd0'],mark:'コンテナ',gim:'cart',rain:.6},
   {name:'解体中のビル',   base:'#1e1c1a',grid:'190,180,160',refl:['255,210,90','150,160,180'],hi:'225,215,195',tube:['#ffd23f','#c8c8c8','#ff9a3f'],mark:'工事中',gim:'beam'},
   {name:'白鷺クリーニング工場',base:'#0f1c22',grid:'170,215,230',refl:['120,220,255','230,250,255'],hi:'200,235,245',tube:['#7fe0ff','#e8fbff','#4fb0ff'],mark:'白鷺'}
 ];
@@ -2368,10 +2369,32 @@ function updateBoss(e,dt,d,toP){
 }
 
 /* ---------------- main update ---------------- */
-const RAIN=[];for(let i=0;i<70;i++)RAIN.push({x:rand(0,W+200),y:rand(0,H),s:rand(600,900),l:rand(10,22)});
+// 雨：奥行きd（0=遠い 1=近い）で太さ・明るさ・速さを変えた雨筋と、床に落ちて広がる波紋
+const RAIN=[];for(let i=0;i<160;i++){const d=Math.random();RAIN.push({x:rand(-60,W+160),y:rand(0,H),d,s:650+d*600,l:12+d*26})}
+let SPL=[],splAcc=0,boltT=rand(8,16),bolt=0;
+const rainK=()=>state==='title'||state==='shop'?.7:G.tutMode||G.bonus?0:(theme.rain||0);
+function updateRain(rdt){
+  const rk=rainK();for(const r of RAIN){r.y+=r.s*rdt;r.x-=r.s*.22*rdt;if(r.y>H+10){r.y=rand(-40,0);r.x=rand(-60,W+160)}}
+  if(rk>0&&state!=='title'&&state!=='shop'){splAcc+=rdt*60*rk;while(splAcc>1){splAcc--;SPL.push({x:rand(AX0+4,AX1-4),y:rand(AY0+4,AY1-4),t:0})}}
+  for(const p of SPL)p.t+=rdt;SPL=SPL.filter(p=>p.t<.42);
+  // どしゃ降りのステージだけ、ときどき遠くで稲光（青白く2回またたく）と雷鳴
+  bolt=Math.max(0,bolt-rdt);
+  if(rk>=1&&state==='play'){boltT-=rdt;if(boltT<=0){boltT=rand(14,26);bolt=.5;noise(2.2,.3,'lowpass',380,50,now(.35));tone(55,32,1.8,'sine',.25,now(.35))}}
+}
+function drawRainSplash(){
+  if(!SPL.length)return;g.lineWidth=1;
+  for(const p of SPL){const q=p.t/.42,rx=2+q*9;g.strokeStyle=`rgba(195,215,255,${(1-q)*.55})`;g.beginPath();g.ellipse(p.x,p.y,rx,rx*.4,0,0,TAU);g.stroke();
+    if(q<.45){const k=q/.45,up=-14*k+20*k*k;g.fillStyle=`rgba(215,230,255,${.7*(1-k)})`;g.fillRect(p.x-2-k*5,p.y+up,1.4,1.4);g.fillRect(p.x+1+k*5,p.y+up*.8,1.4,1.4)}}
+}
+function drawRain(k){
+  if(k<=0)return;const n=Math.round(RAIN.length*k);g.lineCap='round';
+  // 遠い・中・近いの3層に分けて描く（近いほど太く明るい）
+  for(let b=0;b<3;b++){g.strokeStyle=`rgba(${b===2?'215,228,255':'170,195,245'},${[.16,.26,.4][b]*(.6+k*.4)})`;g.lineWidth=[.8,1.2,1.9][b];g.beginPath();
+    for(let i=0;i<n;i++){const r=RAIN[i];if(Math.min(2,Math.floor(r.d*3))!==b)continue;g.moveTo(r.x,r.y);g.lineTo(r.x+r.l*.22,r.y-r.l)}g.stroke()}
+}
 function update(rdt){
   stateT+=rdt;
-  for(const r of RAIN){r.y+=r.s*rdt;r.x-=r.s*.25*rdt;if(r.y>H){r.y=-20;r.x=rand(0,W+200)}}
+  updateRain(rdt);
   if(state==='title'||state==='shop'){G.time+=rdt;return}
   if(state==='ad'){if(stateT>AD_T&&adCb){const f=adCb;adCb=null;f()}return}
   if(state==='bres'){updateBres(rdt);return}
@@ -2773,8 +2796,9 @@ function wantsBang(e){return (e.state==='windup'&&e.st<.3)||(e.state==='aim'&&e.
 /* ---------------- world draw ---------------- */
 function drawWorld(){
   g.drawImage(bgC,0,0,W,H);
-  // ウェーブ間は血が雨に洗い流されていく
+  // ステージクリア後の休憩中は、床の血をゆっくり薄くしていく（次のステージは新しい床から始まるため。雨とは関係ない）
   g.globalAlpha=G.phase==='break'?clamp(G.breakT/1.2,0,1):1;g.drawImage(decC,0,0,W,H);g.globalAlpha=1;
+  drawRainSplash();
   if(!G.isBossWave&&G.phase==='fight'&&state==='play'){
     // まだ塗られていないタイルは床を明るく浮かせ、角マークでも示す（終盤ほど強く点滅）
     const pg=prog(),al=pg>.75?.45+Math.sin(G.time*7)*.25:.3+pg*.15;
@@ -2877,8 +2901,7 @@ function drawWorld(){
     else{const sc=t.t<.08?1.5-t.t/.08*.5:1;txt(t.txt,t.x,t.y,Math.round(t.size*sc),t.col,'center',EN,['#000',3],true)}
     g.globalAlpha=1;
   }
-  g.strokeStyle='rgba(160,190,255,.13)';g.lineWidth=1;g.beginPath();
-  for(const r of RAIN){g.moveTo(r.x,r.y);g.lineTo(r.x+r.l*.25,r.y-r.l)}g.stroke();
+  drawRain(rainK());
 }
 function drawSlash(){
   const a=P.atk;if(!a||P.dead)return;
@@ -2985,6 +3008,9 @@ function drawControls(){
   g.restore();
 }
 function drawOverlays(){
+  // 雨のステージは全体を少し青く湿らせる。稲光は青白く2回またたく
+  {const rk=rainK();if(rk>0&&state!=='title'){g.fillStyle=`rgba(40,60,110,${.07*rk})`;g.fillRect(0,0,W,H)}
+   if(bolt>0){const a=bolt>.38?.22:bolt>.3?0:bolt>.18?.3*(bolt-.18)/.12:0;if(a>0){g.fillStyle=`rgba(200,215,255,${a})`;g.fillRect(0,0,W,H)}}}
   // 怨念解放の間は、画面の縁を赤黒く沈めて主人公の周りに目を向けさせる
   if(G.rageFx){const a=(1-G.rageFx.t/G.rageFx.dur)*.45,vg=g.createRadialGradient(vx(P.x),vy(P.y),G.rageFx.R*VS*.9,vx(P.x),vy(P.y),H*.9);vg.addColorStop(0,'rgba(40,0,8,0)');vg.addColorStop(1,`rgba(40,0,8,${a})`);g.fillStyle=vg;g.fillRect(0,0,W,H)}
   // 塗るほど照明が赤く染まる（進み具合を数字でなく雰囲気で感じさせる）
@@ -3067,7 +3093,7 @@ function drawTitle(){
   if(titleArt()){const ta=titleArt(),h=531,w=h*ta.width/ta.height,bob=Math.sin(G.time*1.2)*3;g.drawImage(ta,W/2-w/2,232+bob,w,h)}
   glow(W/2,470,150,'#ff1030',.18+Math.sin(G.time*2)*.05);
   const gr=g.createLinearGradient(0,0,0,H);gr.addColorStop(0,'rgba(4,4,8,.94)');gr.addColorStop(.42,'rgba(4,4,8,.72)');gr.addColorStop(.62,'rgba(4,4,8,.2)');gr.addColorStop(1,'rgba(4,4,8,.88)');g.fillStyle=gr;g.fillRect(0,0,W,H);
-  g.strokeStyle='rgba(160,190,255,.13)';g.lineWidth=1;g.beginPath();for(const r of RAIN){g.moveTo(r.x,r.y);g.lineTo(r.x+r.l*.25,r.y-r.l)}g.stroke();
+  drawRain(rainK());
   // プロローグ：空行は半分の高さに詰め、タイトルロゴ(上端≒y255)より上に収める
   let py=60;const last=PROLOGUE.length-1;
   PROLOGUE.forEach((l,i)=>{if(!l){py+=10;return}const a=clamp((stateT-i*.6)/.86,0,1),red=l.startsWith('——')||i===last;g.globalAlpha=a;txt(l,W/2,py,13,red?'#ff4d6d':'#c9cfdc','center',JP,null,false,red?900:500);py+=20});
