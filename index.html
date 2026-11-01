@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.34 2026-11-01';
+const VERSION='v0.35 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -449,21 +449,12 @@ function spark(x,y,ang,big){
   const n=big?9:5;for(let i=0;i<n;i++){const a=ang+rand(-1.1,1.1),s=rand(350,big?850:600),l=rand(.08,.18);fx({k:'s',x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:l,max:l})}
   fx({k:'f',x,y,r:big?42:26,life:.09,max:.09,a:rand(0,TAU)});
 }
-// まとめ倒しの血の判：MK_GAP秒以内に3体以上倒すと、倒した場所の中心に大きな血の跡を押し、半径内のマスを塗り切る
-// 文字は出さず、跡の大きさと手応え（揺れ・ヒットストップ・音）だけで伝える
+// まとめ倒しの手応え：MK_GAP秒以内に3体以上倒すと、揺れ・ヒットストップ・音・衝撃の輪で「決まった」感を出す
+// 床は塗らない（塗りは1体ごとの血しぶきと死体の跡だけ、というルールを崩さないため）
 const MK_GAP=.2;
 function multiStamp(list){
   const n=list.length;let x=0,y=0;for(const p of list){x+=p.x;y+=p.y}x/=n;y/=n;
-  const R=Math.min(105,50+(n-3)*15),d=decG;
-  // 血の判：中心の濃い溜まり＋放射状の飛沫
-  d.fillStyle='rgba(95,0,12,.75)';d.beginPath();d.arc(x,y,R*.42,0,TAU);d.fill();
-  for(let k=0;k<22;k++){const a=k/22*TAU+rand(-.12,.12),l=R*rand(.55,1.05);
-    d.fillStyle=`rgba(${irand(100,150)},0,${irand(8,20)},${rand(.5,.8).toFixed(2)})`;
-    d.beginPath();d.moveTo(x+Math.cos(a-.09)*R*.35,y+Math.sin(a-.09)*R*.35);d.lineTo(x+Math.cos(a)*l,y+Math.sin(a)*l);d.lineTo(x+Math.cos(a+.09)*R*.35,y+Math.sin(a+.09)*R*.35);d.fill();
-    d.beginPath();d.arc(x+Math.cos(a)*l,y+Math.sin(a)*l,rand(2.5,6),0,TAU);d.fill()}
-  for(let i=0;i<GN;i++){if(DONE[i])continue;const t=tileRect(i);if(dist(x,y,t.x+t.w/2,t.y+t.h/2)<R)fillTile(i)}
-  RINGS.push({x,y,r:R*.3,R:R+30,t:0,dur:.4,col:'255,40,70',w:14});
-  bloodBurst(x,y,rand(0,TAU),24+n*4,520);
+  RINGS.push({x,y,r:20,R:Math.min(150,90+(n-3)*15),t:0,dur:.4,col:'255,40,70',w:14});
   addShake(10+n*2);G.hitstop=Math.max(G.hitstop,.08);G.flash=Math.max(G.flash,.25);G.flashCol='255,20,50';SFX.boom();
 }
 function splat(x,y,r,ang){
