@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.45 2026-11-01';
+const VERSION='v0.46 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -311,7 +311,8 @@ const TYPES={
   gunner:{r:13,hp:3,spd:62,dmg:10,val:150},
   bazooka:{r:15,hp:5,spd:50,dmg:22,val:350},
   cleaner:{r:12,hp:2.5,spd:105,dmg:0,val:300},
-  brute:{r:20,hp:12,spd:48,dmg:20,val:400,armor:true}
+  brute:{r:20,hp:12,spd:48,dmg:20,val:400,armor:true},
+  onmyo:{r:13,hp:6,spd:70,dmg:10,val:600}
 };
 const STORY=['','あの夜の借りを、返しに来た。','一人残らず、地獄へ送る。','銃なんて怖くない。もう死んでるから。','用心棒？ 骨ごと砕く。','','まだ足りない。全然足りない。','ロケットごと、まとめて送り返す。','鬼頭組の看板、叩き割ってやる。','あと少し。あの男の匂いがする。','',
   '霧島は沈んだ。闇市の灯りごと、焼き払う。','爆竹の音に紛れて、首を獲る。','海に沈めてやる。全員まとめて。','血を消す男がいる。なら、もっと流すだけ。','',
@@ -361,7 +362,7 @@ function startWave(n){
   if(!G.tutMode){
     if(G.gim)G.cards.push({tag:'GIMMICK',title:GIMMICKS[G.gim].name,body:GIMMICKS[G.gim].hint,col:'#7ff3ff'});
     else if(n===1)G.cards.push({tag:'RULE',title:'囲い込み制圧',body:'塗ったマスで囲むと、中が一気に血で染まる',col:'#ff4d6d'});
-    if(WINS.length&&!SEEN.has('win')){markSeen('win');G.cards.push({tag:'GIMMICK',title:'窓からの投擲',body:'窓に顔を出した敵が斧を投げてくる。攻撃で弾き返せ——窓に打ち返せば撃退できる',col:'#ffb040'})}
+    if(WINS.length&&!SEEN.has('door')){markSeen('door');G.cards.push({tag:'GIMMICK',title:'ドアからの投擲',body:'ドアが開くと、戸口の敵が斧を投げてくる。攻撃で弾き返せ——戸口に打ち返せば撃退できる',col:'#ffb040'})}
     // ボス戦のルールは初めての時だけ案内（白鷺は個別にもう1枚）
     if(bk&&!SEEN.has('bossrule')){markSeen('bossrule');G.cards.push({tag:'BOSS',title:'ボスは血に弱い',body:'血溜まりの上に立つボスは、動きが鈍り、受けるダメージが1.5倍。体力が半分を切ると、天井から柱が落ちてくる',col:'#ff2f5f'})}
     if(bk==='shirasagi'&&!SEEN.has('boss_shirasagi')){markSeen('boss_shirasagi');G.cards.push({tag:'BOSS',title:'潔癖の男・白鷺',body:'拳銃とナイフは攻撃で弾き返せる。血の上に長くいると立ち止まって掃除を始める——その間は総攻撃のチャンス',col:'#40c8ff'})}
@@ -451,10 +452,10 @@ function updateWave(dt){
           const fresh=kinds.filter(k=>!G.seenSub[k]);for(const k of kinds)G.seenSub[k]=true;
           if(fresh.length){const f=CLEANER_INFO[fresh[fresh.length-1]];callout(f[0],f[1],'#5ab8ff');G.callout.dur=2.4}
           else popText(W/2,AY0+40,'掃除屋 ×'+crew,'#5ab8ff',16,1.2)}}
-      // 大群ラッシュ：STAGE2以降、ステージの途中で一度（長引けばもう一度）、一撃で倒れる雑魚が8秒間どっと押し寄せる
-      // まとめ斬り（まとめ倒しの血の判）を気持ちよく決めるための息抜き
-      if(G.wave>=2&&!G.tut){G.rushT-=dt;if(G.rushT<=0&&G.rush<=0&&prog()<.9){G.rush=8;G.rushT=rand(40,55);callout('式神襲来！','呪術師が放った紙の人形——まとめて斬り裂け','#ff8a30');G.callout.dur=1.8;SFX.alarm()}}
-      if(G.rush>0){G.rush-=dt;G.rushSp-=dt;if(G.rushSp<=0&&alive<Math.min(5+Math.ceil(G.wave*.7),11)+16){G.rushSp=.28;for(let k=0;k<2;k++){queueSpawn(Math.random()<.6?'runner':'grunt');MARKS[MARKS.length-1].horde=true}}}
+      // 陰陽師の襲来：STAGE2以降、ステージの途中で一度（長引けばもう一度）、外道陰陽師が現れて式神（一撃で倒れる紙の人形）を呼び出し続ける
+      // まとめ斬りを気持ちよく決めるための息抜き。式神は血が出ないので床は塗れない
+      if(G.wave>=2&&!G.tut){G.rushT-=dt;if(G.rushT<=0&&G.rush<=0&&prog()<.9){G.rush=1;G.rushT=rand(40,55);queueSpawn('onmyo');callout('陰陽師 出現','式神を呼び出す外道——術者を斬れば、式神は紙に戻る','#b46cff');G.callout.dur=2;SFX.alarm()}}
+      // 式神は陰陽師が呼び出す（陰陽師を倒すか、陰陽師が姿を消すと G.rush=0 に戻る）
       // 同時に出る敵の上限：WAVE1で6体〜最大11体（旧8〜15体）。まとめて薙ぎ払える集団湧きは残す
       G.spawnT-=dt;const cap=Math.min(5+Math.ceil(G.wave*.7),11)*waveEase();
       // チュートリアル中は通常の敵は出さない（各手順で必要な敵だけを出す）
@@ -716,6 +717,8 @@ function killEnemy(e,ang,spd,o){
   if(G.tut){const gl=G.tut.step===2&&G.tut.gap>=0?[G.tut.gap]:G.tut.step===7&&G.tut.targets?G.tut.targets:[];
     for(const i of gl)if(!DONE[i]){const t=tileRect(i);if(dist(e.x,e.y,t.x+t.w/2,t.y+t.h/2)<95)fillTile(i)}}
   if(lv('drain'))P.hp=Math.min(P.maxhp,P.hp+1.4*lv('drain'));
+  // 陰陽師を斬ると術が解け、呼び出された式神はすべて紙に戻る
+  if(e.type==='onmyo'){G.rush=0;popText(e.x,e.y-40,'術が解けた！','#d8a8ff',18,1.1);addShake(10);for(const o of [...E])if(o.shiki)killEnemy(o,Math.atan2(o.y-e.y,o.x-e.x),300,{})}
   // 式神（紙の人形）：血は出ず、斬り裂かれた紙が舞い散る。死体も残らない（床は塗れない）
   if(e.shiki){paperBurst(e.x,e.y,ang,16);SFX.swing(0);return}
   if(o.fall){for(let i=0;i<8;i++){const a=rand(0,TAU),v=rand(30,120),l=rand(.3,.6);fx({k:'smoke',x:e.x,y:e.y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:l,max:l,sz:rand(8,14)})}}
@@ -939,9 +942,9 @@ function dynBoom(pr){
   const pc=G.cause;G.cause='dyn';explode(pr.x,pr.y,100,false);G.cause=pc;
   if(!P.dead&&dist(pr.x,pr.y,P.x,P.y)<60)hurtPlayer(10,pr.x,pr.y);
 }
-/* ---------------- 窓からの投擲（建物に囲まれた一部の場所） ----------------
-   左右の壁の窓に敵が顔を出し、0.9秒の予告のあと斧を投げてくる。斧は攻撃で弾き返せ、窓に打ち返せば撃退できる（しばらく出てこない）。
-   窓の敵は床に落ちてこないので血は出ない（塗りには関係しない） */
+/* ---------------- ドアからの投擲（建物に囲まれた一部の場所） ----------------
+   左右の壁のドアが開いて敵が戸口に立ち、0.9秒の予告のあと斧を投げてくる。斧は攻撃で弾き返せ、戸口に打ち返せば撃退できる（しばらく出てこない）。
+   戸口の敵は床に出てこないので血は出ない（塗りには関係しない） */
 const WIN_POS=[{x:AX0,y:AY0+150,s:1},{x:AX1,y:AY0+300,s:-1},{x:AX0,y:AY0+460,s:1},{x:AX1,y:AY0+610,s:-1}];
 let WINS=[];
 function setupWindows(){WINS=theme.win&&!G.isBossWave&&!G.tutMode?WIN_POS.map(p=>({...p,st:'idle',t:0,cool:rand(3,7)})):[]}
@@ -953,17 +956,32 @@ function updateWindows(dt){
     else if(w.st==='throw'&&w.t>1.1){w.st='idle';w.cool=rand(4,7)}
     else if(w.st==='down'&&w.t>9){w.st='idle';w.cool=rand(2,4)}}
 }
-// 打ち返した弾が、顔を出している窓の敵に当たったら撃退
-function windowHit(b){for(const w of WINS)if((w.st==='warn'||w.st==='throw')&&dist(b.x,b.y,w.x+w.s*8,w.y)<30){w.st='down';w.t=0;b.life=0;G.score+=Math.round(300*G.mult);
+// 打ち返した弾が、戸口に立っている敵に当たったら撃退
+function windowHit(b){for(const w of WINS)if((w.st==='warn'||w.st==='throw')&&dist(b.x,b.y,w.x+w.s*12,w.y)<26){w.st='down';w.t=0;b.life=0;G.score+=Math.round(300*G.mult);
   popText(w.x+w.s*50,w.y-20,'撃退！','#ffd54a',16,.9);addShake(8);SFX.glass();return true}return false}
+// ドア：壁に埋まった鉄の扉。敵が出る時は扉が床側へ開き、中の明かりが床に差し込んで、戸口に敵が立つ。撃退するとしばらく閉じたまま
+const DOOR_H=26;
 function drawWindows(){
-  for(const w of WINS){const cx=w.x+w.s*6,on=w.st==='warn'||w.st==='throw';
-    rr(cx-13,w.y-22,26,44,3,'#2a2c36');rr(cx-10,w.y-19,20,38,2,on?'rgba(255,200,90,.85)':w.st==='down'?'#0c0d12':'rgba(60,90,130,.55)');
-    g.strokeStyle='#2a2c36';g.lineWidth=2;g.beginPath();g.moveTo(cx,w.y-19);g.lineTo(cx,w.y+19);g.moveTo(cx-10,w.y);g.lineTo(cx+10,w.y);g.stroke();
-    if(on){glow(cx,w.y,40,'#ffb040',.35);g.fillStyle='#120a08';g.beginPath();g.arc(cx,w.y-6,6,0,TAU);g.fill();g.fillRect(cx-8,w.y,16,14);
-      if(w.st==='throw'&&w.t<.25){g.fillRect(cx+w.s*6,w.y-14,4,12)}
-      if(w.st==='warn'){txt('!',cx+w.s*20,w.y-14+Math.sin(G.time*30)*1.5,20,'#ffdd33','center',EN,['#a00010',4])}}
-    if(w.st==='down'){g.strokeStyle='rgba(200,220,255,.6)';g.lineWidth=1;g.beginPath();g.moveTo(cx-8,w.y-14);g.lineTo(cx+2,w.y-2);g.lineTo(cx+8,w.y+12);g.moveTo(cx+2,w.y-2);g.lineTo(cx-6,w.y+8);g.stroke()}}
+  for(const w of WINS){const s=w.s,on=w.st==='warn'||w.st==='throw',y0=w.y-DOOR_H,y1=w.y+DOOR_H;
+    const open=on?clamp(w.st==='warn'?w.t/.25:1,0,1):0;
+    // 枠（壁に埋まった部分）
+    g.fillStyle='#16171d';g.fillRect(s>0?w.x-10:w.x,y0-4,10,DOOR_H*2+8);
+    g.fillStyle='#4a4d58';g.fillRect(s>0?w.x-2:w.x-2,y0-4,4,4);g.fillRect(s>0?w.x-2:w.x-2,y1,4,4);
+    if(open>0){
+      // 戸口の奥の闇と、床に差し込む明かり
+      g.fillStyle='#07060a';g.fillRect(s>0?w.x-8:w.x,y0,8,DOOR_H*2);
+      const gr=g.createLinearGradient(w.x,0,w.x+s*90,0);gr.addColorStop(0,`rgba(255,190,90,${.38*open})`);gr.addColorStop(1,'rgba(255,190,90,0)');
+      g.fillStyle=gr;g.beginPath();g.moveTo(w.x,y0+2);g.lineTo(w.x+s*90,y0-16);g.lineTo(w.x+s*90,y1+16);g.lineTo(w.x,y1-2);g.closePath();g.fill();
+      // 戸口に立つ敵（投げる瞬間は腕を振り下ろす）
+      const pose=w.st==='throw'&&w.t<.18?'strike':w.st==='warn'&&w.t>.55?'windup':'chase';
+      drawThug({type:'grunt',x:w.x+s*12,y:w.y,r:13,ang:Math.atan2(P.y-w.y,P.x-(w.x+s*12)),walk:0,state:pose,st:w.t,flash:0,v:0});
+      if(w.st==='warn')txt('!',w.x+s*30,w.y-24+Math.sin(G.time*30)*1.5,20,'#ffdd33','center',EN,['#a00010',4])}
+    // 扉の板：上の蝶番を軸に、床側へ開く
+    g.save();g.translate(w.x+s*1,y0);g.rotate(-s*open*1.25);
+    rr(s>0?0:-6,0,6,DOOR_H*2,1.5,w.st==='down'?'#2a2420':'#5a3a24');g.fillStyle='rgba(0,0,0,.25)';g.fillRect(s>0?1:-5,DOOR_H*.5,4,2);g.fillRect(s>0?1:-5,DOOR_H*1.4,4,2);
+    circ(s>0?4.5:-4.5,DOOR_H*1.05,1.6,'#d8b04a');g.restore();
+    // 撃退した扉には×の板が打ち付けられる
+    if(w.st==='down'){g.strokeStyle='#8a6a44';g.lineWidth=3;g.beginPath();g.moveTo(w.x+s*6,y0+6);g.lineTo(w.x-s*2,y1-6);g.moveTo(w.x-s*2,y0+6);g.lineTo(w.x+s*6,y1-6);g.stroke()}}
 }
 function updateGimmicks(dt){
   updateWindows(dt);
@@ -1334,7 +1352,7 @@ function updateTut(dt){
     if(tg.length){const t=tileRect(pick(tg)),a=rand(0,TAU),r=rand(40,90);const e=makeEnemy('grunt',clamp(t.x+t.w/2+Math.cos(a)*r,AX0+20,AX1-20),clamp(t.y+t.h/2+Math.sin(a)*r,AY0+30,AY1-20));e.state='chase'}}
 }
 // 初めて出会う敵・仕掛けに、矢印と一言説明（1回きり）
-const SPOT_TXT={gunner:'銃撃手：弾は攻撃で弾き返せる',brute:'用心棒：赤い円から離れろ',bazooka:'バズーカ兵：ロケットも弾き返せる',
+const SPOT_TXT={onmyo:'陰陽師：式神を呼ぶ。斬れば術が解ける',gunner:'銃撃手：弾は攻撃で弾き返せる',brute:'用心棒：赤い円から離れろ',bazooka:'バズーカ兵：ロケットも弾き返せる',
   cl_mop:'掃除屋：血を消す。先に倒せ',cl_washer:'高圧洗浄機：射線上の血を消す',cl_bleach:'漂白剤：周りの血を消す'};
 function spotNew(e){const k=e.type==='cleaner'?'cl_'+(e.sub||'mop'):e.type;if(SPOT_TXT[k]&&!SEEN.has(k)){markSeen(k);e.spot=4.5;e.spotTxt=SPOT_TXT[k]}}
 function pointer(x,y,label,col){
@@ -1842,6 +1860,25 @@ function updateEnemy(e,dt){
       else if(e.state==='recover'){const rc=run?.35:.5;if(e.st>rc+((run?.26:.32)+.2+rc)*(1/waveEase()-1))e.state='chase'}
       break;
     }
+    case 'onmyo':{
+      // 外道陰陽師：距離を取りながら印を結び、周りに式神を3体ずつ呼び出す。ときどき呪符を3枚投げる（弾き返せる）。
+      // ONMYO_T 秒たつと煙と共に姿を消す（式神は残る）
+      e.life=(e.life||0)+dt;if(e.life>ONMYO_T&&e.state!=='vanish'){e.state='vanish';e.st=0}
+      if(e.state==='vanish'){if(e.st>.6){for(let i=0;i<12;i++){const a=rand(0,TAU),v=rand(30,120),l=rand(.4,.8);fx({k:'smoke',x:e.x,y:e.y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:l,max:l,sz:rand(10,18)})}
+        e.dead=true;const i=E.indexOf(e);if(i>=0)E.splice(i,1);G.rush=0;popText(e.x,e.y-30,'消えた……','#d8a8ff',14,.9)}break}
+      if(e.state==='chase'){e.ang=turn(e.ang,toP,6*dt);const want=220,m=d>want+40?1:d<want-50?-1:0,sa=toP+Math.PI/2*(e.v?1:-1);
+        e.x+=(Math.cos(toP)*m*e.spd+Math.cos(sa)*e.spd*.4)*dt;e.y+=(Math.sin(toP)*m*e.spd+Math.sin(sa)*e.spd*.4)*dt;e.walk+=e.spd*dt*.13;
+        e.cd-=dt;if(e.cd<=0){e.state=Math.random()<.3&&losClear(e.x,e.y,P.x,P.y)?'ofudaAim':'chant';e.st=0;e.aim=toP}}
+      else if(e.state==='chant'){e.ang=turn(e.ang,toP,4*dt);if(e.st>.9){
+        if(E.filter(o=>o.shiki).length<18)for(let i=0;i<3;i++){const a=rand(0,TAU),r=rand(40,70),x=clamp(e.x+Math.cos(a)*r,AX0+20,AX1-20),y=clamp(e.y+Math.sin(a)*r,AY0+24,AY1-20);
+          if(!nearBlock(x,y,14)){MARKS.push({x,y,ox:x,oy:y,type:Math.random()<.6?'runner':'grunt',t:.35,horde:true});paperBurst(x,y,a,6)}}
+        tone(330,660,.25,'triangle',.08);e.state='recover';e.st=0;e.cd=rand(1.2,1.8)}}
+      else if(e.state==='ofudaAim'){e.aim=turn(e.aim,toP,8*dt);e.ang=e.aim;if(e.st>.6){for(let i=-1;i<=1;i++){const b=fire(e.x+Math.cos(e.aim)*20,e.y+Math.sin(e.aim)*20,e.aim+i*.25,260,9);b.ofuda=true}
+        SFX.swing(1);e.state='recover';e.st=0;e.cd=rand(1,1.5)}}
+      else if(e.state==='recover'){if(e.st>.4)e.state='chase'}
+      else e.state='chase';
+      break;
+    }
     case 'gunner':{
       if(e.state==='chase'){
         e.ang=turn(e.ang,toP,8*dt);
@@ -2319,6 +2356,7 @@ const STY={
   brute:{j:'#0f0f13',skin:'#c99470',hair:'#0b0b0b',wpn:'bigbat',shirt:'#e6e6ea',chain:'#e2b43c',shades:true},
   kirishima:{j:'#e8e4dc',skin:'#dcae8a',hair:'#b9bec6',wpn:'katana',shirt:'#8b1020'},
   kito:{j:'#2a1f35',skin:'#c4906c',hair:'#3a3a3a',wpn:'shotgun',shades:true,crest:true,chain:'#e2b43c'},
+  onmyo:{j:'#1a1226',skin:'#d8b08c',hair:'#111',wpn:'ofuda',shirt:'#7a2ab0'},
   shirasagi:{j:'#f2f4f6',skin:'#e0b090',hair:'#dcdcdc',cap:'#f8f8f8',wpn:'gun',shirt:'#2f6fae',shades:true}
 };
 // 顔写真の頭（チンピラ／銃撃手／若頭・霧島）。体は今までの絵のまま、頭だけ丸く切り抜いた写真を大きめに重ねる
@@ -2332,6 +2370,15 @@ function drawPhotoHead(e,rot,alpha){
   g.beginPath();g.arc(0,0,R,0,TAU);g.save();g.clip();g.drawImage(fi,-R,-R,R*2,R*2);
   if(fl){g.fillStyle='rgba(255,255,255,.75)';g.fillRect(-R,-R,R*2,R*2)}g.restore();
   g.strokeStyle='rgba(0,0,0,.75)';g.lineWidth=2;g.stroke();g.restore();
+}
+// 外道陰陽師：黒い狩衣に烏帽子、紫の妖気。印を結ぶ間は足元に五芒星が回る
+const ONMYO_T=16;
+function drawOnmyo(e){const sc=e.r/13*1.2;
+  glow(e.x,e.y,40,'#9a40ff',.22+Math.sin(G.time*5)*.06);
+  g.save();g.translate(e.x,e.y);g.rotate(e.ang);g.scale(sc,sc);g.fillStyle='#0b0b10';g.beginPath();g.ellipse(-2,0,9.5,5.5,0,0,TAU);g.fill();g.fillStyle='#2a2a34';g.fillRect(-11,-1.2,7,2.4);g.restore();
+  if(e.state==='chant'){const p=clamp(e.st/.9,0,1);g.strokeStyle=`rgba(190,110,255,${.4+p*.5})`;g.lineWidth=2;g.beginPath();g.arc(e.x,e.y,22+p*30,0,TAU);g.stroke();
+    g.save();g.translate(e.x,e.y);g.rotate(G.time*2);g.beginPath();for(let k=0;k<6;k++){const a=-Math.PI/2+k*4*Math.PI/5;if(k)g.lineTo(Math.cos(a)*26,Math.sin(a)*26);else g.moveTo(Math.cos(a)*26,Math.sin(a)*26)}g.stroke();g.restore();
+    txt('臨兵闘者……',e.x,e.y-e.r-24,11,'#d8a8ff','center',JP,['#000',3],false,900)}
 }
 // 式神：人の形に切った白い紙（人形）。ひらひら揺れ、胸に赤い呪符の印
 function drawShiki(e){
@@ -2443,7 +2490,7 @@ function drawTele(e){
     if(e.state==='dizzy'){for(let i=0;i<3;i++){const a=G.time*5+i*TAU/3;circ(e.x+Math.cos(a)*18,e.y-e.r-12+Math.sin(a)*6,3,'#ffe066')}}
   }
   // 刃・ナイフの扇投げ：飛んでくる方向を細い線で予告
-  if(e.state==='throwAim'||e.state==='knifeAim'){const n=e.hp<e.max*.5?7:5,sp=e.type==='shirasagi'?.22:.2,p=clamp(t/.55,0,1);g.strokeStyle=`rgba(230,240,255,${.2+p*.5})`;g.lineWidth=1.5;g.beginPath();
+  if(e.state==='ofudaAim'||e.state==='throwAim'||e.state==='knifeAim'){const n=e.state==='ofudaAim'?3:e.hp<e.max*.5?7:5,sp=e.state==='ofudaAim'?.25:e.type==='shirasagi'?.22:.2,p=clamp(t/.55,0,1);g.strokeStyle=`rgba(230,240,255,${.2+p*.5})`;g.lineWidth=1.5;g.beginPath();
     for(let i=0;i<n;i++){const a=e.aim+(i-(n-1)/2)*sp;g.moveTo(e.x,e.y);g.lineTo(e.x+Math.cos(a)*170,e.y+Math.sin(a)*170)}g.stroke()}
   if(e.type==='shirasagi'){
     if(e.state==='gunAim'){const p=clamp(t/.6,0,1);g.strokeStyle=`rgba(255,40,70,${.25+p*.6})`;g.lineWidth=p>.85?3:1.2;g.beginPath();g.moveTo(e.x,e.y);g.lineTo(e.x+Math.cos(e.aim)*700,e.y+Math.sin(e.aim)*700);g.stroke()}
@@ -2459,7 +2506,7 @@ function drawTele(e){
   if(wantsBang(e)){const by=e.y-e.r-16+Math.sin(G.time*30)*1.5;txt('!',e.x,by,20,'#ffdd33','center',EN,['#a00010',4])}
 }
 function wantsBang(e){return (e.state==='windup'&&e.st<.3)||(e.state==='aim'&&e.st<.3)||e.state==='slamWind'||e.state==='chargeAim'||e.state==='shotAim'||e.state==='fuse'||
-  e.state==='throwAim'||e.state==='knifeAim'||e.state==='gunAim'||e.state==='washAim'||e.state==='bleachAim'||e.state==='sweepWind'}
+  e.state==='chant'||e.state==='ofudaAim'||e.state==='throwAim'||e.state==='knifeAim'||e.state==='gunAim'||e.state==='washAim'||e.state==='bleachAim'||e.state==='sweepWind'}
 
 /* ---------------- world draw ---------------- */
 function drawWorld(){
@@ -2519,7 +2566,7 @@ function drawWorld(){
     }else{
       if(e.boss)glow(e.x,e.y,e.r*2.6,e.type==='kito'?'#8a3cff':e.type==='shirasagi'?'#40c8ff':'#ff3355',.18);
       if(e.boss&&e.onBlood)glow(e.x,e.y+e.r*.6,e.r*2,'#ff1030',.35+Math.sin(G.time*10)*.1);
-      if(e.shiki)drawShiki(e);else drawThug(e);
+      if(e.shiki)drawShiki(e);else{drawThug(e);if(e.type==='onmyo')drawOnmyo(e)}
       if(!e.boss&&e.hp<e.max&&e.max>2){const w=e.r*2;g.fillStyle='rgba(0,0,0,.6)';g.fillRect(e.x-w/2,e.y-e.r-12,w,4);g.fillStyle='#ff4060';g.fillRect(e.x-w/2,e.y-e.r-12,w*clamp(e.hp/e.max,0,1),4)}
     }
   }
@@ -2533,6 +2580,8 @@ function drawWorld(){
     }
     if(b.rocket){const a=Math.atan2(b.vy,b.vx);g.save();g.translate(b.x,b.y);g.rotate(a);rr(-12,-4,18,8,3,'#5a6a3a');g.fillStyle='#ff4020';g.beginPath();g.moveTo(6,-4);g.lineTo(13,0);g.lineTo(6,4);g.fill();g.restore();
       glow(b.x-Math.cos(a)*14,b.y-Math.sin(a)*14,22+Math.random()*6,'#ff8a30',.8);continue}
+    // 呪符：紫の光をまとった紙の札
+    if(b.ofuda){const a=Math.atan2(b.vy,b.vx);glow(b.x,b.y,16,'#b46cff',.6);g.save();g.translate(b.x,b.y);g.rotate(a+Math.sin(G.time*20)*.2);rr(-7,-3,14,6,1,'#f4efe2');g.fillStyle='#c81e1e';g.fillRect(-3,-2,6,4);g.restore();continue}
     // 投げ斧：回りながら飛ぶ（木の柄＋鉄の刃）
     if(b.axe){g.save();g.translate(b.x,b.y);g.rotate(G.time*14+b.y*.03);g.fillStyle='#7a4a24';g.fillRect(-11,-1.8,20,3.6);g.fillStyle='#c8ccd4';g.beginPath();g.moveTo(5,-2);g.lineTo(12,-9);g.quadraticCurveTo(15,0,12,9);g.lineTo(5,2);g.closePath();g.fill();g.restore();continue}
     // 投げナイフ：回りながら飛ぶ銀の刃
