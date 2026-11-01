@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.29 2026-11-01';
+const VERSION='v0.31 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -706,7 +706,7 @@ const UP={};
 const lv=id=>UP[id]||0;
 const powMul=()=>1+.175*lv('power');
 const soulMul=()=>.25*(1+.28*lv('soul')); // 戦闘で溜まるSOULの倍率（基本は当初の1/4）
-const novaR=()=>215*(1+.175*lv('nova')); // 怨念解放の範囲
+const novaR=()=>180*(1+.175*lv('nova')); // 怨念解放の範囲（基本215は強すぎたので180に）
 const guardArc=()=>GUARD_ARC+.245*lv('wide');
 function openPick(){
   const pool=CARDS.filter(c=>lv(c.id)<c.max);if(!pool.length){startWave(G.wave+1);return}
@@ -1431,8 +1431,8 @@ function tryRage(){
   for(const e of [...E]){const d=dist(P.x,P.y,e.x,e.y);if(d<R+e.r)hitEnemy(e,e.boss?12:e.armor?10:e.hp+1,Math.atan2(e.y-P.y,e.x-P.x),820,{fin:true})}
   G.cause=pc;
   for(const b of B)if(!b.friendly&&dist(P.x,P.y,b.x,b.y)<R+5)reflect(b);
-  bloodNova(P.x,P.y,R*.8,false);
-  callout('怨 念 解 放','周囲の敵を一掃し、床を血で染めた','#ff2f5f');
+  // 怨念解放は敵を倒すだけで、床は直接塗らない（倒した敵の血は普通に飛ぶ）
+  callout('怨 念 解 放','周囲の敵を一掃した','#ff2f5f');
 }
 function updatePlayer(dt){
   // SOULが満タンになった瞬間に大きく告知（1回だけ）
@@ -2397,7 +2397,7 @@ function drawTitle(){
 }
 function dim(a,col){g.fillStyle=`rgba(${col||'4,4,8'},${a})`;g.fillRect(0,0,W,H)}
 const RULES=[['塗る','敵を倒すと床に血。血溜まりを100%にするとクリア'],['囲う','囲むと中が一気に染まる。光る「囲える」マスを狙え（壁際も可）'],['掃除屋','塗った血を消しに来る。最優先で倒せ'],
-  ['弾き返し','敵の弾やロケットは、攻撃で跳ね返せる'],['ガード','正面だけ防いで回復。1回防ぐと解除（押し直し）'],['怨念解放','SOUL満タンで発動。周囲を一掃し床を染める'],
+  ['弾き返し','敵の弾やロケットは、攻撃で跳ね返せる'],['ガード','正面だけ防いで回復。1回防ぐと解除（押し直し）'],['怨念解放','SOUL満タンで発動。周囲の敵を一掃する'],
   ['仕掛け','ステージの物を殴ると発動する'],['お題・カード','お題達成でボーナス。ステージクリアで強化を選ぶ'],['ボス','近づくと掴んで投げてくる（ガード不能）']];
 function drawPause(){
   dim(.82);txt('PAUSED',W/2,104,40,'#fff','center',EN,null,true);
