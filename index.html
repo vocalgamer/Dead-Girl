@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.58 2026-11-01';
+const VERSION='v0.59 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -2372,14 +2372,29 @@ function updateBoss(e,dt,d,toP){
 // 雨：奥行きd（0=遠い 1=近い）で太さ・明るさ・速さを変えた雨筋と、床に落ちて広がる波紋
 const RAIN=[];for(let i=0;i<160;i++){const d=Math.random();RAIN.push({x:rand(-60,W+160),y:rand(0,H),d,s:650+d*600,l:12+d*26})}
 let SPL=[],splAcc=0,boltT=rand(8,16),bolt=0;
-const rainK=()=>state==='title'||state==='shop'?.7:G.tutMode||G.bonus?0:(theme.rain||0);
+const rainK=()=>state==='title'||state==='shop'?.4:G.tutMode||G.bonus?0:(theme.rain||0);
 function updateRain(rdt){
-  const rk=rainK();for(const r of RAIN){r.y+=r.s*rdt;r.x-=r.s*.22*rdt;if(r.y>H+10){r.y=rand(-40,0);r.x=rand(-60,W+160)}}
+  const rk=rainK();rainAudio(rdt,rk);for(const r of RAIN){r.y+=r.s*rdt;r.x-=r.s*.22*rdt;if(r.y>H+10){r.y=rand(-40,0);r.x=rand(-60,W+160)}}
   if(rk>0&&state!=='title'&&state!=='shop'){splAcc+=rdt*60*rk;while(splAcc>1){splAcc--;SPL.push({x:rand(AX0+4,AX1-4),y:rand(AY0+4,AY1-4),t:0})}}
   for(const p of SPL)p.t+=rdt;SPL=SPL.filter(p=>p.t<.42);
   // どしゃ降りのステージだけ、ときどき遠くで稲光（青白く2回またたく）と雷鳴
   bolt=Math.max(0,bolt-rdt);
   if(rk>=1&&state==='play'){boltT-=rdt;if(boltT<=0){boltT=rand(14,26);bolt=.5;noise(2.2,.3,'lowpass',380,50,now(.35));tone(55,32,1.8,'sine',.25,now(.35))}}
+}
+/* 雨音：「サー」という2層のノイズ（高いシャー＋低いザー）を鳴らし続け、数秒ごとに強弱の目標を変えてゆっくり追う（風で雨脚が揺れる感じ）。
+   さらに、ときどき近くで粒が当たる「パラッ」を不規則に重ねる。雨の降らないステージでは音量0 */
+let RA=null;
+function rainAudio(rdt,k){
+  if(!AC||!noiseBuf)return;
+  if(!RA){const len=AC.sampleRate*5,buf=AC.createBuffer(1,len,AC.sampleRate),d=buf.getChannelData(0);let p=0;for(let i=0;i<len;i++){const w=Math.random()*2-1;p=p*.6+w*.4;d[i]=p}
+    const mk=(type,f,q,off)=>{const s=AC.createBufferSource();s.buffer=buf;s.loop=true;const fl=AC.createBiquadFilter();fl.type=type;fl.frequency.value=f;fl.Q.value=q;const gn=AC.createGain();gn.gain.value=0;s.connect(fl);fl.connect(gn);gn.connect(sfxG);s.start(0,off);return{fl,gn}};
+    RA={hi:mk('highpass',2200,.5,0),lo:mk('bandpass',800,.45,2.3),gust:1,tgt:1,gt:0,lag:1,dt:0,t:0}}
+  RA.t+=rdt;RA.gt-=rdt;if(RA.gt<=0){RA.gt=rand(1.2,4.5);RA.tgt=rand(.5,1.4)}
+  RA.gust+=(RA.tgt-RA.gust)*Math.min(1,rdt*.9);RA.lag+=(RA.gust-RA.lag)*Math.min(1,rdt*.4);
+  const sh=1+Math.sin(RA.t*2.3)*.07+Math.sin(RA.t*5.7)*.05,now_=AC.currentTime;
+  RA.hi.gn.gain.setTargetAtTime(k*.065*RA.gust*sh,now_,.2);RA.hi.fl.frequency.setTargetAtTime(1700+RA.gust*1100,now_,.3);
+  RA.lo.gn.gain.setTargetAtTime(k*.045*RA.lag,now_,.3);
+  if(k>0){RA.dt-=rdt;if(RA.dt<=0){RA.dt=rand(.04,.3)/(k*RA.gust);noise(.025,rand(.008,.025)*k,'bandpass',rand(2500,6500),0,0,0,2)}}
 }
 function drawRainSplash(){
   if(!SPL.length)return;g.lineWidth=1;
