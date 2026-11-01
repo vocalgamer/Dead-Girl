@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.84 2026-11-01';
+const VERSION='v0.86 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -419,7 +419,20 @@ const SFX={
         lf.frequency.value=rand(4,7);lg.gain.value=f*.035;lf.connect(lg);lg.connect(o.frequency);
         g2.gain.setValueAtTime(.0001,t);g2.gain.exponentialRampToValueAtTime(.06,t+.35);g2.gain.exponentialRampToValueAtTime(.035,t+dur*.55);g2.gain.exponentialRampToValueAtTime(.0001,t+dur);
         o.connect(g2);g2.connect(sfxG);o.start(t);lf.start(t);o.stop(t+dur+.05);lf.stop(t+dur+.05)}}
-    noise(2.4,.18,'bandpass',700,2600,t0,0,3)},
+    noise(2.4,.18,'bandpass',700,2600,t0,0,3);
+    // 女の悲鳴を2人分：うめきの少し後から、左右に分けて重ねる。声帯の震え（ビブラート＋細かい揺らぎ）と「あ」の響き（2つの共鳴）で作り、
+    // うめきと同じく尻上がりに引きつりながら遠ざかって消える。うめきを覆い隠さないよう、音量は控えめに
+    for(let k=0;k<2;k++){const t=t0+.18+k*.45+Math.random()*.1,dur=rand(1.3,1.7),f=rand(1000,1300),o=AC.createOscillator(),v1=AC.createOscillator(),v1g=AC.createGain(),v2=AC.createOscillator(),v2g=AC.createGain(),
+        fa=AC.createBiquadFilter(),fb=AC.createBiquadFilter(),mix=AC.createGain(),gn=AC.createGain(),pan=AC.createStereoPanner?AC.createStereoPanner():null;
+      o.type='sawtooth';o.frequency.setValueAtTime(f*.88,t);o.frequency.linearRampToValueAtTime(f*1.04,t+.12);o.frequency.linearRampToValueAtTime(f,t+dur*.5);o.frequency.exponentialRampToValueAtTime(f*1.55,t+dur);
+      v1.frequency.value=rand(6.5,8.5);v1g.gain.value=f*.035;v1.connect(v1g);v1g.connect(o.frequency);
+      v2.frequency.value=rand(21,27);v2g.gain.value=f*.012;v2.connect(v2g);v2g.connect(o.frequency);
+      fa.type='bandpass';fa.frequency.value=rand(950,1150);fa.Q.value=3;fb.type='bandpass';fb.frequency.value=rand(2400,2900);fb.Q.value=4;mix.gain.value=.7;
+      o.connect(fa);o.connect(fb);fa.connect(gn);fb.connect(mix);mix.connect(gn);
+      gn.gain.setValueAtTime(.0001,t);gn.gain.exponentialRampToValueAtTime(.11,t+.06);gn.gain.exponentialRampToValueAtTime(.075,t+dur*.6);gn.gain.exponentialRampToValueAtTime(.0001,t+dur);
+      if(pan){pan.pan.value=k?.45:-.45;gn.connect(pan);pan.connect(sfxG)}else gn.connect(sfxG);
+      o.start(t);v1.start(t);v2.start(t);o.stop(t+dur+.05);v1.stop(t+dur+.05);v2.stop(t+dur+.05);
+      noise(.25,.06,'highpass',3500,5000,t,0,1)}},
   hands(){const t=now();SFX.moans();tone(62,38,1.8,'sawtooth',.2,t);tone(93,58,1.7,'sawtooth',.12,t+.04);tone(124,70,1.5,'sine',.3,t+.08);
     noise(1.6,.32,'lowpass',420,90,t+.05,0,1.4);noise(1.2,.14,'bandpass',2600,1400,t+.1,0,6);noise(.9,.1,'bandpass',3400,2000,t+.5,0,7);noise(.6,.28,'bandpass',260,80,t+.7,0,2.5)},
   // 引きずり込まれる者の短い悲鳴（音程が落ちながら震える）
@@ -1757,8 +1770,7 @@ function drawHands(){
   for(const h of HANDS){if(h.t<0)continue;const p=clamp(h.t/h.dur,0,1),grow=easeOut(Math.min(1,h.t/.3)),fade=p>.82?(1-p)/.18:1,R=h.deco?.75:1.1;
     g.save();g.globalAlpha=fade;
     // 足元に開く黒い沼（縁が紫に揺らめき、土くれと血が跳ねる）
-    const pr=(24*grow+6)*R;g.fillStyle='rgba(6,0,10,.9)';g.beginPath();g.ellipse(h.x,h.y+4,pr,pr*.42,0,0,TAU);g.fill();
-    g.strokeStyle=`rgba(150,60,220,${.55*fade})`;g.lineWidth=1.5;g.beginPath();g.ellipse(h.x,h.y+4,pr*(1+Math.sin(h.t*20)*.06),pr*.42,0,0,TAU);g.stroke();
+    const pr=(24*grow+6)*R;drawRift(h.x,h.y+4,pr,h.seed,h.t,fade);
     if(h.t<.25&&Math.random()<.5)fx({k:'b',x:h.x+rand(-pr,pr),y:h.y+4,vx:rand(-60,60),vy:rand(-160,-60),life:.35,max:.35,sz:rand(1.5,3),col:pick(['#2a1a10','#3a0a0c','#1a1208'])});
     if(!h.deco){glow(h.x,h.y,46,'#5a20b0',.4*fade);
       // 沼の中で、沈んだ亡者たちの青白い指先がうごめく
@@ -1782,6 +1794,24 @@ function drawHandArms(){
         const bx=h.x+side*20,by=h.y+8,tx=h.x+side*7+tw,ty=h.y+8-(26*rise)+(side?0:-4),mx=h.x+side*19,my=h.y-6*rise;
         zArm(bx,by,mx,my,tx,ty,R,Math.min(1,h.t/.45),h.seed+k,1)}}
     g.restore()}
+}
+// 手が出てくる裂け目：床が割れて開いた、いびつな穴。ふちはギザギザに欠け、外へ向かってひびが走る。
+// 奥は真っ黒で、ふちだけ紫にくすぶる（形は穴ごとに違い、開ききるまで少しずつ広がる）
+function drawRift(x,y,r,sd,t,fade){
+  const rn=k=>{const v=Math.sin(sd*91.7+k*12.31)*43758.5453;return v-Math.floor(v)},N=18,pts=[];
+  for(let k=0;k<N;k++){const a=k/N*TAU,j=(rn(k)<.3?.5:.78)+rn(k+100)*.42,rr=r*j*(1+Math.sin(t*14+k)*.03);pts.push([x+Math.cos(a)*rr*1.15,y+Math.sin(a)*rr*.5])}
+  // 外へ走るひび（床の割れ目）
+  g.strokeStyle=`rgba(10,4,14,${.85*fade})`;g.lineWidth=1.6;g.lineCap='round';g.beginPath();
+  for(let k=0;k<5;k++){const a=rn(k+40)*TAU,l=r*(.9+rn(k+50)*.9);let px=x+Math.cos(a)*r*.8,py=y+Math.sin(a)*r*.36;g.moveTo(px,py);
+    for(let m=0;m<3;m++){const aa=a+(rn(k*7+m)-.5)*.9;px+=Math.cos(aa)*l/3;py+=Math.sin(aa)*l/3*.45;g.lineTo(px,py)}}
+  g.stroke();
+  // 割れた床のふち（少し持ち上がった欠片の明るい縁）
+  g.fillStyle=`rgba(80,60,90,${.5*fade})`;g.beginPath();pts.forEach(([px,py],k)=>{const q=[x+(px-x)*1.18,y+(py-y)*1.18+1];k?g.lineTo(q[0],q[1]):g.moveTo(q[0],q[1])});g.closePath();g.fill();
+  // 穴：奥ほど暗い
+  g.beginPath();pts.forEach(([px,py],k)=>k?g.lineTo(px,py):g.moveTo(px,py));g.closePath();
+  const gr=g.createRadialGradient(x,y,0,x,y,r*1.1);gr.addColorStop(0,'rgba(0,0,0,.98)');gr.addColorStop(.7,'rgba(8,0,14,.95)');gr.addColorStop(1,'rgba(40,10,60,.9)');g.fillStyle=gr;g.fill();
+  // ふちでくすぶる紫の光
+  g.strokeStyle=`rgba(160,70,235,${(.45+Math.sin(t*18+sd)*.15)*fade})`;g.lineWidth=1.2;g.lineJoin='round';g.stroke();
 }
 function drawHandDark(){if(handDark<=0)return;const a=Math.min(1,handDark*1.4);
   const vg=g.createRadialGradient(W/2,H/2,H*.18,W/2,H/2,H*.7);vg.addColorStop(0,`rgba(10,0,18,${.12*a})`);vg.addColorStop(1,`rgba(8,0,14,${.78*a})`);g.fillStyle=vg;g.fillRect(0,0,W,H)}
