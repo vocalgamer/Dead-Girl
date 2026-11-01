@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.67 2026-11-01';
+const VERSION='v0.68 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -632,6 +632,12 @@ function pickType(n){
 }
 const CLEANER_INFO={mop:['掃除屋 出現','血を拭き取られる前に始末しろ！'],washer:['高圧洗浄機 出現','射線上の血を一気に洗い流す——撃たれる前に潰せ'],bleach:['漂白剤 出現','周囲13マスの血を一気に洗い流す——撒かれる前に潰せ']};
 function queueSpawn(type,sub){
+  // 陰陽師：必ず主人公から一番遠い壁際に現れる（現れた瞬間に斬られて、式神を出す前に終わらないように）
+  if(type==='onmyo'){let best=null,bd=-1;
+    for(let k=0;k<24;k++){const sd=k%4,ax=rand(AX0+40,AX1-40),ay=rand(AY0+60,AY1-60);
+      const c=sd===0?{x:ax,y:AY0+14,ox:ax,oy:AY0-26}:sd===1?{x:AX1-14,y:ay,ox:AX1+30,oy:ay}:sd===2?{x:ax,y:AY1-14,ox:ax,oy:AY1+30}:{x:AX0+14,y:ay,ox:AX0-30,oy:ay};
+      if(nearBlock(c.x,c.y,14))continue;const d=dist(c.x,c.y,P.x,P.y);if(d>bd){bd=d;best=c}}
+    if(best){MARKS.push({...best,type,sub,t:.7});return}}
   if(type==='bazooka'&&!G.seenSub.bazooka){G.seenSub.bazooka=true;callout('バズーカ兵 出現','ロケット弾も弾き返せる——敵の群れに撃ち返せ！','#ff8a30');G.callout.dur=2.4}
   // 最終盤アシスト（85%以上）：主人公から離れた塗り残しのすぐそばに、壁を通らず直接現れる
   if(!G.isBossWave&&type!=='cleaner'&&prog()>=.85&&painted<GN&&Math.random()<.8){
@@ -698,9 +704,9 @@ function updateWave(dt){
           const fresh=kinds.filter(k=>!G.seenSub[k]);for(const k of kinds)G.seenSub[k]=true;
           if(fresh.length){const f=CLEANER_INFO[fresh[fresh.length-1]];callout(f[0],f[1],'#5ab8ff');G.callout.dur=2.4}
           else popText(W/2,AY0+40,'掃除屋 ×'+crew,'#5ab8ff',16,1.2)}}
-      // 陰陽師の襲来：STAGE2以降、ステージの途中で一度（長引けばもう一度）、外道陰陽師が現れて式神（一撃で倒れる紙の人形）を呼び出し続ける
+      // 陰陽師の襲来：STAGE11以降（後半から。STAGE15後のボーナス面「式神斬り」より前に一度は出会う）、ステージの途中で一度（長引けばもう一度）、外道陰陽師が現れて式神（一撃で倒れる紙の人形）を呼び出し続ける
       // まとめ斬りを気持ちよく決めるための息抜き。式神は血が出ないので床は塗れない
-      if(G.wave>=2&&!G.tut){G.rushT-=dt;if(G.rushT<=0&&G.rush<=0&&prog()<.9){G.rush=1;G.rushT=rand(40,55);queueSpawn('onmyo');callout('陰陽師 出現','式神を呼び出す外道——術者を斬れば、式神は紙に戻る','#b46cff');G.callout.dur=2;SFX.alarm()}}
+      if(G.wave>=11&&!G.tut){G.rushT-=dt;if(G.rushT<=0&&G.rush<=0&&prog()<.9){G.rush=1;G.rushT=rand(40,55);queueSpawn('onmyo');callout('陰陽師 出現','式神を呼び出す外道——術者を斬れば、式神は紙に戻る','#b46cff');G.callout.dur=2;SFX.alarm()}}
       // 式神は陰陽師が呼び出す（陰陽師を倒すか、陰陽師が姿を消すと G.rush=0 に戻る）
       // 同時に出る敵の上限：WAVE1で6体〜最大11体（旧8〜15体）。まとめて薙ぎ払える集団湧きは残す
       G.spawnT-=dt;const cap=Math.min(5+Math.ceil(G.wave*.7),11)*waveEase();
@@ -2369,11 +2375,12 @@ function updateEnemy(e,dt){
       // 外道陰陽師：距離を取りながら印を結び、周りに式神を3体ずつ呼び出す。ときどき呪符を3枚投げる（弾き返せる）。
       // ONMYO_T 秒たつと煙と共に姿を消す（式神は残る）
       e.life=(e.life||0)+dt;if(e.life>ONMYO_T&&e.state!=='vanish'){e.state='vanish';e.st=0}
+      if(!e.inited){e.inited=1;e.cd=.15;e.first=1} // 出てきたらすぐ、最初の式神を呼ぶ
       if(e.state==='vanish'){if(e.st>.6){for(let i=0;i<12;i++){const a=rand(0,TAU),v=rand(30,120),l=rand(.4,.8);fx({k:'smoke',x:e.x,y:e.y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:l,max:l,sz:rand(10,18)})}
         e.dead=true;const i=E.indexOf(e);if(i>=0)E.splice(i,1);G.rush=0;popText(e.x,e.y-30,'消えた……','#d8a8ff',14,.9)}break}
       if(e.state==='chase'){e.ang=turn(e.ang,toP,6*dt);const want=220,m=d>want+40?1:d<want-50?-1:0,sa=toP+Math.PI/2*(e.v?1:-1);
         e.x+=(Math.cos(toP)*m*e.spd+Math.cos(sa)*e.spd*.4)*dt;e.y+=(Math.sin(toP)*m*e.spd+Math.sin(sa)*e.spd*.4)*dt;e.walk+=e.spd*dt*.13;
-        e.cd-=dt;if(e.cd<=0){e.state=Math.random()<.3&&losClear(e.x,e.y,P.x,P.y)?'ofudaAim':'chant';e.st=0;e.aim=toP}}
+        e.cd-=dt;if(e.cd<=0){e.state=!e.first&&Math.random()<.3&&losClear(e.x,e.y,P.x,P.y)?'ofudaAim':'chant';e.st=e.first?.4:0;e.first=0;e.aim=toP}}
       else if(e.state==='chant'){e.ang=turn(e.ang,toP,4*dt);if(e.st>.9){
         if(E.filter(o=>o.shiki).length<18)for(let i=0;i<3;i++){const a=rand(0,TAU),r=rand(40,70),x=clamp(e.x+Math.cos(a)*r,AX0+20,AX1-20),y=clamp(e.y+Math.sin(a)*r,AY0+24,AY1-20);
           if(!nearBlock(x,y,14)){MARKS.push({x,y,ox:x,oy:y,type:Math.random()<.6?'runner':'grunt',t:.35,horde:true});paperBurst(x,y,a,6)}}
