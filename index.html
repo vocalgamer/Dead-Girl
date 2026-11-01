@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.68 2026-11-01';
+const VERSION='v0.70 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -402,6 +402,9 @@ const SFX={
   powerup(){noise(.7,.35,'bandpass',300,3000,0,0,1.4);tone(180,1200,.6,'sawtooth',.06);tone(523.25,523.25,.9,'sine',.12,now(.45));tone(783.99,783.99,.9,'sine',.1,now(.5));tone(1046.5,1046.5,1.1,'sine',.09,now(.55))},
   crackle(){if(!can('ck',300))return;noise(.06,.09,'highpass',5000);tone(1800,900,.05,'square',.02)},
   glass(){noise(.25,.5,'highpass',3500,7000);tone(2400,1400,.12,'triangle',.08);tone(3100,2100,.1,'triangle',.06,now(.04))},
+  // 消火器の噴射：「ブシャーッ」。最初に圧が抜ける強い音、続く粉の噴射は途中で少し息継ぎしながら弱まっていく
+  spray(){const t=now();noise(.12,.55,'lowpass',900,300,t);noise(1.5,.5,'highpass',2400,1200,t+.02,0,.6);noise(1.4,.32,'bandpass',4200,2200,t+.05,0,.8);
+    for(let k=0;k<4;k++)noise(.18,.18,'highpass',3000,2000,t+.35+k*.28+Math.random()*.06,0,.6)},
   wash(){if(!can('wash',80))return;noise(.35,.3,'bandpass',1800,500,0,0,.7);tone(420,260,.2,'sine',.1)},
   tile(){if(!can('tile',60))return;tone(240,110,.14,'sine',.18);noise(.09,.18,'lowpass',900)},
   guard(){if(!can('gd',40))return;tone(1300,620,.16,'square',.12);noise(.08,.45,'highpass',3200);tone(190,90,.14,'sine',.5)}
@@ -1096,7 +1099,7 @@ function reflect(b){
   G.chain++;G.chainT=chainWin();G.chainPop=1;G.soul=Math.min(100,G.soul+soulMul()*(pf?8:4));
 }
 function hurtPlayer(dmg,sx,sy){
-  if(P.dead||state!=='play')return;
+  if(P.dead||state!=='play'||DEV.god)return; // 開発者モードの無敵
   if(P.inv>0)return;
   dmg*=ENEMY_DMG*(1-.1*lv('armor'));
   const a=Math.atan2(P.y-sy,P.x-sx);
@@ -1303,7 +1306,7 @@ function hitProp(pr,ang){
   // タイヤの山：積んだ4本が崩れ、上の段ほど高く跳ねながら殴った方向へ扇状に飛び出す
   else if(pr.k==='tires'){SFX.wall();addShake(7);for(let i=0;i<4;i++){const a=ang+(i-1.5)*.22+rand(-.06,.06),v=rand(400,500)*(1-i*.05);
     TIRES.push({tire:true,x:pr.x+rand(-5,5),y:pr.y+rand(-4,4),z:i*TIRE_W,vz:rand(150,230)+i*30,r:TIRE_R,vx:Math.cos(a)*v,vy:Math.sin(a)*v,hd:a,rot:rand(0,TAU),lean:0,sd:Math.random()<.5?1:-1,ph:'roll',t:0,ft:0,rat:0,hits:new Set()})}}
-  else if(pr.k==='ext'){SMOKES.push({x:pr.x,y:pr.y,r:88,t:3.5});SFX.wash();addShake(4)}
+  else if(pr.k==='ext'){SMOKES.push({x:pr.x+Math.cos(ang)*40,y:pr.y+Math.sin(ang)*40,r:88,t:3.5});pr.sprayA=ang;pr.spray=1.5;SFX.spray();addShake(4)}
 }
 function dynBoom(pr){
   pr.lit=false;pr.used=true;pr.t=0;
@@ -1355,6 +1358,9 @@ function updateGimmicks(dt){
   updateWindows(dt);
   for(const pr of PROPS){
     pr.t+=dt;
+    // 倒れた消火器：ノズルから白い消火剤を噴き出し続ける
+    if(pr.k==='ext'&&pr.spray>0){pr.spray-=dt;const a=pr.sprayA,nx=pr.x+Math.cos(a)*18,ny=pr.y+Math.sin(a)*18,k=clamp(pr.spray/1.5,0,1);
+      for(let i=0;i<3;i++){const b=a+rand(-.22,.22),v=rand(220,420)*(.4+k*.6),l=rand(.45,.8);fx({k:'powder',x:nx,y:ny,vx:Math.cos(b)*v,vy:Math.sin(b)*v,life:l,max:l,sz:rand(4,8)})}}
     // 使った仕掛けは、しばらくすると別の場所に置き直される
     if(pr.used&&pr.t>(pr.k==='bottle'?11:pr.k==='oil'?13:pr.k==='tires'?8:9)*(1-.3*lv('gimmick')))Object.assign(pr,newProp(pr.k));
     if(pr.lit){pr.fuse-=dt;if(pr.fuse<=0)dynBoom(pr)}
@@ -1579,6 +1585,29 @@ function drawCart(pr){
   }
   parts.sort((p,q)=>p.k-q.k).forEach(p=>p.f());
 }
+// 消火器：赤い円筒（光沢のある陰影）・上の黒いレバーと運搬用の取っ手・圧力計・黄色い安全ピン・白いラベル・黒いホースとラッパ形のノズル。
+// 殴られると殴られた向きに倒れ、ノズルから消火剤を噴き出す
+function drawExt(pr){
+  const lying=pr.used;g.save();g.translate(pr.x,pr.y);
+  if(lying){g.fillStyle='rgba(0,0,0,.4)';g.beginPath();g.ellipse(0,6,20,7,pr.sprayA||0,0,TAU);g.fill();g.rotate((pr.sprayA||0)+Math.PI/2);g.scale(1,.86);g.translate(0,4)}
+  else shadow(0,12,10);
+  const body=g.createLinearGradient(-8,0,8,0);body.addColorStop(0,'#6e0a07');body.addColorStop(.3,'#ea3a2c');body.addColorStop(.45,'#ff8a78');body.addColorStop(.6,'#c41e14');body.addColorStop(1,'#560604');
+  g.fillStyle=body;rrPath(-8,-12,16,27,5);g.fill();
+  g.fillStyle='#3a0604';g.fillRect(-8,11,16,3.5);
+  // 白いラベル（赤い文字の行）とABCの丸
+  rr(-5.5,-6,11,12,1.2,'#f2f0ea');g.fillStyle='#c41e14';for(let k=0;k<3;k++)g.fillRect(-4,-4.5+k*3,8,1.4);circ(0,8.5,2.3,'#f2d23a');
+  // 肩のドーム、首金具、レバー、取っ手
+  g.fillStyle=body;g.beginPath();g.ellipse(0,-12,8,4,0,Math.PI,TAU);g.fill();
+  rr(-3.5,-19,7,6,1.5,'#9aa0a8');
+  g.strokeStyle='#1c1c20';g.lineWidth=2.6;g.lineCap='round';g.beginPath();g.moveTo(-3,-20);g.lineTo(8,-23);g.stroke();
+  g.lineWidth=2;g.beginPath();g.moveTo(-3,-17.5);g.lineTo(7,-19);g.stroke();
+  circ(-5,-17,2.6,'#e8e8e4');g.strokeStyle='#2a8a30';g.lineWidth=1;g.beginPath();g.arc(-5,-17,1.7,Math.PI*1.1,Math.PI*1.8);g.stroke();
+  g.strokeStyle='#e8c020';g.lineWidth=1.3;g.beginPath();g.arc(4,-16,2,0,TAU);g.stroke();
+  // ホースとノズル
+  g.strokeStyle='#18181c';g.lineWidth=2.6;g.beginPath();g.moveTo(3.5,-15);g.bezierCurveTo(14,-12,13,2,9.5,7);g.stroke();
+  g.fillStyle='#18181c';g.beginPath();g.moveTo(8,6);g.lineTo(11,6);g.lineTo(12.5,11);g.lineTo(6.5,11);g.closePath();g.fill();
+  g.restore();
+}
 function drawGimmicks(){
   drawWindows();
   for(const w of WARNS){
@@ -1635,7 +1664,7 @@ function drawGimmicks(){
     // タイヤの山：4本を寝かせて積み上げ、少しずつずれている（使った後はしばらく消える）
     else if(pr.k==='tires'){if(pr.used)continue;
       [[0,0],[2.5,.8],[-2,-.5],[1.5,.3]].forEach(([ox,oy],i)=>drawTire(pr.x+ox,pr.y+oy,i*TIRE_W,i*.7,Math.PI/2,i*1.3,1,1,i>0))}
-    else if(pr.k==='ext'){if(pr.used)continue;shadow(pr.x,pr.y+12,9);rr(pr.x-7,pr.y-14,14,28,5,'#d0201a');rr(pr.x-4,pr.y-20,8,6,2,'#222');g.strokeStyle='#222';g.lineWidth=2;g.beginPath();g.moveTo(pr.x+3,pr.y-18);g.quadraticCurveTo(pr.x+14,pr.y-16,pr.x+11,pr.y-4);g.stroke()}
+    else if(pr.k==='ext'){const f=pr.used?1-clamp((pr.t-3.5)/.6,0,1):1;if(f<=0)continue;g.globalAlpha=f;drawExt(pr);g.globalAlpha=1}
   }
   // 4段目の見た目の衝撃波は紫の二重の輪（強化カードの本物の衝撃波は金色）
   for(const sh of SHOCKS){const f=1-sh.r/sh.R,c=sh.vis?'200,90,255':'255,230,140';g.strokeStyle=`rgba(${c},${.85*f})`;g.lineWidth=8*f+2;g.beginPath();g.arc(sh.x,sh.y,sh.r,0,TAU);g.stroke();
@@ -2034,8 +2063,15 @@ function screenAction(p,key){
   // プロローグ中のタップ（クリック・キー）は読み飛ばし：すぐロゴとボタンを出す（音の準備もこのタップで済ませる）
   if(state==='title'&&stateT<LOGO_T+.6){skipPrologue();return}
   if(state==='title'){if(!muted&&!(AC&&AC.state==='running')&&!G.titleTap){G.titleTap=1;return}
-    if(p){if(inR(p,SCR.tstart))newGame(false);else if(inR(p,SCR.ttut))newGame(true);else if(inR(p,SCR.tendless)){if(endlessOpen())newEndless();else SFX.wall()}else if(inR(p,SCR.tshop)){state='shop';stateT=0;SFX.ui()}return}
+    if(p){if(inR(p,SCR.tstart)){if(DEVSHIFT)openDev();else devHold={t:performance.now()}}else if(inR(p,SCR.ttut))newGame(true);else if(inR(p,SCR.tendless)){if(endlessOpen())newEndless();else SFX.wall()}else if(inR(p,SCR.tshop)){state='shop';stateT=0;SFX.ui()}return}
     newGame(key==='tut');return}
+  if(state==='dev'){
+    if(!p){if(key==='title'){state='title';stateT=0;skipPrologue()}return}
+    for(let n=1;n<=20;n++)if(inR(p,DEV_BTN(n))){devStart(n);return}
+    for(let k=0;k<3;k++)if(inR(p,DEV_BON(k))){devBonus(k);return}
+    if(inR(p,DEV_UI.endless)){devStart(21);return}
+    if(inR(p,DEV_UI.god)){DEV.god=!DEV.god;SFX.ui();return}
+    if(inR(p,DEV_UI.close)){state='title';stateT=0;skipPrologue();SFX.ui()}return}
   if(state==='over'){if(stateT<.9)return;
     if(p){if(canRevive()&&inR(p,SCR.orevive)){rewardAd(revive);return}
       if(inR(p,SCR.oshare)){shareResult();return}
@@ -2061,7 +2097,7 @@ function pauseGame(why){if(state==='play'&&!P.dead){state='pause';stateT=0;G.pau
 cv.addEventListener('pointerdown',ev=>{
   ev.preventDefault();const p=toLocal(ev);
   if(ev.pointerType==='touch'||ev.pointerType==='pen'){touchMode=true;lockPortrait()}
-  if(state!=='play'){screenAction(p);return}
+  if(state!=='play'){DEVSHIFT=ev.shiftKey;screenAction(p);return}
   if(inC(p,UI.pause,6)){pauseGame('btn');return}
   if(inC(p,UI.mute,6)){toggleMute();return}
   try{cv.setPointerCapture(ev.pointerId)}catch(e){}
@@ -2130,7 +2166,9 @@ function pUp(ev){
   if(ev.pointerType==='mouse'){if(ev.type==='pointercancel'){inp.atkMouse=inp.guardMouse=false}else mouseBtn(ev)}
 }
 // 指がキャンバスの外で離れても拾えるよう window で受ける。取りこぼし対策に lostpointercapture と touchend も見る
-addEventListener('pointerup',pUp);addEventListener('pointercancel',pUp);cv.addEventListener('lostpointercapture',pUp);
+addEventListener('pointerup',pUp);addEventListener('pointercancel',pUp);
+// タイトルのスタートボタン：短く押して離せば開始、0.9秒長押しで開発者メニュー（スマホ用。PCはShift＋クリックでも開く）
+addEventListener('pointerup',()=>{if(devHold&&state==='title'){devHold=null;newGame(false)}});addEventListener('pointercancel',()=>{devHold=null});cv.addEventListener('lostpointercapture',pUp);
 let nTouch=0;const touchCnt=ev=>{nTouch=ev.touches.length;if(!nTouch)setTimeout(()=>{if(!nTouch)resetTouch()},80)};
 addEventListener('touchstart',touchCnt,{passive:true});addEventListener('touchend',touchCnt);addEventListener('touchcancel',touchCnt);
 cv.addEventListener('contextmenu',e=>e.preventDefault());
@@ -2155,7 +2193,8 @@ addEventListener('keydown',ev=>{
     if(state==='tutend'){screenAction(null,'go');return}
     if(state==='tutintro'||state==='stintro'){if(k==='enter'||k===' '||k==='j'||k==='z')screenAction(null,'go');return}
     if(state==='tutmenu'){if(k==='r')screenAction(null,'retry');else if(k==='enter'||k===' '||k==='j'||k==='z')screenAction(null,'go');return}
-    if(state==='title'){if(k==='t')screenAction(null,'tut');else if(k==='enter'||k===' '||k==='j'||k==='z')screenAction(null,'go');return}
+    if(state==='dev'){if(k==='escape')screenAction(null,'title');return}
+  if(state==='title'){if(k==='t')screenAction(null,'tut');else if(k==='enter'||k===' '||k==='j'||k==='z')screenAction(null,'go');return}
     if(k==='escape'||k==='t')screenAction(null,state==='pause'&&k==='escape'?null:'title');
     else if(k==='enter'||k===' '||k==='j'||k==='z'||(state==='pause'&&k==='p'))screenAction(null,'go');
     return;
@@ -2494,7 +2533,7 @@ function bossGrab(e,dt,d,toP){
     e.ang=turn(e.ang,toP,6*dt);
     if(e.st>=.5){
       if(!P.dead&&P.inv<=0&&d<e.r+P.r+30){
-        const dmg=14*ENEMY_DMG*(1-.1*lv('armor'));P.hp-=dmg;P.blinkT=.8;P.inv=.7;P.recover=.35;P.atk=null;
+        const dmg=14*ENEMY_DMG*(1-.1*lv('armor'));if(!DEV.god)P.hp-=dmg;P.blinkT=.8;P.inv=.7;P.recover=.35;P.atk=null;
         P.kx=Math.cos(toP)*680;P.ky=Math.sin(toP)*680;G.chain=0;G.mult=1;
         addShake(18);G.flash=Math.max(G.flash,.4);G.flashCol='255,30,60';G.hitstop=Math.max(G.hitstop,.12);SFX.hurt();SFX.wall();
         bloodBurst(P.x,P.y,toP,18,360);popText(P.x,P.y-40,'投げ！ -'+Math.round(dmg),'#ff4060',20,1);
@@ -2654,7 +2693,8 @@ function drawRain(k){
 function update(rdt){
   stateT+=rdt;
   updateRain(rdt);
-  if(state==='title'||state==='shop'){G.time+=rdt;return}
+  if(state==='title'&&devHold&&performance.now()-devHold.t>900){devHold=null;openDev()}
+  if(state==='title'||state==='shop'||state==='dev'){G.time+=rdt;return}
   if(state==='ad'){if(stateT>AD_T&&adCb){const f=adCb;adCb=null;f()}return}
   if(state==='bres'){updateBres(rdt);return}
   if(G.rageFx){G.rageFx.t+=rdt;if(G.rageFx.t>G.rageFx.dur)G.rageFx=null} // 怨念解放の演出は実時間で進める（スロー中もきっちり1.3秒）
@@ -2766,7 +2806,7 @@ function update(rdt){
   for(const f of FX){
     f.life-=dt;f.x+=f.vx*dt||0;f.y+=f.vy*dt||0;
     if(f.k==='b'){const k=Math.exp(-7*dt);f.vx*=k;f.vy*=k;if(f.life<=0&&Math.random()<.25){decG.fillStyle='rgba(110,0,15,.6)';decG.beginPath();decG.arc(f.x,f.y,f.sz*.7,0,TAU);decG.fill();paint(f.x,f.y,5,.04)}}
-    else if(f.k==='fire'||f.k==='smoke'||f.k==='gold'){const k=Math.exp(-4*dt);f.vx*=k;f.vy*=k}
+    else if(f.k==='fire'||f.k==='smoke'||f.k==='gold'||f.k==='powder'){const k=Math.exp(-4*dt);f.vx*=k;f.vy*=k}
     else if(f.k==='ash'){const k=Math.exp(-2.2*dt);f.vx*=k;f.vy=f.vy*k-30*dt;f.rot+=f.vr*dt}
     else if(f.k==='paper'){const k=Math.exp(-5*dt);f.vx*=k;f.vy=f.vy*k+40*dt;f.rot+=f.vr*dt}
   }
@@ -3152,6 +3192,7 @@ function drawWorld(){
       if(!f.cap){const e=(1-a)*5;g.strokeStyle=`rgba(255,235,240,${a})`;g.lineWidth=3*a+1;g.strokeRect(f.x+3-e,f.y+3-e,f.w-6+e*2,f.h-6+e*2)}}
     else if(f.k==='capline'){g.strokeStyle=`rgba(255,${200*a|0},${210*a|0},${a})`;g.lineWidth=2+4*a;glow(f.cx,f.cy,f.R,'#ff2848',a*.35);tileOutline(f.set)}
     else if(f.k==='smoke'){g.globalAlpha=a*.45;circ(f.x,f.y,f.sz*(1.6-a*.6),'#2a2a30')}
+    else if(f.k==='powder'){g.globalAlpha=a*.5;circ(f.x,f.y,f.sz*(2.2-a*1.2),'#eef2f6')}
     g.globalAlpha=1;
   }
   for(const r of RINGS){if(r.t<0)continue;const p=r.t/r.dur,rad=lerp(r.r,r.R,easeOut(p));g.strokeStyle=`rgba(${r.col},${1-p})`;g.lineWidth=r.w*(1-p)+1;g.beginPath();g.arc(r.x,r.y,rad,0,TAU);g.stroke()}
@@ -3210,9 +3251,32 @@ function drawPlayerGauges(){
   if(full)glow(P.x,y+10,40,'#ffcc33',.45+Math.sin(G.time*8)*.2);
   rr(x,y+9,w*v,4,1.5,full?(Math.floor(G.time*8)%2?'#fff3b0':'#ffc72a'):'#7fd13a');
 }
+/* ---------------- 開発者モード ----------------
+   タイトルで「ゲームスタート」を Shift＋クリック（PC）／0.9秒長押し（スマホ）すると開く。
+   好きなステージ・ボーナス面・ENDLESSから始められる。無敵の切り替えつき（このセッションの間だけ） */
+const DEV={god:false};let DEVSHIFT=false,devHold=null;
+const DEV_BTN=n=>({x:66+((n-1)%4)*106,y:150+Math.floor((n-1)/4)*62,w:96,h:52});
+const DEV_BON=k=>({x:84+k*141,y:480,w:132,h:44});
+const DEV_UI={endless:{x:W/2-80,y:548,w:150,h:44},god:{x:W/2+80,y:548,w:150,h:44},close:{x:W/2,y:630,w:200,h:44}};
+function openDev(){devHold=null;state='dev';stateT=0;SFX.ui()}
+function devStart(n){resetRun();G.tutMode=false;G.runSeed=1+Math.floor(Math.random()*1e6);G.endless=n>20;state='play';stateT=0;SFX.ui();startWave(n)}
+function devBonus(k){resetRun();G.tutMode=false;G.wave=[5,10,15][k];G.bonusFor=G.wave;SFX.ui();startBonus(['gun','gunaxe','shiki'][k])}
+function drawDev(){
+  g.fillStyle='#08090d';g.fillRect(0,0,W,H);
+  txt('開発者モード',W/2,70,24,'#ffd54a','center',JP,null,false,900);txt('始めたいステージを選ぶ',W/2,98,12,'#8b93a8','center',JP,null,false,700);
+  for(let n=1;n<=20;n++){const r=DEV_BTN(n),bk=bossFor(n),t=themeFor(n);
+    rr(r.x-r.w/2,r.y-r.h/2,r.w,r.h,7,bk?'rgba(120,16,32,.95)':'rgba(30,32,44,.95)');g.strokeStyle='rgba(255,255,255,.3)';g.lineWidth=1;rrPath(r.x-r.w/2,r.y-r.h/2,r.w,r.h,7);g.stroke();
+    txt((bk?'BOSS ':'')+pad2(n),r.x,r.y-2,15,bk?'#ff8aa0':'#fff','center',EN,null,true);txt(t.name,r.x,r.y+16,9,'#aab2c4','center',JP,null,false,700,r.w-6)}
+  txt('ボーナス面',W/2,446,12,'#8b93a8','center',JP,null,false,700);
+  ['弾丸返し','弾丸返し・改','式神斬り'].forEach((l,k)=>button(DEV_BON(k),l,'rgba(110,80,10,.95)'));
+  button(DEV_UI.endless,'ENDLESS 21','rgba(30,32,44,.95)',EN);
+  button(DEV_UI.god,'無敵：'+(DEV.god?'ON':'OFF'),DEV.god?'rgba(20,110,60,.95)':'rgba(30,32,44,.95)');
+  button(DEV_UI.close,'閉じる','rgba(30,32,44,.95)');
+}
 function drawHUD(){
   // 上部は床の上に重ねる薄い帯だけ（床を画面いっぱいに使うため）。出すのはステージ名・停止・音の3つと、ボス戦のボスの体力だけ
   const hg=g.createLinearGradient(0,0,0,44);hg.addColorStop(0,'rgba(4,4,8,.72)');hg.addColorStop(1,'rgba(4,4,8,0)');g.fillStyle=hg;g.fillRect(0,0,W,44);
+  if(DEV.god)txt('無敵',12,46,10,'#6dff9c','left',JP,['#000',3],false,900);
   txt(G.tutMode?'TUTORIAL':G.bonus?'BONUS':G.isBossWave?'BOSS':'STAGE '+pad2(G.wave),12,27,15,G.tutMode?'#7ff3ff':G.isBossWave?'#ff2f5f':'#b8ff5a','left',EN,['#000',3],true);
   if(G.isBossWave&&G.boss){const b=G.boss,x=112,w=W-112-84;txt(BOSSES[b.bk].name,x,15,10,'#fff','left',JP,['#000',3],false,900);if(b.onBlood)txt('血に弱る！',x+w,15,10,'#ff4d6d','right',JP,['#000',3],false,900);
     rr(x,20,w,8,3,'rgba(40,10,20,.85)');rr(x,20,w*clamp(b.hp/b.max,0,1),8,3,b.hp<b.max*.5?'#ff2040':'#ff5a7a')}
@@ -3347,6 +3411,8 @@ function drawTitle(){
     // ゲームスタート／チュートリアル（初めての人にはチュートリアルを目立たせる）
     g.globalAlpha=la;const first=!tutDone;
     button(SCR.tstart,'ゲームスタート','rgba(160,20,45,.92)');
+    // 長押し中は、開発者メニューが開くまでの残りを輪で見せる（0.3秒を過ぎてから）
+    if(devHold){const k=(performance.now()-devHold.t)/900;if(k>.33){g.strokeStyle='#ffd54a';g.lineWidth=3;g.beginPath();g.arc(SCR.tstart.x+SCR.tstart.w/2-20,SCR.tstart.y,12,-Math.PI/2,-Math.PI/2+TAU*Math.min(1,k));g.stroke()}}
     if(first)glow(SCR.ttut.x,SCR.ttut.y,150,'#40c8ff',.18+Math.sin(stateT*4)*.08);
     button(SCR.ttut,first?'チュートリアル（初めての方）':'チュートリアル',first?'rgba(20,80,110,.95)':'rgba(30,32,44,.92)');
     // ENDLESS：全20ステージクリアで開放（それまでは鍵付きで見せて、目標にする）
@@ -3413,6 +3479,7 @@ function drawClear(){
 function draw(){
   g.setTransform(cv.width/W,0,0,cv.height/H,0,0);g.globalAlpha=1;g.globalCompositeOperation='source-over';
   if(state==='title'){TXT_SCALE=1;drawTitle();return}
+  if(state==='dev'){TXT_SCALE=1;drawDev();return}
   if(state==='shop'){TXT_SCALE=1;drawShop();return}
   TXT_SCALE=1.2;
   g.save();
