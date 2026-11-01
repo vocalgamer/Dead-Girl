@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.61 2026-11-01';
+const VERSION='v0.62 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -2436,7 +2436,8 @@ const RAIN=[];for(let i=0;i<160;i++){const d=Math.random();RAIN.push({x:rand(-60
 let SPL=[],splAcc=0,boltT=rand(8,16),bolt=0;
 const rainK=()=>state==='title'||state==='shop'?.4:G.tutMode||G.bonus?0:(theme.rain||0);
 function updateRain(rdt){
-  const rk=rainK();rainAudio(rdt,state==='title'||state==='shop'?.6:rk); // タイトルは見た目は控えめ、音は小雨と同じくらいfor(const r of RAIN){r.y+=r.s*rdt;r.x-=r.s*.22*rdt;if(r.y>H+10){r.y=rand(-40,0);r.x=rand(-60,W+160)}}
+  const rk=rainK();rainAudio(rdt,state==='title'||state==='shop'?.6:rk); // タイトルは見た目は控えめ、音は小雨と同じくらい
+  for(const r of RAIN){r.y+=r.s*rdt;r.x-=r.s*.22*rdt;if(r.y>H+10){r.y=rand(-40,0);r.x=rand(-60,W+160)}}
   if(rk>0&&state!=='title'&&state!=='shop'){splAcc+=rdt*60*rk;while(splAcc>1){splAcc--;SPL.push({x:rand(AX0+4,AX1-4),y:rand(AY0+4,AY1-4),t:0})}}
   for(const p of SPL)p.t+=rdt;SPL=SPL.filter(p=>p.t<.42);
   // どしゃ降りのステージだけ、ときどき遠くで稲光（青白く2回またたく）と雷鳴
