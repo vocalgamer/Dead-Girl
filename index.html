@@ -27,12 +27,14 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.52 2026-11-01';
+const VERSION='v0.53 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
 const GUARD_ARC=1.2; // 正面ガードの有効角（片側・ラジアン。1.2≒69°）
 const W=450,H=800,AX0=18,AX1=432,AY0=114,AY1=786,TAU=Math.PI*2;
+// 床の表示：遊びの座標（AX0〜AX1, AY0〜AY1）はそのまま、画面には横幅いっぱいに拡大して描く。ヘッダーは上の VY0 px だけ
+const VS=W/(AX1-AX0),VY0=H-(AY1-AY0)*VS,vx=x=>(x-AX0)*VS,vy=y=>VY0+(y-AY0)*VS;
 const EN='"Arial Black","Impact","Helvetica Neue",sans-serif';
 const JP='"Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",sans-serif';
 const cv=document.getElementById('game'),g=cv.getContext('2d');
@@ -114,20 +116,15 @@ function renderBG(){
   for(let y=AY0;y<=H;y+=46){b.beginPath();b.moveTo(0,y+.5);b.lineTo(W,y+.5);b.stroke()}
   b.fillStyle='rgba(225,225,235,.055)';for(let i=0;i<7;i++)b.fillRect(66+i*46,430,26,92);
   b.save();b.fillStyle='rgba(235,235,245,.065)';b.font='900 '+(T_.mark.length>3?56:70)+'px '+JP;b.textAlign='center';b.fillText(T_.mark,225,650);b.restore();
-  b.fillStyle='rgba(235,185,40,.11)';b.fillRect(AX0+8,AY0,4,H-AY0);b.fillRect(AX1-12,AY0,4,H-AY0);
   b.strokeStyle='rgba(0,0,0,.55)';b.lineWidth=1.3;
   for(let i=0;i<14;i++){let x=sr()*W,y=AY0+sr()*(H-AY0);b.beginPath();b.moveTo(x,y);for(let k=0;k<5;k++){x+=(sr()-.5)*44;y+=(sr()-.5)*44;b.lineTo(x,y)}b.stroke()}
   const manhole=(x,y)=>{b.fillStyle='#090a0e';b.beginPath();b.arc(x,y,21,0,TAU);b.fill();b.strokeStyle='rgba(140,150,170,.25)';b.lineWidth=2;b.beginPath();b.arc(x,y,19,0,TAU);b.stroke();b.lineWidth=1;for(let k=-12;k<=12;k+=6){b.beginPath();b.moveTo(x-15,y+k);b.lineTo(x+15,y+k);b.stroke()}};
   manhole(110,300);manhole(345,700);
   // 屋上：左右は柵のない縁（黄黒の警告帯）
   if(T_.gim==='edge'){for(const x0 of [AX0,AX1-10]){for(let y=AY0;y<H;y+=16){b.fillStyle='#e8c020';b.fillRect(x0,y,10,8);b.fillStyle='#111';b.fillRect(x0,y+8,10,8)}}}
-  // side walls
-  b.fillStyle='#06070b';b.fillRect(0,AY0,AX0,H);b.fillRect(AX1,AY0,W-AX1,H);
-  const tube=(x,y0,y1,col)=>{b.strokeStyle=col;b.lineWidth=4;b.lineCap='round';b.beginPath();b.moveTo(x,y0);b.lineTo(x,y1);b.stroke();b.strokeStyle='rgba(255,255,255,.8)';b.lineWidth=1.3;b.beginPath();b.moveTo(x,y0);b.lineTo(x,y1);b.stroke()};
-  tube(8,190,330,T_.tube[0]);tube(8,560,690,T_.tube[0]);tube(W-8,250,410,T_.tube[1]);tube(W-8,600,760,T_.tube[2]);
-  const crate=(x,y,w,h)=>{b.fillStyle='#2a1d15';b.fillRect(x,y,w,h);b.strokeStyle='#4a3324';b.lineWidth=2;b.strokeRect(x+1,y+1,w-2,h-2);b.beginPath();b.moveTo(x,y);b.lineTo(x+w,y+h);b.stroke()};
-  const barrel=(x,y,r,c)=>{b.fillStyle=c;b.beginPath();b.arc(x,y,r,0,TAU);b.fill();b.strokeStyle='rgba(0,0,0,.5)';b.lineWidth=2;b.beginPath();b.arc(x,y,r*.65,0,TAU);b.stroke()};
-  crate(0,128,30,30);barrel(W-12,150,15,'#1f4b7a');barrel(W-10,520,13,'#5a1e22');crate(0,742,26,40);barrel(10,450,11,'#3b3f22');
+  // 床の左右の端：壁の代わりに、内側へ落ちる影と細い縁取りだけ（敵を叩きつける場所が分かるように）
+  for(const [x0,s] of [[AX0,1],[AX1,-1]]){const sg=b.createLinearGradient(x0,0,x0+s*16,0);sg.addColorStop(0,'rgba(0,0,0,.55)');sg.addColorStop(1,'rgba(0,0,0,0)');b.fillStyle=sg;b.fillRect(Math.min(x0,x0+s*16),AY0,16,H-AY0);
+    b.fillStyle=`rgba(${T_.grid},.5)`;b.fillRect(s>0?x0:x0-2.5,AY0,2.5,H-AY0)}
   // header plate
   const hg=b.createLinearGradient(0,0,0,AY0);hg.addColorStop(0,'#0b0d14');hg.addColorStop(1,'#151826');b.fillStyle=hg;b.fillRect(0,0,W,AY0-6);
   b.fillStyle='#ff2f5f';b.fillRect(0,AY0-6,W,2);
@@ -423,8 +420,8 @@ function finishBonus(){
 function drawBonusHUD(){
   const b=G.bonus;if(!b||b.t<b.wait)return;
   const main=b.kind==='shiki'?'残り '+Math.max(0,Math.ceil(b.dur-(b.t-b.wait)))+'秒　斬った数 '+b.kills:'弾き返し '+b.ref+' / '+b.need;
-  txt(main,W/2,AY0+34,20,'#ffd54a','center',JP,['#000',5],false,900);
-  if(b.kind!=='shiki'){const w=200,x=W/2-w/2;rr(x,AY0+44,w,6,3,'rgba(0,0,0,.5)');rr(x,AY0+44,w*clamp(b.ref/b.need,0,1),6,3,'#ffd54a')}
+  txt(main,W/2,VY0+34,20,'#ffd54a','center',JP,['#000',5],false,900);
+  if(b.kind!=='shiki'){const w=200,x=W/2-w/2;rr(x,VY0+44,w,6,3,'rgba(0,0,0,.5)');rr(x,VY0+44,w*clamp(b.ref/b.need,0,1),6,3,'#ffd54a')}
 }
 function newEndless(){resetRun();G.endless=true;G.runSeed=1+Math.floor(Math.random()*1e6);state='play';stateT=0;SFX.ui();startWave(21)}
 function saveBest(){if(G.score>best){best=G.score;G.newBest=true;try{localStorage.setItem('nb_best',best)}catch(e){}}}
@@ -1054,7 +1051,7 @@ function dynBoom(pr){
 /* ---------------- ドアからの投擲（建物に囲まれた一部の場所） ----------------
    左右の壁のドアが開いて敵が戸口に立ち、0.9秒の予告のあと斧を投げてくる。斧は攻撃で弾き返せ、戸口に打ち返せば撃退できる（しばらく出てこない）。
    戸口の敵は床に出てこないので血は出ない（塗りには関係しない） */
-const WIN_POS=[{x:AX0,y:AY0+150,s:1},{x:AX1,y:AY0+300,s:-1},{x:AX0,y:AY0+460,s:1},{x:AX1,y:AY0+610,s:-1}];
+const WIN_POS=[{x:AX0+10,y:AY0+150,s:1},{x:AX1-10,y:AY0+300,s:-1},{x:AX0+10,y:AY0+460,s:1},{x:AX1-10,y:AY0+610,s:-1}];
 let WINS=[];
 function setupWindows(){WINS=theme.win&&!G.isBossWave&&!G.tutMode?WIN_POS.map(p=>({...p,st:'idle',t:0,cool:rand(3,7)})):[]}
 function updateWindows(dt){
@@ -1490,7 +1487,7 @@ const SPOT_TXT={onmyo:'陰陽師：式神を呼ぶ。斬れば術が解ける',g
 function spotNew(e){const k=e.type==='cleaner'?'cl_'+(e.sub||'mop'):e.type;if(SPOT_TXT[k]&&!SEEN.has(k)){markSeen(k);e.spot=4.5;e.spotTxt=SPOT_TXT[k]}}
 function pointer(x,y,label,col){
   const b=Math.sin(G.time*8)*4;g.fillStyle=col||'#ffd54a';g.beginPath();g.moveTo(x,y+b);g.lineTo(x-8,y-12+b);g.lineTo(x+8,y-12+b);g.closePath();g.fill();
-  g.strokeStyle='#000';g.lineWidth=1.5;g.stroke();if(label)txt(label,clamp(x,label.length*6+8,W-label.length*6-8),y-18+b,12,col||'#ffd54a','center',JP,['#000',4],false,900);
+  g.strokeStyle='#000';g.lineWidth=1.5;g.stroke();if(label)txt(label,clamp(x,AX0+label.length*6+8,AX1-label.length*6-8),y-18+b,12,col||'#ffd54a','center',JP,['#000',4],false,900);
 }
 function glowTile(i,label){const t=tileRect(i),pl=.5+Math.sin(G.time*8)*.5;
   g.fillStyle=`rgba(255,213,74,${.15+pl*.2})`;g.fillRect(t.x,t.y,t.w,t.h);g.strokeStyle=`rgba(255,213,74,${.6+pl*.4})`;g.lineWidth=3;g.strokeRect(t.x+2,t.y+2,t.w-4,t.h-4);
@@ -1508,7 +1505,7 @@ function drawTutWorld(){
 function drawTutPanel(){
   const T_=G.tut,intro=state==='tutintro';if(!T_||(state!=='play'&&!intro)||!tutText(T_.step))return;
   // 床の邪魔にならないよう、ヘッダーのすぐ下に半透明で表示（主人公が近づくとさらに薄くなる）。開始待ちの間はくっきり表示し、枠を点滅させる
-  const [h,b]=tutText(T_.step),y=AY0+6,near=P.y<AY0+130?.45:1,a=intro?1:Math.min(1,T_.t*3)*.85*near;g.save();g.globalAlpha=a;
+  const [h,b]=tutText(T_.step),y=VY0+6,near=vy(P.y)<VY0+130?.45:1,a=intro?1:Math.min(1,T_.t*3)*.85*near;g.save();g.globalAlpha=a;
   const bl=intro?.5+Math.sin(stateT*7)*.5:0;if(intro)glow(W/2,y+26,170,'#ffd54a',.12+bl*.12);
   rr(16,y,W-32,52,8,intro?'rgba(8,8,14,.88)':'rgba(8,8,14,.45)');g.strokeStyle=intro?`rgba(255,213,74,${.4+bl*.6})`:'rgba(255,213,74,.4)';g.lineWidth=intro?2.5:1.2;rrPath(16,y,W-32,52,8);g.stroke();
   txt(h,30,y+21,15,'#ffd54a','left',JP,null,false,900);txt('チュートリアル '+T_.step+'/'+TUT_STEPS+'　'+Math.min(TUT_REPS,(T_.rep||0)+1)+'/'+TUT_REPS+'回目',W-30,y+21,10,'#8b93a8','right',JP,null,false,700);
@@ -1574,7 +1571,7 @@ const keys=new Set();
 let touchMode=!!(window.matchMedia&&matchMedia('(pointer:coarse)').matches);
 // ガードは押している間だけ。ただし正面の攻撃を1回防いで回復すると、押したままでも解ける（一度離して押し直すと再びガード）
 function guarding(){const held=inp.guardKey||inp.guardMouse||inp.guardTouch!=null||inp.padGuard;if(!held)P.guardLock=false;return held&&!P.guardLock}
-const UI={pause:{x:W-24,y:24,r:15},mute:{x:W-24,y:60,r:15}};
+const UI={pause:{x:W-24,y:20,r:14},mute:{x:W-24,y:51,r:14}};
 // マウス：左=攻撃、右=ガード（同時押しは pointermove で来るので buttons から判定）
 function mouseBtn(ev){const a=!!(ev.buttons&1),gd=!!(ev.buttons&2);if(a&&!inp.atkMouse)pressAttack();inp.atkMouse=a;inp.guardMouse=gd}
 const SCR={endless:{x:W/2,y:612,w:260,h:52},title:{x:W/2,y:682,w:260,h:44},ptitle:{x:W/2,y:560,w:240,h:46},tstart:{x:W/2,y:522,w:250,h:46},tnext:{x:W/2,y:430,w:240,h:48},tretry:{x:W/2,y:492,w:240,h:42},ttut:{x:W/2,y:578,w:250,h:40}};
@@ -1699,10 +1696,10 @@ cv.addEventListener('pointerdown',ev=>{
   try{cv.setPointerCapture(ev.pointerId)}catch(e){}
   if(ev.pointerType==='mouse'){mouseBtn(ev);return}
   // 上部のHUD帯をタップ：SOUL満タンなら怨念解放（床を隠すボタンは置かない）
-  if(p.y<AY0){if(G.soul>=100)inp.ragePress=true;return}
+  if(p.y<VY0){if(G.soul>=100)inp.ragePress=true;return}
   const now=performance.now();
   // SOUL満タン中に主人公の上を触ったら、まず「怨念解放の候補」として扱う（離したら発動。滑らせたら移動／長押しならガード）
-  if(G.soul>=100&&!P.dead&&dist(p.x,p.y,P.x,P.y-12)<42){TOUCH.set(ev.pointerId,{x:p.x,y:p.y,sx:p.x,sy:p.y,t:now,mode:'rage',left:p.x<W*.5});return}
+  if(G.soul>=100&&!P.dead&&dist(p.x,p.y,vx(P.x),vy(P.y-12))<42*VS){TOUCH.set(ev.pointerId,{x:p.x,y:p.y,sx:p.x,sy:p.y,t:now,mode:'rage',left:p.x<W*.5});return}
   if(p.x<W*.5){
     // 左半分：触れた場所を中心にした見えないスティック（移動専用。ガードに化けない）
     // 新しく触った指を常にスティックにする（前の指が残っていても乗っ取る）
@@ -1749,7 +1746,7 @@ cv.addEventListener('pointermove',ev=>{
   }
   if(t.mode==='stick'){
     let dx=p.x-inp.sx,dy=p.y-inp.sy,l=Math.hypot(dx,dy);const R=STICK_R;
-    if(l>R){inp.sx+=dx/l*(l-R);inp.sy+=dy/l*(l-R);inp.sx=clamp(inp.sx,R,W-R);inp.sy=clamp(inp.sy,AY0+R,H-R);dx=p.x-inp.sx;dy=p.y-inp.sy;l=Math.hypot(dx,dy)}
+    if(l>R){inp.sx+=dx/l*(l-R);inp.sy+=dy/l*(l-R);inp.sx=clamp(inp.sx,R,W-R);inp.sy=clamp(inp.sy,VY0+R,H-R);dx=p.x-inp.sx;dy=p.y-inp.sy;l=Math.hypot(dx,dy)}
     const m=l<6?0:Math.min(1,(l-4)/(R-10));inp.tx=l?dx/l*m:0;inp.ty=l?dy/l*m:0;t.seen=performance.now();
   }
 });
@@ -2657,9 +2654,6 @@ function wantsBang(e){return (e.state==='windup'&&e.st<.3)||(e.state==='aim'&&e.
 /* ---------------- world draw ---------------- */
 function drawWorld(){
   g.drawImage(bgC,0,0,W,H);
-  const fl=.75+Math.sin(G.time*13)*.08+(Math.random()<.03?-.4:0);
-  const heat=1+(G.isBossWave?0:prog())*1.6; // 塗るほどネオンが強く光る
-  glow(8,260,90,theme.tube[0],.22*fl*heat);glow(8,625,80,theme.tube[0],.2*fl*heat);glow(W-8,330,90,theme.tube[1],.2*fl*heat);glow(W-8,680,90,theme.tube[2],.2*heat);
   // ウェーブ間は血が雨に洗い流されていく
   g.globalAlpha=G.phase==='break'?clamp(G.breakT/1.2,0,1):1;g.drawImage(decC,0,0,W,H);g.globalAlpha=1;
   if(!G.isBossWave&&G.phase==='fight'&&state==='play'){
@@ -2717,6 +2711,7 @@ function drawWorld(){
       if(!e.boss&&e.hp<e.max&&e.max>2){const w=e.r*2;g.fillStyle='rgba(0,0,0,.6)';g.fillRect(e.x-w/2,e.y-e.r-12,w,4);g.fillStyle='#ff4060';g.fillRect(e.x-w/2,e.y-e.r-12,w*clamp(e.hp/e.max,0,1),4)}
     }
   }
+  if(!P.dead&&state!=='title')drawPlayerGauges();
   // bullets
   for(const b of B){
     if(b.friendly){
@@ -2761,7 +2756,7 @@ function drawWorld(){
   for(const r of RINGS){if(r.t<0)continue;const p=r.t/r.dur,rad=lerp(r.r,r.R,easeOut(p));g.strokeStyle=`rgba(${r.col},${1-p})`;g.lineWidth=r.w*(1-p)+1;g.beginPath();g.arc(r.x,r.y,rad,0,TAU);g.stroke()}
   for(const t of TEXTS){
     const p=t.t/t.dur,a=p>.7?1-(p-.7)/.3:1;g.globalAlpha=a;
-    if(t.speech){g.font='700 '+t.size+'px '+JP;const w=g.measureText(t.txt).width+18,x=clamp(t.x,w/2+4,W-w/2-4),y=Math.max(t.y,AY0+30);rr(x-w/2,y-20,w,28,6,'rgba(10,10,14,.85)');g.strokeStyle='rgba(255,60,90,.8)';g.lineWidth=1.5;rrPath(x-w/2,y-20,w,28,6);g.stroke();txt(t.txt,x,y-1,t.size,'#fff','center',JP,null,false,700)}
+    if(t.speech){g.font='700 '+t.size+'px '+JP;const w=g.measureText(t.txt).width+18,x=clamp(t.x,AX0+w/2+4,AX1-w/2-4),y=Math.max(t.y,AY0+30);rr(x-w/2,y-20,w,28,6,'rgba(10,10,14,.85)');g.strokeStyle='rgba(255,60,90,.8)';g.lineWidth=1.5;rrPath(x-w/2,y-20,w,28,6);g.stroke();txt(t.txt,x,y-1,t.size,'#fff','center',JP,null,false,700)}
     else{const sc=t.t<.08?1.5-t.t/.08*.5:1;txt(t.txt,t.x,t.y,Math.round(t.size*sc),t.col,'center',EN,['#000',3],true)}
     g.globalAlpha=1;
   }
@@ -2803,8 +2798,22 @@ function drawSpin(a,p,a0,a1,R,alpha){
 }
 
 /* ---------------- HUD ---------------- */
+// 主人公のHP・SOUL：足元に2本のバーで出す（上のヘッダーを見なくても状態が分かる）
+function drawPlayerGauges(){
+  const w=54,x=P.x-w/2,y=P.y+27,low=lowHP(),v=clamp(G.soul/100,0,1),full=G.soul>=100;
+  rr(x-2,y-2,w+4,15,3,'rgba(0,0,0,.72)');
+  // HP：白い残像（減った分）の上に赤。25%ごとに区切り線
+  rr(x,y,w*clamp(P.hpLag/P.maxhp,0,1),7,2,'#ffffff');
+  rr(x,y,Math.max(0,w*clamp(P.hp/P.maxhp,0,1)),7,2,low&&Math.floor(G.time*6)%2?'#ff8090':'#ff2f5f');
+  g.fillStyle='rgba(0,0,0,.6)';for(let k=1;k<4;k++)g.fillRect(x+w*k/4-.5,y,1,7);
+  // SOUL：緑。満タンで金色に点滅して光る
+  if(full)glow(P.x,y+10,40,'#ffcc33',.45+Math.sin(G.time*8)*.2);
+  rr(x,y+9,w*v,4,1.5,full?(Math.floor(G.time*8)%2?'#fff3b0':'#ffc72a'):'#7fd13a');
+}
 function drawHUD(){
-  g.drawImage(bgC,0,0,bgC.width,Math.round((AY0-4)*bgC.height/H),0,0,W,AY0-4);
+  // ヘッダー（床を広く見せるため、高さは VY0 px だけ）
+  const hg=g.createLinearGradient(0,0,0,VY0);hg.addColorStop(0,'#0b0d14');hg.addColorStop(1,'#151826');g.fillStyle=hg;g.fillRect(0,0,W,VY0);
+  g.fillStyle='#ff2f5f';g.fillRect(0,VY0-2,W,2);
   if(imgOK(FACE)){const hs=P.blinkT>.5?rand(-2,2):0;g.save();rrPath(12+hs,8,46,52,6);g.clip();g.drawImage(FACE,12+hs,8,46,52);
     if(lowHP()&&!P.dead){g.fillStyle=`rgba(255,0,40,${.25+Math.sin(G.time*6)*.15})`;g.fillRect(12,8,46,52)}g.restore();g.strokeStyle=lowHP()?'#ff2f5f':'rgba(255,255,255,.35)';g.lineWidth=1.5;rrPath(12+hs,8,46,52,6);g.stroke()}
   // 床を見やすくするため、進み具合の表示はすべてヘッダー内に収める（プレイ中はロゴの代わりにBLOODゲージ）
@@ -2827,26 +2836,14 @@ function drawHUD(){
   g.fillStyle='#cfd6e4';g.beginPath();const mx=UI.mute.x-7,my=UI.mute.y;g.moveTo(mx,my-3);g.lineTo(mx+4,my-3);g.lineTo(mx+9,my-8);g.lineTo(mx+9,my+8);g.lineTo(mx+4,my+3);g.lineTo(mx,my+3);g.closePath();g.fill();
   if(muted){g.strokeStyle='#ff4060';g.lineWidth=2.2;g.beginPath();g.moveTo(mx-1,my-9);g.lineTo(mx+16,my+9);g.stroke()}
   else{g.strokeStyle='#cfd6e4';g.lineWidth=1.5;g.beginPath();g.arc(mx+9,my,5,-.9,.9);g.stroke()}
-  // HP
-  const hy=78;txt('HP',16,hy+11,12,'#e6e9f0','left',EN);
-  rr(42,hy,140,13,3,'#20242f');
-  rr(42,hy,140*clamp(P.hpLag/P.maxhp,0,1),13,3,'#ffffff');
-  const low=lowHP();rr(42,hy,Math.max(0,140*clamp(P.hp/P.maxhp,0,1)),13,3,low&&Math.floor(G.time*6)%2?'#ff8090':'#ff2f5f');
-  txt(Math.ceil(P.hp)+'',186,hy+11,12,'#fff','left',EN);
-  // SOUL
-  const sx=272;txt('SOUL',222,hy+11,12,'#e6e9f0','left',EN);
-  rr(sx,hy,124,13,3,'#20242f');
-  const v=G.soul/100;
-  rr(sx,hy,Math.max(0,124*v),13,3,G.soul>=100?(Math.floor(G.time*8)%2?'#fff3b0':'#ffc72a'):'#7fd13a');
-  if(G.soul>=100){glow(sx+62,hy+6,120,'#ffcc33',.5+Math.sin(G.time*8)*.2);g.strokeStyle=`rgba(255,236,160,${.6+Math.sin(G.time*8)*.4})`;g.lineWidth=2.5;rrPath(sx-3,hy-3,130,19,5);g.stroke();txt(touchMode?'TAP!':'L / E',sx+62,hy+11,10,'#3a1a00','center',EN)}
-  // chain（HP・SOULの下の帯にコンパクトに。数字が増えるたびに一瞬弾む）
+  // chain（ゲージの下の段にコンパクトに。数字が増えるたびに一瞬弾む）。HP・SOULは主人公の足元（drawPlayerGauges）
   if(G.chain>=3){
-    const y=105,pop=1+G.chainPop*.3,rk=rankOf(G.chain),col=G.chain>=50?'#ffd54a':G.chain>=25?'#ff2f5f':'#fff';
-    g.save();g.translate(W-150,y);g.scale(pop,pop);txt(String(G.chain),0,0,14,col,'right',EN,['#000',3],true);g.restore();
-    txt('HITS',W-146,y,8.5,'#cfd6e4','left',EN,null,true);
-    if(rk)txt(rk,W-112,y,10,G.chain>=50?'#ffd54a':'#ff2f5f','left',EN,null,true);
-    if(G.mult>1)txt('x'+G.mult.toFixed(1),W-14,y,9,'#b8ff5a','right',EN,null,true);
-    rr(W-230,y+3,80,2.5,1,'rgba(255,255,255,.15)');rr(W-230,y+3,80*clamp(G.chainT/2.4,0,1),2.5,1,'#ff2f5f');
+    const y=57,ox=bx+30,pop=1+G.chainPop*.3,rk=rankOf(G.chain),col=G.chain>=50?'#ffd54a':G.chain>=25?'#ff2f5f':'#fff';
+    g.save();g.translate(ox,y);g.scale(pop,pop);txt(String(G.chain),0,0,14,col,'right',EN,['#000',3],true);g.restore();
+    txt('HITS',ox+4,y,8.5,'#cfd6e4','left',EN,null,true);
+    if(rk)txt(rk,ox+38,y,10,G.chain>=50?'#ffd54a':'#ff2f5f','left',EN,null,true);
+    if(G.mult>1)txt('x'+G.mult.toFixed(1),bx+bw+40,y,9,'#b8ff5a','right',EN,null,true);
+    rr(bx,y+4,bw+40,2.5,1,'rgba(255,255,255,.15)');rr(bx,y+4,(bw+40)*clamp(G.chainT/2.4,0,1),2.5,1,'#ff2f5f');
   }
   if(touchMode&&state==='play'&&G.wave===1)txt('左ドラッグ:移動  右タップ:攻撃  右長押し:ガード  光る主人公タップ:怨念',W/2,H-8,10,'rgba(220,225,240,.45)','center',JP,null,false,700);
   if(!touchMode&&state==='play')txt('移動:WASD  攻撃:J/左クリック  ガード:U/右クリック  怨念:L/E',W/2,H-8,10,'rgba(220,225,240,.45)','center',JP,null,false,700);
@@ -2865,14 +2862,14 @@ function drawControls(){
     else if(t.mode==='guard'){g.globalAlpha=.6;g.strokeStyle='#78f0ff';g.lineWidth=2;g.beginPath();g.arc(t.x,t.y,18,0,TAU);g.stroke()}
   }
   // WAVE1の最初の数秒だけ、左右の役割を薄く表示
-  if(G.wave===1&&G.waveTime<6){const a=.35*clamp((6-G.waveTime)/1.5,0,1);g.globalAlpha=a;g.strokeStyle='#fff';g.lineWidth=1;g.setLineDash([6,8]);g.beginPath();g.moveTo(W/2,AY0+40);g.lineTo(W/2,H-30);g.stroke();g.setLineDash([]);
+  if(G.wave===1&&G.waveTime<6){const a=.35*clamp((6-G.waveTime)/1.5,0,1);g.globalAlpha=a;g.strokeStyle='#fff';g.lineWidth=1;g.setLineDash([6,8]);g.beginPath();g.moveTo(W/2,VY0+40);g.lineTo(W/2,H-30);g.stroke();g.setLineDash([]);
     g.globalAlpha=a*1.8;txt('移動',W*.25,H-60,16,'#fff','center',JP,['#000',3],false,900);txt('ドラッグ',W*.25,H-42,11,'#c9cfdc','center',JP,null,false,700);
     txt('攻撃',W*.75,H-60,16,'#fff','center',JP,['#000',3],false,900);txt('タップ（長押しでガード）',W*.75,H-42,11,'#c9cfdc','center',JP,null,false,700)}
   g.restore();
 }
 function drawOverlays(){
   // 怨念解放の間は、画面の縁を赤黒く沈めて主人公の周りに目を向けさせる
-  if(G.rageFx){const a=(1-G.rageFx.t/G.rageFx.dur)*.45,vg=g.createRadialGradient(P.x,P.y,G.rageFx.R*.9,P.x,P.y,H*.9);vg.addColorStop(0,'rgba(40,0,8,0)');vg.addColorStop(1,`rgba(40,0,8,${a})`);g.fillStyle=vg;g.fillRect(0,0,W,H)}
+  if(G.rageFx){const a=(1-G.rageFx.t/G.rageFx.dur)*.45,vg=g.createRadialGradient(vx(P.x),vy(P.y),G.rageFx.R*VS*.9,vx(P.x),vy(P.y),H*.9);vg.addColorStop(0,'rgba(40,0,8,0)');vg.addColorStop(1,`rgba(40,0,8,${a})`);g.fillStyle=vg;g.fillRect(0,0,W,H)}
   // 塗るほど照明が赤く染まる（進み具合を数字でなく雰囲気で感じさせる）
   if(state==='play'&&!G.isBossWave&&!G.tutMode&&G.phase==='fight'){const pr=prog(),a=pr*pr*.3;
     if(a>.01){const vg=g.createRadialGradient(W/2,H*.55,H*.18,W/2,H*.55,H*.75);vg.addColorStop(0,`rgba(255,0,30,${a*.25})`);vg.addColorStop(1,`rgba(150,0,20,${a})`);g.fillStyle=vg;g.fillRect(0,0,W,H)}}
@@ -3040,6 +3037,7 @@ function draw(){
   TXT_SCALE=1.2;
   g.save();
   const sh=G.shake;if(sh>.3)g.translate(rand(-sh,sh),rand(-sh,sh));
+  g.translate(0,VY0);g.scale(VS,VS);g.translate(-AX0,-AY0);
   if(G.zoom>.002){const z=G.zc||P;g.translate(z.x,z.y);g.scale(1+G.zoom,1+G.zoom);g.translate(-z.x,-z.y)}
   drawWorld();drawSmokes();drawTutWorld();
   g.restore();
