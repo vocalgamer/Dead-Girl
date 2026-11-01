@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.51 2026-11-01';
+const VERSION='v0.52 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -354,7 +354,7 @@ const BONUS_THEME={name:'血の試練場',base:'#140810',grid:'200,120,140',refl
 const bonusKind=n=>n===5?'gun':n===10?'gunaxe':n===15?'shiki':['gun','gunaxe','shiki'][(n/5)%3];
 function startBonus(kind){
   state='play';stateT=0;E=[];B=[];MARKS=[];CORPSES=[];
-  G.bonus={kind,ref:0,kills:0,need:BONUS_INFO[kind].need,t:0,wait:2.4,dur:25,end:false,ok:false,endT:0};
+  G.bonus={kind,ref:0,kills:0,got:[],need:BONUS_INFO[kind].need,t:0,wait:2.4,dur:25,end:false,ok:false,endT:0};
   G.phase='fight';G.isBossWave=true;G.boss=null;G.bossPending=0;G.rush=0;G.aimer=null;G.shotGap=1;G.cards=null;G.gim=null;G.crests=[];
   makeLayout(null);washFloor();setTheme(BONUS_THEME);PROPS=[];SPILLS=[];TIRES=[];SMOKES=[];WARNS=[];PWARN=[];
   WINS=kind==='gunaxe'?WIN_POS.map(p=>({...p,st:'idle',t:0,cool:rand(3,5)})):[];
@@ -363,7 +363,7 @@ function startBonus(kind){
 }
 function updateBonus(dt){
   const b=G.bonus;b.t+=dt;
-  if(b.end){b.endT+=dt/Math.max(.05,G.ts);if(b.endT>2.4)finishBonus();return} // 終了演出のスローに関係なく、実時間で2.4秒
+  if(b.end){b.endT+=dt/Math.max(.05,G.ts);if(b.endT>1.4)openBonusResult();return} // 終了演出のスローに関係なく、実時間で2.4秒
   if(b.t<b.wait)return;
   const alive=E.length+MARKS.length;
   if(b.kind==='shiki'){
@@ -384,7 +384,39 @@ function bonusEnd(ok){
   else{slow(1.2,.2);SFX.hurt();G.flash=.6;G.flashCol='255,30,60';addShake(14);callout('終 了','+'+b.pts+'　次のステージへ','#ff4d6d')}
   G.callout.dur=2.2;
 }
+// ボーナス面の集計：弾き返した弾丸・斧（式神斬りは倒した式神）の絵が、テ・テ・テと音を鳴らしながら1つずつ並ぶ。最後に結果と得点
+function openBonusResult(){
+  const b=G.bonus;B=[];E=[];MARKS=[];WINS=[];G.callout=null;G.banner=null;
+  G.bres={items:b.kind==='shiki'?Array(b.kills).fill('shiki'):b.got.slice(),ok:b.ok,pts:b.pts,kind:b.kind,need:b.need,n:0,tick:.5,doneT:-1};
+  state='bres';stateT=0;
+}
+function updateBres(rdt){
+  const r=G.bres;if(r.doneT>=0){r.doneT+=rdt;return}
+  r.tick-=rdt;if(r.tick>0)return;
+  if(r.n<r.items.length){r.n++;r.tick=Math.max(.05,Math.min(.14,2.2/r.items.length));tone(520+Math.min(r.n,40)*22,520+Math.min(r.n,40)*22,.05,'square',.07)}
+  else{r.doneT=0;if(r.ok){SFX.clear();SFX.just()}else SFX.wall()}
+}
+// 集計画面の小さな絵
+function drawIcon(k,x,y){
+  if(k==='bullet'){g.save();g.translate(x,y);rr(-5,-4,10,15,2,'#c9a24a');g.fillStyle='#e8c870';g.fillRect(-3,-3,2,13);g.fillStyle='#b8733a';g.beginPath();g.moveTo(-5,-4);g.quadraticCurveTo(-5,-14,0,-16);g.quadraticCurveTo(5,-14,5,-4);g.closePath();g.fill();g.restore()}
+  else if(k==='axe'){g.save();g.translate(x,y);g.rotate(-.7);g.scale(1.4,1.4);g.fillStyle='#7a4a24';g.fillRect(-11,-1.8,20,3.6);g.fillStyle='#c8ccd4';g.beginPath();g.moveTo(5,-2);g.lineTo(12,-9);g.quadraticCurveTo(15,0,12,9);g.lineTo(5,2);g.closePath();g.fill();g.restore()}
+  else drawShiki({x,y,r:10,flash:0});
+}
+function drawBres(){
+  const r=G.bres,a=clamp(stateT/.3,0,1);dim(.88*a);g.globalAlpha=a;
+  txt('— BONUS STAGE —',W/2,150,15,'#ffd54a','center',EN,null,true);txt(BONUS_INFO[r.kind].name,W/2,190,30,'#fff','center',JP,['#000',5],false,900);
+  const cols=9,cell=42,shown=Math.min(r.n,63),x0=W/2-(cols-1)*cell/2;
+  for(let i=0;i<shown;i++){const cx=x0+(i%cols)*cell,cy=262+Math.floor(i/cols)*48,pop=(i===r.n-1&&r.doneT<0?1.3:1)*1.35;g.save();g.translate(cx,cy);g.scale(pop,pop);drawIcon(r.items[i],0,0);g.restore()}
+  if(r.n>63)txt('+'+(r.n-63),W/2,262+7*48,16,'#fff','center',EN,null,true);
+  const label=r.kind==='shiki'?'斬った式神 '+r.n:'弾き返し '+r.n+' / '+r.need;txt(label,W/2,636,22,'#ffd54a','center',JP,['#000',4],false,900);
+  if(r.doneT>=0){const b=clamp(r.doneT/.3,0,1);g.globalAlpha=a*b;
+    txt(r.ok?'PERFECT!':'失敗……',W/2,688,34,r.ok?'#ffd54a':'#ff4d6d','center',r.ok?EN:JP,['#000',5],r.ok,900);
+    txt('+'+r.pts+(r.ok?'　強化カードをもう1枚選べる':''),W/2,720,14,'#fff','center',JP,null,false,900);
+    if(r.doneT>.6){g.globalAlpha=a*(.55+Math.sin(stateT*5)*.45);txt(touchMode?'タップで次へ':'Enter で次へ',W/2,760,15,'#c9cfdc','center',JP,null,false,900)}}
+  g.globalAlpha=1;
+}
 function finishBonus(){
+  G.bres=null;
   const ok=G.bonus.ok;G.bonus=null;WINS=[];E=[];B=[];
   if(ok){G.pickBonus=true;G.res=null;openPick()}else{state='play';stateT=0;startWave(G.wave+1)}
 }
@@ -827,7 +859,7 @@ function fire(x,y,a,spd,dmg,big){
 // 跳ね返した弾は雑魚を貫通し続ける（装甲・ボスに当たると止まる）
 function reflect(b){
   tutComplete(4,.6);
-  if(G.bonus&&!G.bonus.end&&!b.friendly&&G.bonus.kind!=='shiki'){G.bonus.ref++;if(G.bonus.ref>=G.bonus.need)bonusEnd(true)}
+  if(G.bonus&&!G.bonus.end&&!b.friendly&&G.bonus.kind!=='shiki'){G.bonus.ref++;G.bonus.got.push(b.axe?'axe':'bullet');if(G.bonus.ref>=G.bonus.need)bonusEnd(true)}
   const pf=dist(b.x,b.y,P.x,P.y)<P.r+26+15*lv('perfect');
   b.friendly=true;b.life=2;b.perfect=pf;b.kills=0;b.hits=new Set();b.trail=[];let t=null,bd=1e9;
   for(const e of E){const d=dist(b.x,b.y,e.x,e.y);if(d<bd){bd=d;t=e}}
@@ -1622,6 +1654,8 @@ function shareResult(){
 function pressAttack(a){P.atkBuf=.25;P.atkA=a==null?null:a}
 function screenAction(p,key){
   if(state==='ad')return;
+  // ボーナス集計：並べている途中なら一気に全部出す。出し終わっていれば次へ
+  if(state==='bres'){const r=G.bres;if(r.doneT<0){r.n=r.items.length;r.tick=0}else if(r.doneT>.6)finishBonus();return}
   if(state==='pick'){if(p){if(!G.pickAdUsed&&stateT>.5&&inR(p,SCR.pextra)){rewardAd(()=>{G.pickAdUsed=true;G.pickAgain=true;state='pick';stateT=.6});return}const i=cardAt(p);if(i>=0)pickCard(i)}else pickCard(G.cardSel);return}
   if(state==='shop'){if(p){for(let i=0;i<SHOP.length;i++)if(inR(p,SHOP_R(i))){buyShop(i);return}if(!inR(p,SCR.sback))return}state='title';stateT=LOGO_T+.9;SFX.ui();return}
   if(state==='tutintro'){if(stateT>.3){state='play';stateT=0;SFX.ui()}return}
@@ -2215,6 +2249,7 @@ function update(rdt){
   for(const r of RAIN){r.y+=r.s*rdt;r.x-=r.s*.25*rdt;if(r.y>H){r.y=-20;r.x=rand(0,W+200)}}
   if(state==='title'||state==='shop'){G.time+=rdt;return}
   if(state==='ad'){if(stateT>AD_T&&adCb){const f=adCb;adCb=null;f()}return}
+  if(state==='bres'){updateBres(rdt);return}
   if(G.rageFx){G.rageFx.t+=rdt;if(G.rageFx.t>G.rageFx.dur)G.rageFx=null} // 怨念解放の演出は実時間で進める（スロー中もきっちり1.3秒）
   G.shake*=Math.exp(-11*rdt);if(G.zHold>0)G.zHold-=rdt;else{G.zoom*=Math.exp(-7*rdt);if(G.zoom<.004)G.zc=null}G.flash=Math.max(0,G.flash-rdt*2.2);
   if(G.banner){G.banner.t+=rdt;if(G.banner.t>G.banner.dur)G.banner=null}
@@ -3012,7 +3047,7 @@ function draw(){
   drawHUD();drawTutPanel();
   if(touchMode&&state==='play')drawControls();
   drawBonusHUD();drawSea();drawBanner();drawCallout();
-  if(state==='pause')drawPause();else if(state==='over')drawOver();else if(state==='clear')drawClear();else if(state==='pick')drawPick();else if(state==='tutmenu')drawTutMenu();else if(state==='tutintro')drawTutIntro();else if(state==='stintro')drawStIntro();else if(state==='tutend')drawTutEnd();else if(state==='ad')drawAd();
+  if(state==='pause')drawPause();else if(state==='over')drawOver();else if(state==='clear')drawClear();else if(state==='pick')drawPick();else if(state==='tutmenu')drawTutMenu();else if(state==='tutintro')drawTutIntro();else if(state==='stintro')drawStIntro();else if(state==='tutend')drawTutEnd();else if(state==='ad')drawAd();else if(state==='bres')drawBres();
 }
 function loop(ts){
   const rdt=Math.min(.05,(ts-last)/1000||0);last=ts;
