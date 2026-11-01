@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v1.01 2026-11-02';
+const VERSION='v1.03 2026-11-02';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.6; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値。v0.98で.4→.6）
@@ -2199,10 +2199,13 @@ function tutCorner(){
 }
 function updateTut(dt){
   const T_=G.tut;if(!T_)return;T_.t+=dt;
+  if(T_.backT!=null){T_.backT-=dt;if(T_.backT<=0){resetRun();state='tutsel';stateT=0}return}
   if(T_.doneAt!=null&&T_.t>=T_.doneAt){T_.doneAt=null;T_.rep=(T_.rep||0)+1;
     // 3回成功するまでは、その場で準備をやり直して続ける
     const reps=tutReps(T_.step);
     if(T_.rep<reps){callout('ナイス！','あと'+(reps-T_.rep)+'回','#ffd54a');G.callout.dur=1.2;SFX.ui();tutSetup(T_.step);return}
+    // 個別に選んだ手順：クリアを知らせて、少ししたら選択画面へ戻る
+    if(T_.single){callout(tutText(T_.step)[0]+' クリア！','手順の選択に戻ります','#ffd54a');G.callout.dur=1.4;SFX.just();T_.backT=1.5;T_.later=true;return}
     // 最後の手順は「タイトルへ／もう一度」を出さず、そのまま締めのメッセージへ
     if(T_.step>=TUT_STEPS){tutChoice(true);return}
     state='tutmenu';stateT=0;SFX.just();return}
@@ -2420,7 +2423,7 @@ function screenAction(p,key){
   if(state==='stintro'){if(stateT>.3){SFX.ui();stateT=0;if(++G.cardI>=G.cards.length){G.cards=null;state='play'}}return}
   if(state==='tutmenu'){if(stateT<.3)return;if(p){if(inR(p,SCR.tnext))tutChoice(true);else if(inR(p,SCR.tretry))tutChoice(false);else if(inR(p,SCR.tquit))tutQuit();return}if(key==='quit'){tutQuit();return}tutChoice(key!=='retry');return}
   if(state==='tutsel'){
-    if(p){if(inR(p,TUT_ALL)){newGame(true);return}if(tutDone)for(let n=1;n<=TUT_STEPS;n++)if(inR(p,TUTSEL(n))){startTutAt(n);return}if(inR(p,SCR.tsback)){state='title';stateT=0;skipPrologue();SFX.ui()}return}
+    if(p){if(inR(p,TUT_ALL)){newGame(true);return}if(tutDone)for(let n=1;n<=TUT_STEPS;n++)if(inR(p,TUTSEL(n))){startTutAt(n,true);return}if(inR(p,SCR.tsback)){state='title';stateT=0;skipPrologue();SFX.ui()}return}
     if(key==='title'){state='title';stateT=0;skipPrologue()}return}
   // タイトル：音がまだ鳴らせない状態なら、最初の1回は「音をONにするだけ」（BGMを聴かせるため）。2回目で開始
   // プロローグ中のタップ（クリック・キー）は読み飛ばし：すぐロゴとボタンを出す（音の準備もこのタップで済ませる）
@@ -2436,6 +2439,8 @@ function screenAction(p,key){
     for(let n=1;n<=TUT_STEPS;n++)if(inR(p,DEV_TUT(n))){devTut(n);return}
     if(inR(p,DEV_UI.endless)){devStart(21);return}
     if(inR(p,DEV_UI.god)){DEV.god=!DEV.god;SFX.ui();return}
+    // 怨念の祭壇のリセット：誤って押さないよう、3秒以内にもう一度押した時だけ実行（買った強化と、たまった怨念をすべて0に）
+    if(inR(p,DEV_UI.meta)){if(DEV.metaAsk&&performance.now()-DEV.metaAsk<3000){META={pts:0,lv:{}};saveMeta();DEV.metaAsk=0;DEV.metaDone=performance.now();SFX.clear()}else{DEV.metaAsk=performance.now();SFX.ui()}return}
     if(inR(p,DEV_UI.close)){state='title';stateT=0;skipPrologue();SFX.ui()}return}
   if(state==='over'){if(stateT<.9)return;
     if(p){if(canRevive()&&inR(p,SCR.orevive)){rewardAd(revive);return}
@@ -2570,7 +2575,7 @@ addEventListener('keydown',ev=>{
     if(state==='tutend'){screenAction(null,'go');return}
     if(state==='tutintro'||state==='stintro'){if(k==='enter'||k===' '||k==='j'||k==='z')screenAction(null,'go');return}
     if(state==='tutmenu'){if(k==='r')screenAction(null,'retry');else if(k==='escape')screenAction(null,'quit');else if(k==='enter'||k===' '||k==='j'||k==='z')screenAction(null,'go');return}
-    if(state==='tutsel'){const n=k==='0'?10:+k;if(k==='enter'||k===' ')newGame(true);else if(tutDone&&n>=1&&n<=TUT_STEPS)startTutAt(n);else if(k==='escape')screenAction(null,'title');return}
+    if(state==='tutsel'){const n=k==='0'?10:+k;if(k==='enter'||k===' ')newGame(true);else if(tutDone&&n>=1&&n<=TUT_STEPS)startTutAt(n,true);else if(k==='escape')screenAction(null,'title');return}
     if(state==='dev'){if(k==='escape')screenAction(null,'title');return}
   if(state==='title'){if(k==='t')screenAction(null,'tut');else if(k==='enter'||k===' '||k==='j'||k==='z')screenAction(null,'go');return}
     if(k==='escape'||k==='t')screenAction(null,state==='pause'&&k==='escape'?null:'title');
@@ -3711,12 +3716,13 @@ function drawPlayerGauges(){
 const DEV={god:false};let DEVSHIFT=false,devHold=null;
 const DEV_BTN=n=>({x:66+((n-1)%4)*106,y:150+Math.floor((n-1)/4)*62,w:96,h:52});
 const DEV_BON=k=>({x:84+k*141,y:480,w:132,h:44});
-const DEV_UI={endless:{x:W/2-80,y:548,w:150,h:44},god:{x:W/2+80,y:548,w:150,h:44},close:{x:W/2,y:700,w:200,h:44}};
+const DEV_UI={endless:{x:W/2-80,y:548,w:150,h:44},god:{x:W/2+80,y:548,w:150,h:44},meta:{x:W/2,y:690,w:300,h:40},close:{x:W/2,y:744,w:200,h:40}};
 const DEV_TUT=n=>({x:W/2+(n-5.5)*41,y:632,w:37,h:40}); // チュートリアルの手順①〜⑨
 function openDev(){devHold=null;state='dev';stateT=0;SFX.ui()}
 function devStart(n){resetRun();G.tutMode=false;G.runSeed=1+Math.floor(Math.random()*1e6);G.endless=n>20;state='play';stateT=0;SFX.ui();startWave(n)}
 // チュートリアルを、指定した手順から始める（開発者モード・手順選択の画面から）
-function startTutAt(n){newGame(true);G.tut.step=n;G.tut.rep=0;tutSetup(n);state='tutintro';stateT=0}
+// single：選択画面から個別に選んだ時。その手順を終えたら選択画面へ戻る（開発者モードからは続けて次の手順へ）
+function startTutAt(n,single){newGame(true);G.tut.step=n;G.tut.rep=0;G.tut.single=!!single;tutSetup(n);state='tutintro';stateT=0}
 const devTut=startTutAt;
 // チュートリアルを途中でやめてタイトルへ
 function tutQuit(){G.tut=null;state='title';stateT=0;resetRun();skipPrologue();SFX.ui()}
@@ -3747,6 +3753,8 @@ function drawDev(){
   txt('チュートリアル（手順を選ぶ）',W/2,600,12,'#8b93a8','center',JP,null,false,700);
   for(let n=1;n<=TUT_STEPS;n++){const r=DEV_TUT(n),t=tutText(n);rr(r.x-r.w/2,r.y-r.h/2,r.w,r.h,7,'rgba(20,70,90,.95)');g.strokeStyle='rgba(255,255,255,.3)';g.lineWidth=1;rrPath(r.x-r.w/2,r.y-r.h/2,r.w,r.h,7);g.stroke();
     txt(t?t[0].slice(0,1):String(n),r.x,r.y+7,18,'#7ff3ff','center',JP,null,false,900)}
+  {const ask=DEV.metaAsk&&performance.now()-DEV.metaAsk<3000,done=DEV.metaDone&&performance.now()-DEV.metaDone<2000;
+    button(DEV_UI.meta,done?'リセットしました':ask?'本当にリセット？（もう一度押す）':'怨念の祭壇をリセット（怨念 '+META.pts+'）',done?'rgba(20,110,60,.95)':ask?'rgba(170,30,40,.95)':'rgba(70,20,60,.95)')}
   button(DEV_UI.close,'閉じる','rgba(30,32,44,.95)');
 }
 function drawHUD(){
