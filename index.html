@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.53 2026-11-01';
+const VERSION='v0.57 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -293,7 +293,7 @@ function toggleMute(){muted=!muted;try{localStorage.setItem('nb_mute',muted?'1':
 /* ---------------- state ---------------- */
 let state='title',stateT=0,uid=0,last=0;
 const G={},P={};
-let E=[],B=[],FX=[],ORBS=[],RINGS=[],TEXTS=[],MARKS=[],CORPSES=[];
+let E=[],B=[],FX=[],RINGS=[],TEXTS=[],MARKS=[],CORPSES=[];
 let best=0;try{best=+localStorage.getItem('nb_best')||0}catch(e){}
 const STAGES=[
   {dur:.25,hitAt:.07,range:76,arc:2.7,dmg:1.6,kb:230,from:-1.6,to:1.5,stop:.05,shake:4},
@@ -330,7 +330,7 @@ function resetRun(){
   Object.assign(P,{x:W/2,y:540,vx:0,vy:0,kx:0,ky:0,lx:0,ly:0,lt:0,r:14,hp:100,hpLag:100,maxhp:100,face:-Math.PI/2,
     atk:null,stage:0,comboWin:0,recover:0,atkBuf:0,atkA:null,inv:0,blinkT:0,
     crit:false,walk:0,trail:[],ghostT:0,dead:false,guard:false,guardLock:false,guardFx:0});
-  E=[];B=[];FX=[];ORBS=[];RINGS=[];TEXTS=[];MARKS=[];CORPSES=[];
+  E=[];B=[];FX=[];RINGS=[];TEXTS=[];MARKS=[];CORPSES=[];
   PROPS=[];SMOKES=[];WARNS=[];SHOCKS=[];SPILLS=[];for(const k in UP)delete UP[k];
   makeLayout(null);washFloor();setTheme(1);
   // 怨念の祭壇で買った永続強化（チュートリアルでは使わない）
@@ -431,6 +431,7 @@ function startWave(n){
   G.wave=n;G.sea=null;G.phase='fight';G.spawnT=1.3;G.bossPending=0;G.bossInfo=null;G.aimer=null;G.shotGap=0;G.cleanT=rand(5,9);G.crewOut=false;G.waveTime=0;G.crests=[];
   const bk=bossFor(n);
   G.isBossWave=!!bk;
+  if(!G.tutMode&&lv('seed'))G.soul=Math.min(100,G.soul+25*lv('seed')); // 怨念の種
   // 床の形：STAGE1・ボス・チュートリアルは素の長方形。ストーリーはステージごとに決まった形、ENDLESSは自動生成
   makeLayout(G.tutMode||bk||n===1?null:n<=20?n*7919:(G.runSeed*7919+n*104729),n<=20?STORY_TPL[n]:null);
   washFloor();setTheme(G.tutMode?TUT_THEME:themeFor(n));setupWindows();setupGimmick();G.mile=0;capNew=[];CAPQ=[];G.wk=0;G.wchain=0;G.wcap=0;G.rushT=rand(22,34);G.rush=0;G.rushSp=0;
@@ -546,7 +547,7 @@ function updateWave(dt){
 }
 const SEA_FOCUS=.75; // 血の海達成の前に、最後の1マスへ寄って見せる秒数
 function waveClear(){
-  G.phase='break';G.breakT=3.2;healP(20);slow(.9,.2);SFX.clear();addShake(16);G.flash=.5;G.flashCol='255,20,50';
+  G.phase='break';G.breakT=3.2;healP(20+15*lv('mend'));slow(.9,.2);SFX.clear();addShake(16);G.flash=.5;G.flashCol='255,20,50';
   for(const o of [...E])killEnemy(o,Math.atan2(o.y-P.y,o.x-P.x),700,{});
   MARKS.length=0;B.length=0;
   const tm=G.waveTime,rk=tm<40?'S':tm<55?'A':tm<75?'B':'C',bonus={S:3000,A:1500,B:600,C:0}[rk]*G.wave;G.score+=bonus;
@@ -623,7 +624,7 @@ function paint(x,y,r,amt){
     const i=cy*GC+cx;if(DONE[i])continue;const t=tileRect(i);
     if(Math.hypot(x-clamp(x,t.x,t.x+t.w),y-clamp(y,t.y,t.y+t.h))>r)continue;
     const inT=x>=t.x&&x<t.x+t.w&&y>=t.y&&y<t.y+t.h;
-    PAINT[i]+=amt*PAINT_MUL*(inT?1:.5)*(prog()>=.85?2:1)*(1+Math.min(1.2,G.chain/20))*(G.tutMode?1:1+.06*mlv('blood'));if(PAINT[i]>=1)fillTile(i); // 連続撃破ほど塗りが速い（20連で2倍、24連で最大2.2倍）
+    PAINT[i]+=amt*PAINT_MUL*(inT?1:.5)*(prog()>=.85?2:1)*(1+Math.min(1.2,G.chain/20))*(G.tutMode?1:1+.06*mlv('blood'))*(1+.1*lv('paint'));if(PAINT[i]>=1)fillTile(i); // 連続撃破ほど塗りが速い（20連で2倍、24連で最大2.2倍）
   }
 }
 function fillTile(i){
@@ -781,7 +782,8 @@ function hitEnemy(e,dmg,ang,kb,o){
   if(e.boss&&e.state==='dizzy')dmg*=1.6;
   // ボスは血溜まりの上だと弱る（白鷺は潔癖なのでさらに弱る）
   if(e.boss&&e.onBlood)dmg*=e.type==='shirasagi'?2:1.5;
-  e.hp-=dmg;e.flash=.11;let k=kb;
+  if(e.boss)dmg*=1+.25*lv('slayer');
+  e.hp-=dmg;e.flash=.11;let k=kb*(1+.12*lv('heavy'));
   if(e.armor){
     if(e.boss)k*=o.fin?.18:.06;
     else if(o.fin){k*=.6;e.stun=.6;if(e.state!=='enter')e.state='chase'}
@@ -793,7 +795,7 @@ function hitEnemy(e,dmg,ang,kb,o){
     if(k>=420&&!o.crash){e.fly=.45;e.bset=new Set([e])} // ぶつけられた敵はさらに次へは飛ばない（連鎖は直後の1体まで）
   }
   e.vx=Math.cos(ang)*k;e.vy=Math.sin(ang)*k;
-  G.chain++;G.chainT=2.4;G.chainPop=1;G.maxChain=Math.max(G.maxChain,G.chain);G.wchain=Math.max(G.wchain||0,G.chain);
+  G.chain++;G.chainT=chainWin();G.chainPop=1;G.maxChain=Math.max(G.maxChain,G.chain);G.wchain=Math.max(G.wchain||0,G.chain);
   G.mult=1+Math.min(4,Math.floor(G.chain/10)*.5);
   if([10,25,50,100,150,200,300].includes(G.chain))callout(rankOf(G.chain)+'!',G.chain+' HITS  x'+G.mult.toFixed(1));
   G.soul=Math.min(100,G.soul+soulMul()*(o.fin?3:1.6));
@@ -826,9 +828,8 @@ function killEnemy(e,ang,spd,o){
   // 連続撃破ほど血しぶきが大きくなる（25連で最大1.8倍）
   else{const cs=1+Math.min(.8,G.chain/25);splat(e.x,e.y,e.r*1.5*cs,ang);bloodBurst(e.x,e.y,ang,Math.round(18*cs),440*cs)}  {
     if(!o.fall)CORPSES.push({e,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,rot:0,vr:rand(-16,16),t:0,hit:new Set(),noCrash:!!o.crash,push2:!!o.crash});
-    G.kills++;const pts=Math.round(e.val*G.mult);G.score+=pts;
+    G.kills++;const pts=Math.round(e.val*G.mult*(1+.25*lv('greed')));G.score+=pts;
     G.soul=Math.min(100,G.soul+soulMul()*(e.type==='brute'?20:10));
-    dropOrbs(e.x,e.y,Math.random()<(P.hp<40?.24:.1)+(e.type==='brute'?.3:0));
     SFX.kill(G.chain);G.hitstop=Math.max(G.hitstop,.06);addShake(6);
   }
 }
@@ -870,23 +871,19 @@ function reflect(b){
   G.flash=Math.max(G.flash,pf?.45:.25);G.flashCol=pf?'255,230,140':'150,240,255';G.zoom=Math.max(G.zoom,pf?.06:.04);addShake(pf?13:8);
   popText(b.x,b.y-18,pf?'PERFECT REFLECT!!':'REFLECT!!',pf?'#ffd54a':'#7ff3ff',pf?22:19,.85);
   G.score+=pf?300:100;
-  G.chain++;G.chainT=2.4;G.chainPop=1;G.soul=Math.min(100,G.soul+soulMul()*(pf?8:4));
-}
-// 落とすのは回復ハートのみ（魂を吸い取る演出は廃止。SOULは撃破時に直接加算）
-function dropOrbs(x,y,heal){
-  if(heal)ORBS.push({k:'heal',x,y,vx:rand(-50,50),vy:rand(-50,50),t:0});
+  G.chain++;G.chainT=chainWin();G.chainPop=1;G.soul=Math.min(100,G.soul+soulMul()*(pf?8:4));
 }
 function hurtPlayer(dmg,sx,sy){
   if(P.dead||state!=='play')return;
   if(P.inv>0)return;
-  dmg*=ENEMY_DMG;
+  dmg*=ENEMY_DMG*(1-.1*lv('armor'));
   const a=Math.atan2(P.y-sy,P.x-sx);
   // ガードは正面（向いている方向±GUARD_ARC）からの攻撃だけ防げる
   const front=Math.abs(angDiff(P.face,a+Math.PI))<guardArc();
   if(P.guard&&!front)popText(P.x,P.y-50,'背後を取られた！','#ffb44a',13,.8);
   if(P.guard&&front){
     // ガード：ダメージを完全に防ぎ、受けるはずだったダメージのGUARD_HEAL倍だけ回復。ノックバック小、連撃は途切れない
-    const heal=dmg*GUARD_HEAL;P.hp=Math.min(P.maxhp,P.hp+heal);P.guardLock=true;tutComplete(3,.6);
+    const heal=dmg*GUARD_HEAL*(1+.5*lv('guardh'));P.hp=Math.min(P.maxhp,P.hp+heal);P.guardLock=true;tutComplete(3,.6);
     if(lv('counter')&&!P.crit){P.crit=.7;popText(P.x,P.y-48,'COUNTER!','#7fd8ff',15,.7)}
     // 防いだ相手（近接攻撃なら攻撃元の近くの敵）を弾き飛ばして少し怯ませ、間合いを作る
     let foe=null,fd=48;for(const e of E){if(e.boss)continue;const dd=dist(e.x,e.y,sx,sy);if(dd<fd){fd=dd;foe=e}}
@@ -899,7 +896,9 @@ function hurtPlayer(dmg,sx,sy){
   }
   // ボーナス面は1発でも被弾したら即終了（ライフは減らない）
   if(G.bonus){if(!G.bonus.end)bonusEnd(false);P.inv=.8;return}
-  P.hp-=dmg;P.inv=.8;P.blinkT=.8;
+  P.hp-=dmg;P.inv=.8*(1+.5*lv('dodge'));P.blinkT=P.inv;
+  // 復讐の血：被弾した瞬間、周りの敵を吹き飛ばす
+  if(lv('spite')){RINGS.push({x:P.x,y:P.y,r:10,R:110,t:0,dur:.3,col:'255,40,70',w:10});for(const e of E){if(e.boss)continue;const ka=Math.atan2(e.y-P.y,e.x-P.x);if(dist(e.x,e.y,P.x,P.y)<110){e.vx=Math.cos(ka)*460;e.vy=Math.sin(ka)*460;e.stun=Math.max(e.stun,.6)}}}
   P.kx=Math.cos(a)*300;P.ky=Math.sin(a)*300;
   bloodBurst(P.x,P.y,a,14,300);addShake(11);G.flash=Math.max(G.flash,.35);G.flashCol='255,30,60';G.hitstop=Math.max(G.hitstop,.07);SFX.hurt();
   popText(P.x,P.y-30,'-'+Math.round(dmg),'#ff4060',18,.8);
@@ -909,7 +908,7 @@ function hurtPlayer(dmg,sx,sy){
 }
 function die(a){P.hp=0;P.dead=true;P.guard=false;G.deathT=0;slow(2,.25);P.atk=null;bloodBurst(P.x,P.y,a,40,500);splat(P.x,P.y,26,a);SFX.death();G.flash=.7}
 function bossDown(e,ang){
-  G.boss=null;G.kills++;const pts=Math.round(e.val*G.mult);G.score+=pts;
+  G.boss=null;G.kills++;const pts=Math.round(e.val*G.mult*(1+.25*lv('greed')));G.score+=pts;
   slow(1.7,.15);addShake(28);G.flash=.9;G.flashCol='255,255,255';G.hitstop=.18;G.zoom=.08;
   for(let i=0;i<4;i++)bloodBurst(e.x,e.y,rand(0,TAU),30,600);
   splat(e.x,e.y,50,ang);SFX.boom();SFX.kill(99);
@@ -917,10 +916,9 @@ function bossDown(e,ang){
   CORPSES.push({e,vx:Math.cos(ang)*520,vy:Math.sin(ang)*520,rot:0,vr:rand(-8,8),t:-.8,hit:new Set()});
   for(const o of [...E])killEnemy(o,Math.atan2(o.y-e.y,o.x-e.x),760,{});
   MARKS.length=0;B.length=0;
-  dropOrbs(e.x,e.y,true);
   PWARN.length=0;G.banner={top:BOSSES[e.bk].name,main:'撃 破',sub:'+'+pts,t:0,dur:2.8,col:'#ff2f5f'};
   if(e.type==='kito'&&!G.endless){G.phase='ending';G.endT=3.4}
-  else{G.phase='break';G.breakT=3.4;healP(35);G.res={boss:true,kills:G.wk,chain:G.wchain}}
+  else{G.phase='break';G.breakT=3.4;healP(35+15*lv('mend'));G.res={boss:true,kills:G.wk,chain:G.wchain}}
 }
 
 
@@ -938,23 +936,46 @@ const CARDS=[
   {id:'swift',  name:'死者の脚',    desc:'移動速度+8%',                            max:2,col:'#d0d6ff'},
   {id:'power',  name:'剛腕',        desc:'攻撃力+17%',                              max:3,col:'#ffb060'},
   {id:'perfect',name:'見切り',      desc:'PERFECT反射の受付が広がり、弾も速くなる', max:1,col:'#ffd54a'},
-  {id:'quake',  name:'死体爆弾',    desc:'吹き飛んだ死体が壁に当たると爆発',        max:1,col:'#ff9a40'}
+  {id:'quake',  name:'死体爆弾',    desc:'吹き飛んだ死体が壁に当たると爆発',        max:1,col:'#ff9a40'},
+  {id:'paint',  name:'濃い返り血',  desc:'床の塗り+10%',                            max:3,col:'#ff4d6d'},
+  {id:'armor',  name:'死者の皮膚',  desc:'受けるダメージ-10%',                      max:3,col:'#a8b4c8'},
+  {id:'mend',   name:'戦いの余韻',  desc:'ステージクリア時の回復+15',               max:3,col:'#6dff9c'},
+  {id:'linger', name:'途切れぬ怒り',desc:'連撃が途切れるまでの時間+30%',            max:2,col:'#ff2f5f'},
+  {id:'ember',  name:'怨念の残り火',desc:'怨念解放のあと、SOULが30残る',            max:1,col:'#b8ff5a'},
+  {id:'payback',name:'倍返し',      desc:'反射弾の装甲・ボスへの威力+50%',          max:2,col:'#7ff3ff'},
+  {id:'guardh', name:'守りの糧',    desc:'ガード成功時の回復量+50%',                max:2,col:'#7fd8ff'},
+  {id:'gimmick',name:'仕掛け屋',    desc:'仕掛けが30%早く元に戻る',                 max:2,col:'#ffb040'},
+  {id:'heavy',  name:'怪力',        desc:'敵を吹き飛ばす力+12%',                    max:2,col:'#ffb060'},
+  {id:'slayer', name:'鬼殺し',      desc:'ボスへのダメージ+25%',                    max:2,col:'#ff2f5f'},
+  {id:'greed',  name:'血の宴',      desc:'撃破スコア+25%',                          max:2,col:'#ffd54a'},
+  {id:'quick',  name:'速い爪',      desc:'攻撃の速さ+8%',                           max:2,col:'#ffd0d6'},
+  {id:'brink',  name:'背水',        desc:'HPが30%以下の間、攻撃力+40%',             max:1,col:'#ff5a78'},
+  {id:'spite',  name:'復讐の血',    desc:'被弾すると、周りの敵を吹き飛ばす',        max:1,col:'#ff4060'},
+  {id:'seed',   name:'怨念の種',    desc:'ステージ開始時にSOUL+25',                 max:2,col:'#b8ff5a'},
+  {id:'dodge',  name:'受け流し',    desc:'被弾後の無敵時間+50%',                    max:1,col:'#d0d6ff'},
+  // 何度でも選べるカード：通常の強化が3枚に満たない時だけ出る（ENDLESSで取り尽くしても「もう1枚」が空にならない）
+  {id:'r_heal', name:'血の補給',    desc:'HPを全回復',                              max:999,rep:true,col:'#6dff9c'},
+  {id:'r_soul', name:'怨念の滴',    desc:'SOUL+60',                                 max:999,rep:true,col:'#b8ff5a'},
+  {id:'r_grit', name:'執念',        desc:'攻撃力+4%（何度でも重なる）',             max:999,rep:true,col:'#ffb060'}
 ];
+const chainWin=()=>2.4*(1+.3*lv('linger'));
 const UP={};
 const lv=id=>UP[id]||0;
-const powMul=()=>(1+.175*lv('power'))*(G.tutMode?1:1+.06*mlv('blade'));
+const powMul=()=>(1+.175*lv('power')+.04*lv('r_grit'))*(lv('brink')&&P.hp<=P.maxhp*.3?1.4:1)*(G.tutMode?1:1+.06*mlv('blade'));
 const soulMul=()=>.25*(1+.28*lv('soul')); // 戦闘で溜まるSOULの倍率（基本は当初の1/4）
 const novaR=()=>180*(1+.175*lv('nova')); // 怨念解放の範囲（基本215は強すぎたので180に）
 const guardArc=()=>GUARD_ARC+.245*lv('wide');
 function openPick(extra){
-  const pool=CARDS.filter(c=>lv(c.id)<c.max);if(!pool.length){state='play';stateT=0;startWave(G.wave+1);return}
-  for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]]}
-  G.cards=pool.slice(0,3);G.cardSel=0;state='pick';stateT=0;SFX.ui();
+  const shuf=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+  const pool=shuf(CARDS.filter(c=>!c.rep&&lv(c.id)<c.max)).slice(0,3);
+  if(pool.length<3)pool.push(...shuf(CARDS.filter(c=>c.rep)).slice(0,3-pool.length));
+  G.cards=pool;G.cardSel=0;state='pick';stateT=0;SFX.ui();
   if(!extra)G.pickAdUsed=false; // 「動画を見てもう1枚」はステージクリアごとに1回
 }
 function pickCard(i){
   if(state!=='pick'||stateT<.5)return;const c=G.cards[i];if(!c)return;
   UP[c.id]=lv(c.id)+1;if(c.id==='vital'){P.maxhp+=18;P.hp=Math.min(P.maxhp,P.hp+18)}
+  if(c.id==='r_heal')P.hp=P.maxhp;if(c.id==='r_soul')G.soul=Math.min(100,G.soul+60);
   if(G.pickAgain){G.pickAgain=false;SFX.just();popText(W/2,AY0+60,c.name+' 獲得','#ffd54a',16,1.2);openPick(true);return}
   // 中ボスを倒した後は、次のステージの前にボーナス面を1回挟む
   if(!G.tutMode&&bossFor(G.wave)&&G.bonusFor!==G.wave){G.bonusFor=G.wave;SFX.just();startBonus(bonusKind(G.wave));return}
@@ -989,11 +1010,15 @@ function drawPick(){
     g.strokeStyle=c.col;g.lineWidth=sel?3.5:2;rrPath(x,y,r.w,r.h,10);g.stroke();
     if(!touchMode)txt(String(i+1),x+22,r.y+8,22,c.col,'center',EN,null,true);
     txt(c.name,x+44,y+40,21,c.col,'left',JP,['#000',4],false,900);
-    txt(c.max>1?'Lv '+l+' → '+(l+1):'NEW',x+r.w-14,y+30,12,'#ffd54a','right',EN,null,true);
+    txt(c.rep?'ITEM':c.max>1?'Lv '+l+' → '+(l+1):'NEW',x+r.w-14,y+30,12,'#ffd54a','right',EN,null,true);
     txt(c.desc,x+44,y+76,13,'#e6e9f0','left',JP,null,false,700);
   });
-  const own=CARDS.filter(c=>lv(c.id)).map(c=>c.name+(c.max>1?lv(c.id):''));
-  if(own.length){const line='所持：'+own.join(' / ');const L1=line.slice(0,30),L2=line.slice(30);txt(L1,W/2,690,11,'#c9cfdc','center',JP,null,false,700);if(L2)txt(L2,W/2,706,11,'#c9cfdc','center',JP,null,false,700)}
+  // 所持カード：多くなっても3行に収める（あふれた分は「ほかN枚」）
+  const own=CARDS.filter(c=>lv(c.id)&&c.id!=='r_heal'&&c.id!=='r_soul').map(c=>c.name+(c.max>1?lv(c.id):''));
+  if(own.length){const lines=[];let cur='所持：',i=0;
+    for(;i<own.length;i++){const add=(cur==='所持：'?'':' / ')+own[i];if((cur+add).length>32){if(lines.length===2)break;lines.push(cur);cur=own[i]}else cur+=add}
+    if(i<own.length)cur+=' ほか'+(own.length-i)+'枚';lines.push(cur);
+    lines.forEach((l,k)=>txt(l,W/2,688+k*15,11,'#c9cfdc','center',JP,null,false,700))}
   txt(touchMode?'カードをタップして決定':'1・2・3キー ／ 矢印で選んでEnter',W/2,740,12,'#8b93a8','center',JP,null,false,700);
   if(G.pickAgain)txt('このあと、もう1枚選べる',W/2,650,15,'#ffd54a','center',JP,['#000',3],false,900);
   else if(!G.pickAdUsed)button(SCR.pextra,'▶ 動画でもう1枚選ぶ','rgba(20,80,110,.95)');
@@ -1039,8 +1064,9 @@ function hitProp(pr,ang){
   else if(pr.k==='oil'){SFX.wall();addShake(5);noise(.6,.25,'lowpass',900,200);
     for(let i=0;i<10;i++){const a=ang+rand(-.5,.5),v=rand(80,240),l=rand(.25,.5);fx({k:'oild',x:pr.x+Math.cos(ang)*12,y:pr.y+4,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:l,max:l})}
     SPILLS.push({x:pr.x+Math.cos(ang)*6,y:pr.y+Math.sin(ang)*6+8,a:ang,len:175,w:100,t:0,tick:0,dur:5,lit:false,cause:'oil',dmg:.14,grow:.95,ign:1.25,oil:true})}
-  // タイヤの山：4本がばらけて、殴った方向へ扇状に転がる
-  else if(pr.k==='tires'){SFX.wall();addShake(7);for(let i=0;i<4;i++){const a=ang+(i-1.5)*.18+rand(-.05,.05),v=rand(430,520);TIRES.push({x:pr.x+rand(-6,6),y:pr.y+rand(-6,6),r:11,vx:Math.cos(a)*v,vy:Math.sin(a)*v,rot:0,t:0,hits:new Set()})}}
+  // タイヤの山：積んだ4本が崩れ、上の段ほど高く跳ねながら殴った方向へ扇状に飛び出す
+  else if(pr.k==='tires'){SFX.wall();addShake(7);for(let i=0;i<4;i++){const a=ang+(i-1.5)*.22+rand(-.06,.06),v=rand(400,500)*(1-i*.05);
+    TIRES.push({tire:true,x:pr.x+rand(-5,5),y:pr.y+rand(-4,4),z:i*TIRE_W,vz:rand(150,230)+i*30,r:TIRE_R,vx:Math.cos(a)*v,vy:Math.sin(a)*v,hd:a,rot:rand(0,TAU),lean:0,sd:Math.random()<.5?1:-1,ph:'roll',t:0,ft:0,rat:0,hits:new Set()})}}
   else if(pr.k==='ext'){SMOKES.push({x:pr.x,y:pr.y,r:88,t:3.5});SFX.wash();addShake(4)}
 }
 function dynBoom(pr){
@@ -1094,7 +1120,7 @@ function updateGimmicks(dt){
   for(const pr of PROPS){
     pr.t+=dt;
     // 使った仕掛けは、しばらくすると別の場所に置き直される
-    if(pr.used&&pr.t>(pr.k==='bottle'?11:pr.k==='oil'?13:pr.k==='tires'?8:9))Object.assign(pr,newProp(pr.k));
+    if(pr.used&&pr.t>(pr.k==='bottle'?11:pr.k==='oil'?13:pr.k==='tires'?8:9)*(1-.3*lv('gimmick')))Object.assign(pr,newProp(pr.k));
     if(pr.lit){pr.fuse-=dt;if(pr.fuse<=0)dynBoom(pr)}
     if(pr.fly&&!pr.fly.done){const f=pr.fly,c=Math.cos(f.a),s=Math.sin(f.a);f.t+=dt;pr.x+=c*480*dt;pr.y+=s*480*dt;
       if(Math.random()<.7)fx({k:'fire',x:pr.x,y:pr.y-14,vx:rand(-20,20),vy:rand(-50,-20),life:.3,max:.3,sz:rand(5,9)});
@@ -1117,14 +1143,32 @@ function updateGimmicks(dt){
       if(v>140)for(const e of [...E]){if(pr.hits.has(e))continue;if(dist(pr.x,pr.y,e.x,e.y)<pr.r+e.r){pr.hits.add(e);gimHit('cart',e,e.armor?6:e.hp+1,Math.atan2(e.y-pr.y,e.x-pr.x),560,{fin:true});popText(e.x,e.y-30,'撥ねた！','#ffd54a',14,.6)}}
     }}
   }
-  // 転がるタイヤ：壁・柱で跳ね返り、当たった敵を撥ね飛ばす（同じ敵には1回だけ）。止まったら消える
-  for(const t of TIRES){t.t+=dt;t.x+=t.vx*dt;t.y+=t.vy*dt;const f=Math.exp(-1.1*dt);t.vx*=f;t.vy*=f;const v=Math.hypot(t.vx,t.vy);t.rot+=v*dt/t.r;
-    if(t.x<AX0+t.r){t.x=AX0+t.r;t.vx=Math.abs(t.vx)*.6}else if(t.x>AX1-t.r){t.x=AX1-t.r;t.vx=-Math.abs(t.vx)*.6}
-    if(t.y<AY0+t.r){t.y=AY0+t.r;t.vy=Math.abs(t.vy)*.6}else if(t.y>AY1-t.r){t.y=AY1-t.r;t.vy=-Math.abs(t.vy)*.6}
-    {const n=blockPush(t);if(n)bounceOff(t,n,.6)}
-    if(v>120)for(const e of [...E]){if(t.hits.has(e)||dist(t.x,t.y,e.x,e.y)>=t.r+e.r)continue;t.hits.add(e);
-      gimHit('tires',e,e.boss?2:e.armor?4:e.hp+1,Math.atan2(t.vy,t.vx),480,{fin:true});popText(e.x,e.y-30,'撥ねた！','#ffd54a',14,.6);t.vx*=.7;t.vy*=.7}
-    t.done=v<35&&t.t>.5}
+  // 転がるタイヤ：最初は弾みながら飛び、着地のたびに跳ねて減速。壁・柱で跳ね返り、当たった敵を撥ね飛ばす（同じ敵には1回だけ）
+  // 遅くなると傾いて弧を描き、最後はコインのように回りながら倒れて床に寝る（しばらくして消える）
+  for(const t of TIRES){t.t+=dt;
+    if(t.ph==='flat'){t.ft+=dt;t.done=t.ft>2.4;continue}
+    if(t.z>0||t.vz>0){t.vz-=1100*dt;t.z+=t.vz*dt;
+      if(t.z<=0){t.z=0;if(t.vz<-110){const k=Math.min(1,-t.vz/450);t.vz=-t.vz*.42;t.vx*=.86;t.vy*=.86;tireThud(k);tireDust(t,k)}else t.vz=0}}
+    const air=t.z>0,fric=t.ph==='fall'?4:air?.25:1.05,f=Math.exp(-fric*dt);t.vx*=f;t.vy*=f;
+    let v=Math.hypot(t.vx,t.vy);
+    if(t.ph==='roll'){
+      // 遅くなるほど傾き、傾いた側へ曲がっていく
+      if(!air&&v<240){t.lean+=dt*(.25+(240-v)/240*1.3);const ta=t.sd*t.lean*1.8*dt,c=Math.cos(ta),s=Math.sin(ta);[t.vx,t.vy]=[t.vx*c-t.vy*s,t.vx*s+t.vy*c]}
+      if(v>1)t.hd=Math.atan2(t.vy,t.vx);
+      if(!air&&(v<70||t.lean>.5)){t.ph='fall';t.spin=3}}
+    else{
+      // 倒れ込み：傾くほど速く首を振る（ワン、ワン、ワワワ…と音も速くなる）
+      t.lean=Math.min(Math.PI/2,t.lean+dt*(1+t.lean*2.2));t.spin=3+t.lean*9;t.hd+=t.sd*t.spin*dt;
+      t.rat-=dt;if(t.rat<=0){t.rat=Math.max(.05,.2-t.lean*.1);tone(150+t.lean*60,110,.05,'triangle',.12)}
+      if(t.lean>=Math.PI/2){t.ph='flat';t.vx=t.vy=0;tireThud(.35);tireDust(t,.5)}}
+    t.x+=t.vx*dt;t.y+=t.vy*dt;t.rot+=v*dt/t.r;
+    let wall=false;
+    if(t.x<AX0+t.r){t.x=AX0+t.r;t.vx=Math.abs(t.vx)*.6;wall=true}else if(t.x>AX1-t.r){t.x=AX1-t.r;t.vx=-Math.abs(t.vx)*.6;wall=true}
+    if(t.y<AY0+t.r){t.y=AY0+t.r;t.vy=Math.abs(t.vy)*.6;wall=true}else if(t.y>AY1-t.r){t.y=AY1-t.r;t.vy=-Math.abs(t.vy)*.6;wall=true}
+    {const n=blockPush(t);if(n){bounceOff(t,n,.6);wall=true}}
+    if(wall&&v>120){t.vz=Math.max(t.vz,90+v*.15);tireThud(.6)}
+    if(v>120&&t.z<30)for(const e of [...E]){if(t.hits.has(e)||dist(t.x,t.y,e.x,e.y)>=t.r+e.r)continue;t.hits.add(e);
+      gimHit('tires',e,e.boss?2:e.armor?4:e.hp+1,Math.atan2(t.vy,t.vx),480,{fin:true});popText(e.x,e.y-30,'撥ねた！','#ffd54a',14,.6);t.vx*=.7;t.vy*=.7;t.vz=Math.max(t.vz,170)}}
   TIRES=TIRES.filter(t=>!t.done);
   for(const sm of SMOKES){sm.t-=dt;for(const e of E)if(dist(sm.x,sm.y,e.x,e.y)<sm.r){if(!e.boss)e.stun=Math.max(e.stun,.2);e.smoked=1.2}}
   SMOKES=SMOKES.filter(sm=>sm.t>0);
@@ -1207,11 +1251,100 @@ function drawRageFx(){
   g.restore();
   txt('怨',P.x,P.y-56-p*24,32,`rgba(255,60,80,${a})`,'center',JP,['#000',4],false,900);
 }
+/* ---------------- タイヤ（立体的に描く） ----------------
+   床の座標(x,y)と高さzを、斜め上から見た画面へ写す（奥行きは TIRE_K 倍に縮む）。
+   タイヤは「進む向き hd」「横倒しの傾き lean（0=立って転がる／π/2=床に寝る）」「回転 rot」で形が決まる */
+const TIRE_R=14,TIRE_W=10,TIRE_K=.6,TIRE_CAM=[0,.6,.8];
+function tireThud(k){if(!can('tire',60))return;tone(120,50,.16,'sine',.25+k*.5);noise(.08,.12+k*.25,'lowpass',600,150)}
+function tireDust(t,k){for(let i=0;i<3+k*6;i++){const a=rand(0,TAU),v=rand(20,70)*(.5+k),l=rand(.3,.55);fx({k:'smoke',x:t.x+Math.cos(a)*8,y:t.y+Math.sin(a)*4,vx:Math.cos(a)*v,vy:Math.sin(a)*v*.5,life:l,max:l,sz:rand(4,8)*(.6+k*.6)})}}
+// 中心(cx,cy)、共役半径ベクトルu,vの楕円のパスを作る（線の太さは変形の影響を受けない）
+function ringPath(cx,cy,u,v,s1,s2){g.save();g.translate(cx,cy);g.transform(u[0],u[1],v[0],v[1],0,0);g.beginPath();g.arc(0,0,s1,0,TAU);g.moveTo(s2,0);g.arc(0,0,s2,0,TAU,true);g.restore()}
+function ellPath(cx,cy,u,v,s){g.save();g.translate(cx,cy);g.transform(u[0],u[1],v[0],v[1],0,0);g.beginPath();g.arc(0,0,s,0,TAU);g.restore()}
+function drawTire(x,y,z,hd,lean,rot,sd,alpha,noShadow){
+  const c=Math.cos(hd),s=Math.sin(hd),cl=Math.cos(lean),sl=Math.sin(lean)*(sd||1),R=TIRE_R,hw=TIRE_W/2;
+  const P3=(a,b,h)=>[a,b*TIRE_K-h];
+  // 進行方向F・車軸A・上U から、傾いた後の「タイヤ面の上向き V」と「車軸 X」
+  const V=[-s*sl,c*sl,cl],X=[-s*cl,c*cl,-sl];
+  const u=P3(c*R,s*R,0),v=P3(V[0]*R,V[1]*R,V[2]*R),ch=z+R*cl+hw*Math.abs(Math.sin(lean));
+  const side=o=>{const p=P3(X[0]*o,X[1]*o,X[2]*o+ch);return[x+p[0],y+p[1]]};
+  // 車軸が画面手前を向いている側が見える側
+  const fs=(X[0]*TIRE_CAM[0]+X[1]*TIRE_CAM[1]+X[2]*TIRE_CAM[2])>=0?1:-1;
+  g.save();g.globalAlpha*=alpha==null?1:alpha;
+  // 床の影（高く跳ぶほど小さく薄く）
+  const hk=clamp(1-z/90,.35,1),srx=R*Math.max(Math.abs(c)*cl,Math.abs(Math.sin(lean)))+hw*Math.abs(s)*cl;
+  if(!noShadow){g.fillStyle=`rgba(0,0,0,${.42*hk})`;g.beginPath();g.ellipse(x,y+2,Math.max(hw,srx)*hk+2,(R*TIRE_K*Math.abs(Math.sin(lean))+hw*TIRE_K+3)*hk,0,0,TAU);g.fill()}
+  // 光の向き（左上・手前から）と、面の向きから明るさを決める
+  const Lt=[-.497,-.348,.795],Hf=[-.27,.14,.95],shade=(n,m)=>{const d=Math.max(0,n[0]*Lt[0]+n[1]*Lt[1]+n[2]*Lt[2]),sp=Math.pow(Math.max(0,n[0]*Hf[0]+n[1]*Hf[1]+n[2]*Hf[2]),14);
+    const l=Math.round((22+72*d)*(m||1)+sp*60);return`rgb(${l},${l},${l+4})`};
+  const at=(o,rf,ct,st)=>{const p=side(o);return[p[0]+(u[0]*ct+v[0]*st)*rf,p[1]+(u[1]*ct+v[1]*st)*rf]};
+  // 胴（トレッド）：幅を4本の帯に分け、両端は丸い肩として内側へ倒した面にする。帯×28分割の面を、こちらを向いた面だけ陰影つきで塗る
+  const OF=[-1,-.55,0,.55,1],RF=[.9,.985,1,.985,.9],BT=[-.95,-.3,.3,.95],N=28;
+  for(let k=0;k<N;k++){const t0=rot+k*TAU/N,t1=t0+TAU/N,tm=(t0+t1)/2,c0=Math.cos(t0),s0=Math.sin(t0),c1=Math.cos(t1),s1=Math.sin(t1),cm=Math.cos(tm),sm=Math.sin(tm);
+    const rd=[c*cm+V[0]*sm,s*cm+V[1]*sm,V[2]*sm];
+    for(let j=0;j<4;j++){const cb=Math.cos(BT[j]),sb=Math.sin(BT[j]),n=[rd[0]*cb+X[0]*sb,rd[1]*cb+X[1]*sb,rd[2]*cb+X[2]*sb];
+      if(n[0]*TIRE_CAM[0]+n[1]*TIRE_CAM[1]+n[2]*TIRE_CAM[2]<=0)continue;
+      // ブロック模様：中央2本は交互に溝、肩は互い違い
+      const blk=(j===1||j===2)?((k+(j===2?1:0))%2?1:.62):((k+(j===3?1:0))%3===0?.7:1);
+      const o0=OF[j]*hw,o1=OF[j+1]*hw,a0=at(o0,RF[j],c0,s0),a1=at(o0,RF[j],c1,s1),b1=at(o1,RF[j+1],c1,s1),b0=at(o1,RF[j+1],c0,s0);
+      g.fillStyle=shade(n,blk);g.beginPath();g.moveTo(a0[0],a0[1]);g.lineTo(a1[0],a1[1]);g.lineTo(b1[0],b1[1]);g.lineTo(b0[0],b0[1]);g.closePath();g.fill();g.strokeStyle=g.fillStyle;g.lineWidth=.6;g.stroke()}}
+  // 手前の側面：ふくらんだゴム（光の側が明るいグラデーション）・肩の影・刻印の帯・ビード・向こうが透ける穴
+  const back=side(-fs*hw),front=side(fs*hw),[fx_,fy_]=front,nS=[X[0]*fs,X[1]*fs,X[2]*fs];
+  const d0=Math.max(0,nS[0]*Lt[0]+nS[1]*Lt[1]+nS[2]*Lt[2]),lv0=24+52*d0,gr=g.createLinearGradient(fx_-R*.8,fy_-R*.8,fx_+R*.8,fy_+R*.8);
+  const gc=k=>{const l=Math.round(lv0*k);return`rgb(${l},${l},${l+4})`};gr.addColorStop(0,gc(1.6));gr.addColorStop(.5,gc(1));gr.addColorStop(1,gc(.55));
+  ringPath(fx_,fy_,u,v,.9,.6);g.fillStyle=gr;g.fill();
+  ringPath(fx_,fy_,u,v,.9,.84);g.fillStyle='rgba(0,0,0,.3)';g.fill();
+  ringPath(fx_,fy_,u,v,.67,.6);g.fillStyle='rgba(0,0,0,.45)';g.fill();
+  ellPath(fx_,fy_,u,v,.9);g.strokeStyle='rgba(0,0,0,.55)';g.lineWidth=1;g.stroke();
+  // つや：左上の弧
+  const arcPts=(r,a0,a1,n)=>{g.beginPath();for(let k=0;k<=n;k++){const th=a0+(a1-a0)*k/n,px=fx_+(u[0]*Math.cos(th)+v[0]*Math.sin(th))*r,py=fy_+(u[1]*Math.cos(th)+v[1]*Math.sin(th))*r;k?g.lineTo(px,py):g.moveTo(px,py)}};
+  g.strokeStyle=`rgba(255,255,255,${.1+d0*.18})`;g.lineWidth=1.6;arcPts(.78,Math.PI*.95,Math.PI*1.55,8);g.stroke();
+  // 刻印（メーカー名のような白い文字の並び）。回転と一緒に回るので転がっているのが分かる
+  g.strokeStyle='rgba(215,215,222,.6)';g.lineWidth=1.1;
+  for(const base of [rot,rot+Math.PI])for(let q=0;q<6;q++){const th=base+q*.13;arcPts(.755,th,th+.07,1);g.stroke()}
+  // 穴：向こう側の内張りが見え、その奥は床が透ける
+  g.save();ellPath(fx_,fy_,u,v,.6);g.clip();
+  g.beginPath();g.save();g.translate(fx_,fy_);g.transform(u[0],u[1],v[0],v[1],0,0);g.arc(0,0,.6,0,TAU);g.restore();
+  g.save();g.translate(back[0],back[1]);g.transform(u[0],u[1],v[0],v[1],0,0);g.moveTo(.6,0);g.arc(0,0,.6,0,TAU);g.restore();
+  g.fillStyle='#0d0d10';g.fill('evenodd');g.restore();
+  g.restore();
+}/* ---------------- 立体の箱（台車・段ボール） ----------------
+   タイヤと同じ見え方・光の向きで、向き(c,s)に回した直方体を描く。局所座標 a=前後 b=左右 h=高さ。見えている面だけ陰影をつけて塗る */
+const BOX_L=[-.497,-.348,.795];
+function boxPt(x,y,c,s,a,b,h){return[x+c*a-s*b,y+(s*a+c*b)*TIRE_K-h]}
+function drawBox3(x,y,c,s,a0,a1,b0,b1,h0,h1,rgb,onTop){
+  const P=(a,b,h)=>boxPt(x,y,c,s,a,b,h);
+  const F=[[[a0,b0,h1],[a1,b0,h1],[a1,b1,h1],[a0,b1,h1],[0,0,1]],[[a1,b0,h0],[a1,b1,h0],[a1,b1,h1],[a1,b0,h1],[c,s,0]],[[a0,b0,h0],[a0,b1,h0],[a0,b1,h1],[a0,b0,h1],[-c,-s,0]],
+    [[a0,b1,h0],[a1,b1,h0],[a1,b1,h1],[a0,b1,h1],[-s,c,0]],[[a0,b0,h0],[a1,b0,h0],[a1,b0,h1],[a0,b0,h1],[s,-c,0]]];
+  for(const f of F){const n=f[4];if(n[0]*TIRE_CAM[0]+n[1]*TIRE_CAM[1]+n[2]*TIRE_CAM[2]<=.001)continue;
+    const k=.4+.72*Math.max(0,n[0]*BOX_L[0]+n[1]*BOX_L[1]+n[2]*BOX_L[2]);
+    g.fillStyle=`rgb(${Math.min(255,rgb[0]*k|0)},${Math.min(255,rgb[1]*k|0)},${Math.min(255,rgb[2]*k|0)})`;g.beginPath();
+    for(let i=0;i<4;i++){const p=P(...f[i]);i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1])}g.closePath();g.fill();g.strokeStyle='rgba(0,0,0,.4)';g.lineWidth=.8;g.stroke()}
+  if(onTop)onTop(P,h1);
+}
+// 平らな面の上に、局所座標の四角を塗る（溝・ガムテープなど）
+function boxQuad(P,a0,a1,b0,b1,h,col){g.fillStyle=col;g.beginPath();[[a0,b0],[a1,b0],[a1,b1],[a0,b1]].forEach(([a,b],i)=>{const p=P(a,b,h);i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1])});g.closePath();g.fill()}
+// 台車：鉄の荷台（厚み・滑り止めの溝）、四隅のキャスター、後ろに立ち上がるコの字の持ち手、ガムテープで留めた段ボール2箱。走っている間は小刻みに揺れる
+function drawCart(pr){
+  const c=Math.cos(pr.a),s=Math.sin(pr.a),mv=Math.hypot(pr.vx,pr.vy)>60,j=mv?Math.random()*1.2:0,x=pr.x,y=pr.y-j;
+  // 床の影（荷台の形）
+  g.fillStyle='rgba(0,0,0,.42)';g.beginPath();[[-23,-15],[23,-15],[23,15],[-23,15]].forEach(([a,b],i)=>{const p=boxPt(pr.x,pr.y+2,c,s,a,b,0);i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1])});g.closePath();g.fill();
+  // キャスター（黒いゴム車輪＋金具）
+  for(const [wa,wb] of [[-15,-10],[15,-10],[-15,10],[15,10]]){drawBox3(x,y,c,s,wa-1.5,wa+1.5,wb-1.5,wb+1.5,3,5,[150,155,165]);drawBox3(x,y,c,s,wa-2.8,wa+2.8,wb-1.2,wb+1.2,0,3.4,[40,40,44])}
+  // 荷台
+  drawBox3(x,y,c,s,-20,20,-13,13,5,9,[132,140,152],(P,h)=>{for(let a=-16;a<=16;a+=5)boxQuad(P,a-.6,a+.6,-11,11,h,'rgba(40,44,52,.55)');boxQuad(P,-20,20,-13,-12,h,'rgba(255,255,255,.12)')});
+  // 持ち手と荷物は、手前にあるものほど後に描く
+  const parts=[];
+  const handle=()=>{const col=[70,110,190];drawBox3(x,y,c,s,-21,-18.5,-12,-9.5,9,34,col);drawBox3(x,y,c,s,-21,-18.5,9.5,12,9,34,col);
+    drawBox3(x,y,c,s,-21,-18.5,-12,12,31.5,34,col);drawBox3(x,y,c,s,-21.6,-17.9,-6,6,31,34.6,[30,30,34])};
+  parts.push({k:s*-19.7,f:handle});
+  if(pr.cargo){
+    parts.push({k:s*-8,f:()=>drawBox3(x,y,c,s,-16,-1.5,-9.5,9.5,9,24,[182,138,82],(P,h)=>{boxQuad(P,-9.6,-7.9,-9.5,9.5,h,'rgba(215,190,140,.85)');boxQuad(P,-16,-1.5,-.4,.4,h,'rgba(120,85,45,.6)')})});
+    parts.push({k:s*8,f:()=>drawBox3(x,y,c,s,.5,15,-8,7.5,9,20,[164,122,70],(P,h)=>{boxQuad(P,6.9,8.6,-8,7.5,h,'rgba(215,190,140,.85)');boxQuad(P,.5,15,-.6,.2,h,'rgba(110,78,40,.6)')})});
+  }
+  parts.sort((p,q)=>p.k-q.k).forEach(p=>p.f());
+}
 function drawGimmicks(){
   drawWindows();
-  // 転がるタイヤ（横から見た円＋回転するスポーク）
-  for(const t of TIRES){shadow(t.x,t.y+t.r*.7,t.r*.9);circ(t.x,t.y,t.r,'#18181c');g.strokeStyle='#3a3a42';g.lineWidth=2;g.beginPath();g.arc(t.x,t.y,t.r-3,0,TAU);g.stroke();
-    g.strokeStyle='#8a8a92';g.lineWidth=2;g.beginPath();for(let k=0;k<3;k++){const a=t.rot+k*TAU/3;g.moveTo(t.x,t.y);g.lineTo(t.x+Math.cos(a)*(t.r-5),t.y+Math.sin(a)*(t.r-5))}g.stroke()}
   for(const w of WARNS){
     if(!w.done){const p=clamp(w.t/w.dur,0,1),rr_=w.r*(1.3-p*.3);
       g.fillStyle=`rgba(0,0,0,${.25+p*.4})`;g.beginPath();g.ellipse(w.x,w.y,rr_,rr_*.6,0,0,TAU);g.fill();
@@ -1256,15 +1389,10 @@ function drawGimmicks(){
       if(pr.used){circ(Math.cos(.1)*6,3,2.4,'#140a05')}
       g.restore();g.globalAlpha=1}
     // 台車：灰色の荷台に小さな車輪4つ、後ろに持ち手。荷物（段ボール2箱）を積んでいる間は箱も描く
-    else if(pr.k==='cart'){shadow(pr.x,pr.y+6,22);g.save();g.translate(pr.x,pr.y);g.rotate(pr.a);
-      for(const [wx,wy] of [[-15,-12],[15,-12],[-15,12],[15,12]])circ(wx,wy,3.5,'#141418');
-      rr(-20,-12,40,24,3,'#6a7078');g.strokeStyle='#454a52';g.lineWidth=1;for(let k=-12;k<=12;k+=8){g.beginPath();g.moveTo(k,-11);g.lineTo(k,11);g.stroke()}
-      g.strokeStyle='#2a2d33';g.lineWidth=3;g.beginPath();g.moveTo(-20,-11);g.lineTo(-27,-11);g.lineTo(-27,11);g.lineTo(-20,11);g.stroke();
-      if(pr.cargo){rr(-16,-10,15,19,1.5,'#b08850');rr(1,-9,14,17,1.5,'#9c7644');g.fillStyle='#d8c8a0';g.fillRect(-9.5,-10,2,19);g.fillRect(7,-9,2,17)}
-      g.restore()}
-    // タイヤの山：3本が少しずれて重なっている（使った後はしばらく消える）
-    else if(pr.k==='tires'){if(pr.used)continue;shadow(pr.x,pr.y+8,18);
-      for(const [ox,oy] of [[-5,4],[5,2],[0,-5]]){circ(pr.x+ox,pr.y+oy,13,'#18181c');g.strokeStyle='#34343a';g.lineWidth=2;g.beginPath();g.arc(pr.x+ox,pr.y+oy,10,0,TAU);g.stroke();circ(pr.x+ox,pr.y+oy,5,'#0c0c0e')}}
+    else if(pr.k==='cart')drawCart(pr);
+    // タイヤの山：4本を寝かせて積み上げ、少しずつずれている（使った後はしばらく消える）
+    else if(pr.k==='tires'){if(pr.used)continue;
+      [[0,0],[2.5,.8],[-2,-.5],[1.5,.3]].forEach(([ox,oy],i)=>drawTire(pr.x+ox,pr.y+oy,i*TIRE_W,i*.7,Math.PI/2,i*1.3,1,1,i>0))}
     else if(pr.k==='ext'){if(pr.used)continue;shadow(pr.x,pr.y+12,9);rr(pr.x-7,pr.y-14,14,28,5,'#d0201a');rr(pr.x-4,pr.y-20,8,6,2,'#222');g.strokeStyle='#222';g.lineWidth=2;g.beginPath();g.moveTo(pr.x+3,pr.y-18);g.quadraticCurveTo(pr.x+14,pr.y-16,pr.x+11,pr.y-4);g.stroke()}
   }
   // 4段目の見た目の衝撃波は紫の二重の輪（強化カードの本物の衝撃波は金色）
@@ -1826,7 +1954,7 @@ function startAttack(ix,iy){
   if(P.atkA!=null){P.face=P.atkA;P.atkA=null}else if(Math.hypot(ix,iy)>.3)P.face=Math.atan2(iy,ix);
   // 4段目の回転攻撃は踏み込まず、その場で回る（背後の敵にも届くように）
   if(st===3){P.lx=P.ly=0;P.lt=0}else{P.lx=Math.cos(P.face)*140;P.ly=Math.sin(P.face)*140;P.lt=.1}
-  P.atk={st,S,t:0,dur:S.dur,hitAt:S.hitAt,hit:false,queued:false,crit:P.crit};
+  P.atk={st,S,t:0,dur:S.dur/(1+.08*lv('quick')),hitAt:S.hitAt/(1+.08*lv('quick')),hit:false,queued:false,crit:P.crit};
   P.crit=false;P.stage=(st+1)%STAGES.length;P.atkBuf=0;
   SFX.swing(st);
 }
@@ -1859,7 +1987,7 @@ function tryRage(){
   tutComplete(5,1);
   const R=novaR();
   // 弾き返しと同じくらいのスローで、範囲（床の赤い円）と、波が届いて敵が燃え上がっていく様子を見せる
-  G.soul=0;SFX.rage();slow(1.1,.22);G.rageFx={t:0,dur:1.3,R};G.flash=.7;G.flashCol='255,30,60';addShake(24);G.zoom=.07;G.hitstop=Math.max(G.hitstop,.1);
+  G.soul=lv('ember')?30:0;SFX.rage();slow(1.1,.22);G.rageFx={t:0,dur:1.3,R};G.flash=.7;G.flashCol='255,30,60';addShake(24);G.zoom=.07;G.hitstop=Math.max(G.hitstop,.1);
   P.inv=Math.max(P.inv,.9);healP(15);
   RINGS.push({x:P.x,y:P.y,r:10,R:R+15,t:0,dur:.55,col:'255,40,70',w:20});
   RINGS.push({x:P.x,y:P.y,r:10,R:R*.8,t:-.08,dur:.5,col:'255,200,210',w:7});
@@ -2122,7 +2250,7 @@ function bossGrab(e,dt,d,toP){
     e.ang=turn(e.ang,toP,6*dt);
     if(e.st>=.5){
       if(!P.dead&&P.inv<=0&&d<e.r+P.r+30){
-        const dmg=14*ENEMY_DMG;P.hp-=dmg;P.blinkT=.8;P.inv=.7;P.recover=.35;P.atk=null;
+        const dmg=14*ENEMY_DMG*(1-.1*lv('armor'));P.hp-=dmg;P.blinkT=.8;P.inv=.7;P.recover=.35;P.atk=null;
         P.kx=Math.cos(toP)*680;P.ky=Math.sin(toP)*680;G.chain=0;G.mult=1;
         addShake(18);G.flash=Math.max(G.flash,.4);G.flashCol='255,30,60';G.hitstop=Math.max(G.hitstop,.12);SFX.hurt();SFX.wall();
         bloodBurst(P.x,P.y,toP,18,360);popText(P.x,P.y-40,'投げ！ -'+Math.round(dmg),'#ff4060',20,1);
@@ -2341,7 +2469,7 @@ function update(rdt){
       for(const e of [...E]){
         if(b.hits&&b.hits.has(e))continue;if(dist(b.x,b.y,e.x,e.y)>=e.r+8)continue;
         const kill=!e.armor&&!e.boss;if(b.hits)b.hits.add(e);
-        hitEnemy(e,kill?e.hp+1:(b.big?16:4)*(b.perfect?2:1),Math.atan2(b.vy,b.vx),520,{fin:true});
+        hitEnemy(e,kill?e.hp+1:(b.big?16:4)*(b.perfect?2:1)*(1+.5*lv('payback')),Math.atan2(b.vy,b.vx),520,{fin:true});
         if(!kill||b.noPierce){b.life=0;if(kill)popText(e.x,e.y-28,'SHOT KILL',b.perfect?'#ffd54a':'#7ff3ff',15,.8);break}
         b.kills=(b.kills||0)+1;G.score+=150*b.kills;G.hitstop=Math.max(G.hitstop,.06);G.zoom=Math.max(G.zoom,.03);addShake(9);
         popText(e.x,e.y-28,b.kills>1?'PIERCE ×'+b.kills:'SHOT KILL',b.perfect?'#ffd54a':'#7ff3ff',b.kills>1?19:15,.8);
@@ -2352,15 +2480,6 @@ function update(rdt){
     }
   }
   B=B.filter(b=>b.life>0&&b.x>-30&&b.x<W+30&&b.y>AY0-30&&b.y<H+30);
-  // orbs
-  for(const o of ORBS){
-    o.t+=dt;const f=Math.exp(-5*dt);o.vx*=f;o.vy*=f;
-    const d=dist(o.x,o.y,P.x,P.y),a=Math.atan2(P.y-o.y,P.x-o.x);
-    if(!P.dead&&d<120){o.vx+=Math.cos(a)*1400*dt;o.vy+=Math.sin(a)*1400*dt}
-    o.x+=o.vx*dt;o.y+=o.vy*dt;
-    if(!P.dead&&d<P.r+8){o.got=true;healP(10);SFX.heal()}
-  }
-  ORBS=ORBS.filter(o=>!o.got&&o.t<12);
   // fx
   for(const f of FX){
     f.life-=dt;f.x+=f.vx*dt||0;f.y+=f.vy*dt||0;
@@ -2679,16 +2798,14 @@ function drawWorld(){
   drawGimmicks();
   for(const m of MARKS){const p=1-m.t/.7;g.strokeStyle=`rgba(255,40,70,${.4+p*.6})`;g.lineWidth=2;g.beginPath();g.arc(m.x,m.y,16-p*6,0,TAU);g.stroke();glow(m.x,m.y,30,'#ff2040',.3+p*.4)}
   for(const e of E)drawTele(e);
-  for(const o of ORBS){
-    {const b=1+Math.sin(G.time*8)*.15;glow(o.x,o.y,22,'#ff2048',.5);g.save();g.translate(o.x,o.y);g.scale(b,b);g.fillStyle='#ff2a4f';g.beginPath();g.moveTo(0,5);g.bezierCurveTo(-9,-1,-5,-9,0,-4);g.bezierCurveTo(5,-9,9,-1,0,5);g.fill();g.restore()}
-  }
   for(const c of CORPSES){const a=c.t>.8?1-(c.t-.8)/.4:1;drawThug(c.e,c.rot+.001,clamp(a,0,1)*.9)}
   for(const t of P.trail){drawGirl(t.x,t.y,t.face,(t.t/.22)*(t.red?.35:.45),t.red?'red':'cyan')}
   for(const f of FX)if(f.k==='ghost'){g.globalAlpha=f.life/f.max*.4;g.fillStyle='#ffffff';g.beginPath();g.arc(f.x,f.y,f.e.r,0,TAU);g.fill();g.globalAlpha=1}
   // entities sorted by y
-  const list=E.slice();list.push(null);
+  const list=E.concat(TIRES);list.push(null);
   list.sort((a,b)=>(a?a.y:P.y)-(b?b.y:P.y));
   for(const e of list){
+    if(e&&e.tire){drawTire(e.x,e.y,e.z,e.hd,e.lean,e.rot,e.sd,e.ph==='flat'?clamp((2.4-e.ft)/.6,0,1):1);continue}
     if(e===null){
       glow(P.x,P.y,46,'#48f1d2',.12);
       if(P.dead){g.save();g.globalAlpha=.85;drawGirl(P.x,P.y,P.face,.85);g.restore()}
@@ -2843,7 +2960,7 @@ function drawHUD(){
     txt('HITS',ox+4,y,8.5,'#cfd6e4','left',EN,null,true);
     if(rk)txt(rk,ox+38,y,10,G.chain>=50?'#ffd54a':'#ff2f5f','left',EN,null,true);
     if(G.mult>1)txt('x'+G.mult.toFixed(1),bx+bw+40,y,9,'#b8ff5a','right',EN,null,true);
-    rr(bx,y+4,bw+40,2.5,1,'rgba(255,255,255,.15)');rr(bx,y+4,(bw+40)*clamp(G.chainT/2.4,0,1),2.5,1,'#ff2f5f');
+    rr(bx,y+4,bw+40,2.5,1,'rgba(255,255,255,.15)');rr(bx,y+4,(bw+40)*clamp(G.chainT/chainWin(),0,1),2.5,1,'#ff2f5f');
   }
   if(touchMode&&state==='play'&&G.wave===1)txt('左ドラッグ:移動  右タップ:攻撃  右長押し:ガード  光る主人公タップ:怨念',W/2,H-8,10,'rgba(220,225,240,.45)','center',JP,null,false,700);
   if(!touchMode&&state==='play')txt('移動:WASD  攻撃:J/左クリック  ガード:U/右クリック  怨念:L/E',W/2,H-8,10,'rgba(220,225,240,.45)','center',JP,null,false,700);
