@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.42 2026-11-01';
+const VERSION='v0.43 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -78,9 +78,9 @@ function glow(x,y,r,col,a){if(a<=0)return;g.globalCompositeOperation='lighter';g
 // base:床の地色 grid:目地の色 refl:濡れた路面に映るネオン2色 hi:未塗りタイルの浮き上がり色 tube:左右ネオン管 mark:路面標示
 const THEMES=[
   {name:'雨の路地裏',     base:'#0c0e15',grid:'120,140,175',refl:['60,150,255','255,50,130'],hi:'175,205,240',tube:['#ff2f7a','#29e6ff','#b45cff'],mark:'止まれ'},
-  {name:'歌舞伎町',       base:'#1f0f33',grid:'175,125,215',refl:['255,60,210','80,200,255'],hi:'215,180,255',tube:['#ff3fd0','#3fd8ff','#ffd23f'],mark:'徐行',gim:'bottle'},
+  {name:'歌舞伎町',       base:'#1f0f33',grid:'175,125,215',refl:['255,60,210','80,200,255'],hi:'215,180,255',tube:['#ff3fd0','#3fd8ff','#ffd23f'],mark:'徐行',gim:'bottle',win:true},
   {name:'港の倉庫街',     base:'#082428',grid:'100,175,180',refl:['40,220,210','255,150,60'],hi:'150,235,230',tube:['#2fffe0','#ff9a3f','#2f8cff'],mark:'立入禁止',gim:'dyn'},
-  {name:'赤提灯の横丁',   base:'#2a1a0b',grid:'200,155,100',refl:['255,150,50','255,215,120'],hi:'245,215,165',tube:['#ffa02f','#ffd76a','#ff6a3f'],mark:'一方通行',gim:'oil'},
+  {name:'赤提灯の横丁',   base:'#2a1a0b',grid:'200,155,100',refl:['255,150,50','255,215,120'],hi:'245,215,165',tube:['#ffa02f','#ffd76a','#ff6a3f'],mark:'一方通行',gim:'oil',win:true},
   {name:'霧島の縄張り',   base:'#171a24',grid:'190,195,215',refl:['220,230,255','150,170,255'],hi:'215,222,240',tube:['#e8ecff','#7f9cff','#c0c8ff'],mark:'霧島組'},
   {name:'立体駐車場',     base:'#132213',grid:'150,180,140',refl:['170,255,90','255,230,80'],hi:'195,235,180',tube:['#b8ff5a','#ffe85a','#5affb0'],mark:'P',gim:'car'},
   {name:'廃工場',         base:'#261f0d',grid:'190,165,95',refl:['255,190,60','120,200,255'],hi:'235,215,160',tube:['#ffc23f','#ff7a2f','#6fc8ff'],mark:'危険',gim:'beam'},
@@ -89,8 +89,8 @@ const THEMES=[
   {name:'鬼頭組 本家',    base:'#21102c',grid:'210,175,95',refl:['255,200,70','170,90,255'],hi:'235,210,160',tube:['#ffd23f','#a05cff','#ff9a3f'],mark:'鬼頭組'},
   // STAGE 11〜20 用
   {name:'霧島組 事務所',   base:'#1a1418',grid:'200,190,200',refl:['230,230,255','255,80,110'],hi:'225,215,230',tube:['#f0f0ff','#ff4d6d','#c8c8ff'],mark:'霧島組'},
-  {name:'高架下の闇市',   base:'#1d0f0a',grid:'210,140,110',refl:['255,120,60','255,60,90'],hi:'240,190,170',tube:['#ff7a3f','#ff3f6a','#ffd06a'],mark:'闇市',gim:'bottle'},
-  {name:'中華街',         base:'#2a0a0e',grid:'220,120,110',refl:['255,60,60','255,200,80'],hi:'245,185,175',tube:['#ff3a3a','#ffd23f','#ff8a3f'],mark:'中華街',gim:'dyn'},
+  {name:'高架下の闇市',   base:'#1d0f0a',grid:'210,140,110',refl:['255,120,60','255,60,90'],hi:'240,190,170',tube:['#ff7a3f','#ff3f6a','#ffd06a'],mark:'闇市',gim:'bottle',win:true},
+  {name:'中華街',         base:'#2a0a0e',grid:'220,120,110',refl:['255,60,60','255,200,80'],hi:'245,185,175',tube:['#ff3a3a','#ffd23f','#ff8a3f'],mark:'中華街',gim:'dyn',win:true},
   {name:'埠頭のコンテナ置き場',base:'#0a1a26',grid:'110,160,200',refl:['60,170,255','255,120,60'],hi:'160,205,240',tube:['#3fa8ff','#ff7a3f','#7fffd0'],mark:'コンテナ',gim:'car'},
   {name:'解体中のビル',   base:'#1e1c1a',grid:'190,180,160',refl:['255,210,90','150,160,180'],hi:'225,215,195',tube:['#ffd23f','#c8c8c8','#ff9a3f'],mark:'工事中',gim:'beam'},
   {name:'白鷺クリーニング工場',base:'#0f1c22',grid:'170,215,230',refl:['120,220,255','230,250,255'],hi:'200,235,245',tube:['#7fe0ff','#e8fbff','#4fb0ff'],mark:'白鷺'}
@@ -353,7 +353,7 @@ function startWave(n){
   G.isBossWave=!!bk;
   // 床の形：STAGE1・ボス・チュートリアルは素の長方形。ストーリーはステージごとに決まった形、ENDLESS・今日のステージは自動生成
   makeLayout(G.tutMode||bk||(n===1&&!G.daily)?null:G.daily?G.dailySeed:n<=20?n*7919:(G.runSeed*7919+n*104729),!G.daily&&n<=20?STORY_TPL[n]:null);
-  washFloor();setTheme(G.tutMode?TUT_THEME:themeFor(n));setupGimmick();G.mile=0;capNew=[];CAPQ=[];G.wk=0;G.wchain=0;G.wcap=0;G.rushT=rand(22,34);G.rush=0;G.rushSp=0;
+  washFloor();setTheme(G.tutMode?TUT_THEME:themeFor(n));setupWindows();setupGimmick();G.mile=0;capNew=[];CAPQ=[];G.wk=0;G.wchain=0;G.wcap=0;G.rushT=rand(22,34);G.rush=0;G.rushSp=0;
   // 開始の表示が終わったら、仕掛けを案内
   tutWave(n);if(G.gim&&!SEEN.has('gim_'+G.gim)){markSeen('gim_'+G.gim);G.propSpot=6}else G.propSpot=0;
   // ステージ名の帯のあと、ゲームを止めて「ルール／仕掛け」のカードを見せる（タップで閉じる）
@@ -361,6 +361,7 @@ function startWave(n){
   if(!G.tutMode){
     if(G.gim)G.cards.push({tag:'GIMMICK',title:GIMMICKS[G.gim].name,body:GIMMICKS[G.gim].hint,col:'#7ff3ff'});
     else if(n===1)G.cards.push({tag:'RULE',title:'囲い込み制圧',body:'塗ったマスで囲むと、中が一気に血で染まる',col:'#ff4d6d'});
+    if(WINS.length&&!SEEN.has('win')){markSeen('win');G.cards.push({tag:'GIMMICK',title:'窓からの投擲',body:'窓に顔を出した敵が斧を投げてくる。攻撃で弾き返せ——窓に打ち返せば撃退できる',col:'#ffb040'})}
     // ボス戦のルールは初めての時だけ案内（白鷺は個別にもう1枚）
     if(bk&&!SEEN.has('bossrule')){markSeen('bossrule');G.cards.push({tag:'BOSS',title:'ボスは血に弱い',body:'血溜まりの上に立つボスは、動きが鈍り、受けるダメージが1.5倍。体力が半分を切ると、天井から柱が落ちてくる',col:'#ff2f5f'})}
     if(bk==='shirasagi'&&!SEEN.has('boss_shirasagi')){markSeen('boss_shirasagi');G.cards.push({tag:'BOSS',title:'潔癖の男・白鷺',body:'拳銃とナイフは攻撃で弾き返せる。血の上に長くいると立ち止まって掃除を始める——その間は総攻撃のチャンス',col:'#40c8ff'})}
@@ -452,7 +453,7 @@ function updateWave(dt){
           else popText(W/2,AY0+40,'掃除屋 ×'+crew,'#5ab8ff',16,1.2)}}
       // 大群ラッシュ：STAGE2以降、ステージの途中で一度（長引けばもう一度）、一撃で倒れる雑魚が8秒間どっと押し寄せる
       // まとめ斬り（まとめ倒しの血の判）を気持ちよく決めるための息抜き
-      if(G.wave>=2&&!G.tut){G.rushT-=dt;if(G.rushT<=0&&G.rush<=0&&prog()<.9){G.rush=8;G.rushT=rand(40,55);callout('大群襲来！','一撃で倒れる雑魚の群れ——まとめて薙ぎ払え','#ff8a30');G.callout.dur=1.8;SFX.alarm()}}
+      if(G.wave>=2&&!G.tut){G.rushT-=dt;if(G.rushT<=0&&G.rush<=0&&prog()<.9){G.rush=8;G.rushT=rand(40,55);callout('式神襲来！','呪術師が放った紙の人形——まとめて斬り裂け','#ff8a30');G.callout.dur=1.8;SFX.alarm()}}
       if(G.rush>0){G.rush-=dt;G.rushSp-=dt;if(G.rushSp<=0&&alive<Math.min(5+Math.ceil(G.wave*.7),11)+16){G.rushSp=.28;for(let k=0;k<2;k++){queueSpawn(Math.random()<.6?'runner':'grunt');MARKS[MARKS.length-1].horde=true}}}
       // 同時に出る敵の上限：WAVE1で6体〜最大11体（旧8〜15体）。まとめて薙ぎ払える集団湧きは残す
       G.spawnT-=dt;const cap=Math.min(5+Math.ceil(G.wave*.7),11)*waveEase();
@@ -499,6 +500,9 @@ function multiStamp(list){
   RINGS.push({x,y,r:20,R:Math.min(150,90+(n-3)*15),t:0,dur:.4,col:'255,40,70',w:14});
   addShake(10+n*2);G.hitstop=Math.max(G.hitstop,.08);G.flash=Math.max(G.flash,.25);G.flashCol='255,20,50';SFX.boom();
 }
+// 紙吹雪：式神が斬られた時の白い紙片（回りながら舞って落ちる）
+function paperBurst(x,y,ang,n){for(let i=0;i<n;i++){const a=Math.random()<.7?ang+rand(-1,1):rand(0,TAU),s=rand(80,320),l=rand(.5,1);
+  fx({k:'paper',x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:l,max:l,sz:rand(3,6),rot:rand(0,TAU),vr:rand(-14,14),red:Math.random()<.15})}}
 function splat(x,y,r,ang){
   const d=decG;
   for(let i=0;i<9;i++){const a=ang+rand(-.6,.6),l=rand(0,r*1.7);d.fillStyle=`rgba(${irand(85,140)},0,${irand(8,20)},${rand(.35,.7).toFixed(2)})`;d.beginPath();d.arc(x+Math.cos(a)*l,y+Math.sin(a)*l,rand(r*.12,r*.42),0,TAU);d.fill()}
@@ -695,7 +699,7 @@ function hitEnemy(e,dmg,ang,kb,o){
   if([10,25,50,100,150,200,300].includes(G.chain))callout(rankOf(G.chain)+'!',G.chain+' HITS  x'+G.mult.toFixed(1));
   G.soul=Math.min(100,G.soul+soulMul()*(o.fin?3:1.6));
   const big=o.fin||o.crit||dmg>=3;
-  bloodBurst(e.x,e.y,ang,big?14:8,big?340:230);
+  if(e.shiki)paperBurst(e.x,e.y,ang,big?6:4);else bloodBurst(e.x,e.y,ang,big?14:8,big?340:230);
   spark(e.x-Math.cos(ang)*e.r*.5,e.y-Math.sin(ang)*e.r*.5,ang,big);
   // ダメージ数字はクリティカルの時だけ（床を見やすくするため）
   if(o.crit&&!o.wall)TEXTS.push({x:e.x+rand(-6,6),y:e.y-e.r-8,txt:String(Math.round(dmg*10)),col:'#ffd54a',size:20,t:0,dur:.55,vy:-90});
@@ -712,6 +716,8 @@ function killEnemy(e,ang,spd,o){
   if(G.tut){const gl=G.tut.step===2&&G.tut.gap>=0?[G.tut.gap]:G.tut.step===7&&G.tut.targets?G.tut.targets:[];
     for(const i of gl)if(!DONE[i]){const t=tileRect(i);if(dist(e.x,e.y,t.x+t.w/2,t.y+t.h/2)<95)fillTile(i)}}
   if(lv('drain'))P.hp=Math.min(P.maxhp,P.hp+1.4*lv('drain'));
+  // 式神（紙の人形）：血は出ず、斬り裂かれた紙が舞い散る。死体も残らない（床は塗れない）
+  if(e.shiki){paperBurst(e.x,e.y,ang,16);SFX.swing(0);return}
   if(o.fall){for(let i=0;i<8;i++){const a=rand(0,TAU),v=rand(30,120),l=rand(.3,.6);fx({k:'smoke',x:e.x,y:e.y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:l,max:l,sz:rand(8,14)})}}
   // 連続撃破ほど血しぶきが大きくなる（25連で最大1.8倍）
   else{const cs=1+Math.min(.8,G.chain/25);splat(e.x,e.y,e.r*1.5*cs,ang);bloodBurst(e.x,e.y,ang,Math.round(18*cs),440*cs)}  {
@@ -929,7 +935,34 @@ function dynBoom(pr){
   const pc=G.cause;G.cause='dyn';explode(pr.x,pr.y,100,false);G.cause=pc;
   if(!P.dead&&dist(pr.x,pr.y,P.x,P.y)<60)hurtPlayer(10,pr.x,pr.y);
 }
+/* ---------------- 窓からの投擲（建物に囲まれた一部の場所） ----------------
+   左右の壁の窓に敵が顔を出し、0.9秒の予告のあと斧を投げてくる。斧は攻撃で弾き返せ、窓に打ち返せば撃退できる（しばらく出てこない）。
+   窓の敵は床に落ちてこないので血は出ない（塗りには関係しない） */
+const WIN_POS=[{x:AX0,y:AY0+150,s:1},{x:AX1,y:AY0+300,s:-1},{x:AX0,y:AY0+460,s:1},{x:AX1,y:AY0+610,s:-1}];
+let WINS=[];
+function setupWindows(){WINS=theme.win&&!G.isBossWave&&!G.tutMode?WIN_POS.map(p=>({...p,st:'idle',t:0,cool:rand(3,7)})):[]}
+function updateWindows(dt){
+  if(G.phase!=='fight'||G.cards)return;
+  for(const w of WINS){w.t+=dt;
+    if(w.st==='idle'){w.cool-=dt;if(w.cool<=0&&!WINS.some(o=>o.st==='warn'||o.st==='throw')&&dist(w.x,w.y,P.x,P.y)>90){w.st='warn';w.t=0}}
+    else if(w.st==='warn'&&w.t>.9){w.st='throw';w.t=0;const a=Math.atan2(P.y-w.y,P.x-(w.x+w.s*16)),b=fire(w.x+w.s*16,w.y,a,250,12);b.axe=true;b.life=4;SFX.swing(1)}
+    else if(w.st==='throw'&&w.t>1.1){w.st='idle';w.cool=rand(4,7)}
+    else if(w.st==='down'&&w.t>9){w.st='idle';w.cool=rand(2,4)}}
+}
+// 打ち返した弾が、顔を出している窓の敵に当たったら撃退
+function windowHit(b){for(const w of WINS)if((w.st==='warn'||w.st==='throw')&&dist(b.x,b.y,w.x+w.s*8,w.y)<30){w.st='down';w.t=0;b.life=0;G.score+=Math.round(300*G.mult);
+  popText(w.x+w.s*50,w.y-20,'撃退！','#ffd54a',16,.9);addShake(8);SFX.glass();return true}return false}
+function drawWindows(){
+  for(const w of WINS){const cx=w.x+w.s*6,on=w.st==='warn'||w.st==='throw';
+    rr(cx-13,w.y-22,26,44,3,'#2a2c36');rr(cx-10,w.y-19,20,38,2,on?'rgba(255,200,90,.85)':w.st==='down'?'#0c0d12':'rgba(60,90,130,.55)');
+    g.strokeStyle='#2a2c36';g.lineWidth=2;g.beginPath();g.moveTo(cx,w.y-19);g.lineTo(cx,w.y+19);g.moveTo(cx-10,w.y);g.lineTo(cx+10,w.y);g.stroke();
+    if(on){glow(cx,w.y,40,'#ffb040',.35);g.fillStyle='#120a08';g.beginPath();g.arc(cx,w.y-6,6,0,TAU);g.fill();g.fillRect(cx-8,w.y,16,14);
+      if(w.st==='throw'&&w.t<.25){g.fillRect(cx+w.s*6,w.y-14,4,12)}
+      if(w.st==='warn'){txt('!',cx+w.s*20,w.y-14+Math.sin(G.time*30)*1.5,20,'#ffdd33','center',EN,['#a00010',4])}}
+    if(w.st==='down'){g.strokeStyle='rgba(200,220,255,.6)';g.lineWidth=1;g.beginPath();g.moveTo(cx-8,w.y-14);g.lineTo(cx+2,w.y-2);g.lineTo(cx+8,w.y+12);g.moveTo(cx+2,w.y-2);g.lineTo(cx-6,w.y+8);g.stroke()}}
+}
 function updateGimmicks(dt){
+  updateWindows(dt);
   for(const pr of PROPS){
     pr.t+=dt;
     // 使った仕掛けは、しばらくすると別の場所に置き直される
@@ -1013,6 +1046,7 @@ function flameTongue(x,y,h,w,al,lean){
   g.fillStyle=gr;g.beginPath();g.moveTo(x-w,y);g.bezierCurveTo(x-w*1.1,y-h*.35,tx-w*.2,ty+h*.3,tx,ty);g.bezierCurveTo(tx+w*.2,ty+h*.3,x+w*1.1,y-h*.35,x+w,y);g.quadraticCurveTo(x,y+w*.7,x-w,y);g.fill();
 }
 function drawGimmicks(){
+  drawWindows();
   for(const w of WARNS){
     if(!w.done){const p=clamp(w.t/w.dur,0,1),rr_=w.r*(1.3-p*.3);
       g.fillStyle=`rgba(0,0,0,${.25+p*.4})`;g.beginPath();g.ellipse(w.x,w.y,rr_,rr_*.6,0,0,TAU);g.fill();
@@ -2053,7 +2087,7 @@ function update(rdt){
   updatePlayer(dt);
   if(G.aimer&&(G.aimer.dead||G.aimer.state!=='aim'))G.aimer=null;
   G.shotGap-=dt;
-  for(const m of MARKS){m.t-=dt;if(m.t<=0){const e=makeEnemy(m.type,m.ox,m.oy);if(m.sub)e.sub=m.sub;if(m.horde){e.horde=true;e.hp=e.max=.5}spotNew(e)}}
+  for(const m of MARKS){m.t-=dt;if(m.t<=0){const e=makeEnemy(m.type,m.ox,m.oy);if(m.sub)e.sub=m.sub;if(m.horde){e.horde=true;e.shiki=true;e.hp=e.max=.5;e.r=12}spotNew(e)}}
   MARKS=MARKS.filter(m=>m.t>0);
   for(const e of [...E])updateEnemy(e,dt);
   updateGimmicks(dt);
@@ -2099,6 +2133,7 @@ function update(rdt){
     b.x+=b.vx*dt;b.y+=b.vy*dt;b.life-=dt;
     for(const pr of PROPS)if(pr.k==='dyn'&&!pr.used&&!pr.lit&&dist(b.x,b.y,pr.x,pr.y)<pr.r+4){pr.lit=true;pr.fuse=DYN_FUSE-.45;b.life=0}
     // ふさがったマスに当たった弾は消える（ロケットはそこで爆発）
+    if(b.friendly&&WINS.length&&windowHit(b))continue;
     // 弾き返した弾（ロケット以外）は柱で跳ね返る（跳弾・3回まで）。柱の陰の敵を狙うバンクショットができる
     {const ti=tileAt(b.x,b.y);if(ti>=0&&BLOCK[ti]){
       if(b.friendly&&!b.rocket&&(b.bnc||0)<3){const px=b.x-b.vx*dt,py=b.y-b.vy*dt,ix=tileAt(b.x,py),iy=tileAt(px,b.y),bx=ix>=0&&BLOCK[ix],by=iy>=0&&BLOCK[iy];
@@ -2149,6 +2184,7 @@ function update(rdt){
     f.life-=dt;f.x+=f.vx*dt||0;f.y+=f.vy*dt||0;
     if(f.k==='b'){const k=Math.exp(-7*dt);f.vx*=k;f.vy*=k;if(f.life<=0&&Math.random()<.25){decG.fillStyle='rgba(110,0,15,.6)';decG.beginPath();decG.arc(f.x,f.y,f.sz*.7,0,TAU);decG.fill();paint(f.x,f.y,5,.04)}}
     else if(f.k==='fire'||f.k==='smoke'||f.k==='gold'){const k=Math.exp(-4*dt);f.vx*=k;f.vy*=k}
+    else if(f.k==='paper'){const k=Math.exp(-5*dt);f.vx*=k;f.vy=f.vy*k+40*dt;f.rot+=f.vr*dt}
   }
   FX=FX.filter(f=>f.life>0);
   for(const r of RINGS)r.t+=dt;RINGS=RINGS.filter(r=>r.t<r.dur);
@@ -2293,6 +2329,17 @@ function drawPhotoHead(e,rot,alpha){
   g.beginPath();g.arc(0,0,R,0,TAU);g.save();g.clip();g.drawImage(fi,-R,-R,R*2,R*2);
   if(fl){g.fillStyle='rgba(255,255,255,.75)';g.fillRect(-R,-R,R*2,R*2)}g.restore();
   g.strokeStyle='rgba(0,0,0,.75)';g.lineWidth=2;g.stroke();g.restore();
+}
+// 式神：人の形に切った白い紙（人形）。ひらひら揺れ、胸に赤い呪符の印
+function drawShiki(e){
+  const fl=Math.sin(G.time*12+e.x*.05),s=e.r/12,hit=e.flash>0;
+  shadow(e.x,e.y+12*s,9*s);glow(e.x,e.y,24,'#fff6e0',.14);
+  g.save();g.translate(e.x,e.y-4*s+fl*1.5);g.scale(s*(1-Math.abs(fl)*.25),s);g.rotate(Math.sin(G.time*6+e.y*.05)*.15);
+  g.fillStyle=hit?'#ffffff':'#f1ecdf';g.strokeStyle='rgba(120,100,80,.6)';g.lineWidth=1;
+  g.beginPath();g.arc(0,-11,5,0,TAU);g.fill();g.stroke();
+  g.beginPath();g.moveTo(-4,-6);g.lineTo(-12,-3);g.lineTo(-11,1);g.lineTo(-4,0);g.lineTo(-5,14);g.lineTo(-1,14);g.lineTo(0,6);g.lineTo(1,14);g.lineTo(5,14);g.lineTo(4,0);g.lineTo(11,1);g.lineTo(12,-3);g.lineTo(4,-6);g.closePath();g.fill();g.stroke();
+  g.fillStyle='#c81e1e';g.fillRect(-2,-3,4,8);g.fillRect(-1,-15,2,3);
+  g.restore();
 }
 function drawThug(e,rot,alpha){
   const s=e.type==='gunner'?STY['gunner'+e.v]:(e.sub&&e.sub!=='mop')?STY[e.sub]:STY[e.type],sc=e.r/13*1.2,fl=e.flash>0&&!rot;
@@ -2469,7 +2516,7 @@ function drawWorld(){
     }else{
       if(e.boss)glow(e.x,e.y,e.r*2.6,e.type==='kito'?'#8a3cff':e.type==='shirasagi'?'#40c8ff':'#ff3355',.18);
       if(e.boss&&e.onBlood)glow(e.x,e.y+e.r*.6,e.r*2,'#ff1030',.35+Math.sin(G.time*10)*.1);
-      drawThug(e);
+      if(e.shiki)drawShiki(e);else drawThug(e);
       if(!e.boss&&e.hp<e.max&&e.max>2){const w=e.r*2;g.fillStyle='rgba(0,0,0,.6)';g.fillRect(e.x-w/2,e.y-e.r-12,w,4);g.fillStyle='#ff4060';g.fillRect(e.x-w/2,e.y-e.r-12,w*clamp(e.hp/e.max,0,1),4)}
     }
   }
@@ -2483,6 +2530,8 @@ function drawWorld(){
     }
     if(b.rocket){const a=Math.atan2(b.vy,b.vx);g.save();g.translate(b.x,b.y);g.rotate(a);rr(-12,-4,18,8,3,'#5a6a3a');g.fillStyle='#ff4020';g.beginPath();g.moveTo(6,-4);g.lineTo(13,0);g.lineTo(6,4);g.fill();g.restore();
       glow(b.x-Math.cos(a)*14,b.y-Math.sin(a)*14,22+Math.random()*6,'#ff8a30',.8);continue}
+    // 投げ斧：回りながら飛ぶ（木の柄＋鉄の刃）
+    if(b.axe){g.save();g.translate(b.x,b.y);g.rotate(G.time*14+b.y*.03);g.fillStyle='#7a4a24';g.fillRect(-11,-1.8,20,3.6);g.fillStyle='#c8ccd4';g.beginPath();g.moveTo(5,-2);g.lineTo(12,-9);g.quadraticCurveTo(15,0,12,9);g.lineTo(5,2);g.closePath();g.fill();g.restore();continue}
     // 投げナイフ：回りながら飛ぶ銀の刃
     if(b.knife){g.save();g.translate(b.x,b.y);g.rotate(G.time*18+b.x*.05);g.fillStyle='#e8eef5';g.beginPath();g.moveTo(-9,0);g.lineTo(3,-3);g.lineTo(10,0);g.lineTo(3,3);g.closePath();g.fill();
       g.fillStyle='#3a2a20';g.fillRect(-12,-1.6,5,3.2);g.restore();glow(b.x,b.y,14,'#cfe6ff',.45);continue}
@@ -2500,6 +2549,7 @@ function drawWorld(){
     else if(f.k==='drop'){g.globalAlpha=a;circ(f.x,f.y,2,'#9fd8ff')}
     else if(f.k==='oild'){g.globalAlpha=a;circ(f.x,f.y,2.4,'#24160c')}
     else if(f.k==='suds'){g.globalAlpha=a*.8;g.strokeStyle='#f2f8ff';g.lineWidth=1.3;g.beginPath();g.arc(f.x,f.y,f.sz*(1.4-a*.4),0,TAU);g.stroke();g.globalAlpha=a*.25;circ(f.x,f.y,f.sz*(1.4-a*.4),'#ffffff')}
+    else if(f.k==='paper'){g.globalAlpha=Math.min(1,a*1.6);g.save();g.translate(f.x,f.y);g.rotate(f.rot);g.scale(1,Math.abs(Math.cos(f.rot*1.7))*.8+.2);g.fillStyle=f.red?'#d42a2a':'#f4efe2';g.fillRect(-f.sz,-f.sz*.6,f.sz*2,f.sz*1.2);g.restore()}
     else if(f.k==='mist'){glow(f.x,f.y,8,'#ff1838',a*.5)}
     else if(f.k==='tile'){g.fillStyle=`rgba(255,40,70,${a*.5})`;g.fillRect(f.x,f.y,f.w,f.h);
       if(!f.cap){const e=(1-a)*5;g.strokeStyle=`rgba(255,235,240,${a})`;g.lineWidth=3*a+1;g.strokeRect(f.x+3-e,f.y+3-e,f.w-6+e*2,f.h-6+e*2)}}
