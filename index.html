@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.63 2026-11-01';
+const VERSION='v0.64 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -138,8 +138,21 @@ function drawGround(b,T_,sr){
     // アスファルト：路面標示（あとで粒を重ねて、すり減らす）
     b.fillStyle=paint(.36);b.fillRect(x0+28,y0,4,y1-y0);b.fillRect(x1-32,y0,4,y1-y0);
     // 路地：車1台分の細い一方通行の道。センターラインも停止線も無く、両端の路側線だけ
-    if(gd==='street'){for(let y=y0;y<y1;y+=60)b.fillRect(223,y,4,30);for(let i=0;i<7;i++)b.fillRect(70+i*46,410,24,86);roadText(T_.mark,665,.26)}
-    // 骨材の粒
+    // 繁華街の車道：左側通行の片側1車線ずつ。障害物の無い2段を探して横断歩道を引き、
+    // 手前の停止線（下り車線は横断歩道の上、上り車線は下）と「横断歩道あり」のひし形を置く。センターラインは横断歩道の前後で途切れる
+    if(gd==='street'){
+      const free=(r,c0,c1)=>{if(r<0||r>=GR)return false;for(let c=c0;c<=c1;c++)if(BLOCK[r*GC+c])return false;return true};
+      const mid=Math.floor(GC/2);let cw=-1,bd=99;
+      for(let r=2;r<GR-3;r++){if(!free(r,0,GC-1)||!free(r+1,0,GC-1)||!free(r-1,mid,GC-1)||!free(r+2,0,mid))continue;const d=Math.abs(r+1-GR/2);if(d<bd){bd=d;cw=r}}
+      const cy0=cw>=0?AY0+cw*TS+6:-999,cy1=cw>=0?AY0+(cw+2)*TS-6:-999;
+      for(let y=y0;y<y1;y+=60)if(y+30<cy0-40||y>cy1+40)b.fillRect(223,y,4,30);
+      if(cw>=0){for(let x=x0+40;x+22<=x1-36;x+=44)b.fillRect(x,cy0,22,cy1-cy0);
+        b.fillRect(229,cy0-34,x1-36-229,8);b.fillRect(x0+36,cy1+26,221-x0-36,8);
+        const dia=(cx,cy)=>{b.strokeStyle=paint(.36);b.lineWidth=4;b.beginPath();b.moveTo(cx,cy-44);b.lineTo(cx+15,cy);b.lineTo(cx,cy+44);b.lineTo(cx-15,cy);b.closePath();b.stroke()};
+        const rc=r=>r>=0&&r<GR;const ra=Math.floor((cy0-34-150-AY0)/TS),rb=Math.floor((cy1+26+150-AY0)/TS);
+        if(rc(ra)&&free(ra,mid+1,GC-1)&&rc(ra-1)&&free(ra-1,mid+1,GC-1)&&rc(ra+1)&&free(ra+1,mid+1,GC-1))dia(328,cy0-34-150);
+        if(rc(rb)&&free(rb,0,mid-1)&&rc(rb-1)&&free(rb-1,0,mid-1)&&rc(rb+1)&&free(rb+1,0,mid-1))dia(122,cy1+26+150)}
+    }    // 骨材の粒
     for(let i=0;i<11000;i++){const x=sr()*W,y=y0+sr()*(y1-y0),r=sr();b.fillStyle=r<.45?`rgba(205,210,220,${.04+sr()*.08})`:`rgba(0,0,0,${.2+sr()*.3})`;b.fillRect(x,y,r<.9?1:1.8,r<.9?1:1.8)}
     // 補修跡（色の違う四角いアスファルト）
     for(let i=0;i<3;i++){const x=x0+30+sr()*(x1-x0-160),y=150+sr()*560,w=60+sr()*90,h=40+sr()*70;b.fillStyle='rgba(0,0,0,.2)';b.fillRect(x,y,w,h);b.strokeStyle='rgba(0,0,0,.45)';b.lineWidth=1.5;b.strokeRect(x,y,w,h)}
@@ -149,6 +162,8 @@ function drawGround(b,T_,sr){
     if(gd==='alley'){b.fillStyle='#3a3d43';b.fillRect(x0,y0,16,y1-y0);b.fillStyle='rgba(0,0,0,.35)';b.fillRect(x0+15,y0,2,y1-y0);
       for(let y=AY0;y<y1;y+=46){b.fillStyle='rgba(0,0,0,.4)';b.fillRect(x0,y,16,1.5);if(((y-AY0)/46)%3===1){b.fillStyle='#121316';b.fillRect(x0+2,y+6,12,34);b.fillStyle='#4a4e56';for(let k=y+9;k<y+38;k+=5)b.fillRect(x0+2,k,12,1.6)}}
       b.fillStyle='#34373d';b.fillRect(x1-9,y0,9,y1-y0);b.fillStyle='rgba(255,255,255,.08)';b.fillRect(x1-9,y0,1.5,y1-y0)}
+    // 車道の両側は歩道との境の縁石
+    if(gd==='street')for(const cx of [x0,x1-9]){b.fillStyle='#34373d';b.fillRect(cx,y0,9,y1-y0);b.fillStyle='rgba(255,255,255,.08)';b.fillRect(cx===x0?cx+7.5:cx,y0,1.5,y1-y0)}
   }
   // 水たまり：濡れて黒く光り、ネオンが縦に伸びて映り込む（雨の降る場所ほど多い）
   const np=Math.round((T_.rain||0)*(gd==='alley'?9:6));
@@ -2455,9 +2470,9 @@ function rainAudio(rdt,k){
   RA.t+=rdt;RA.gt-=rdt;if(RA.gt<=0){RA.gt=rand(1.2,4.5);RA.tgt=rand(.5,1.4)}
   RA.gust+=(RA.tgt-RA.gust)*Math.min(1,rdt*.9);RA.lag+=(RA.gust-RA.lag)*Math.min(1,rdt*.4);
   const sh=1+Math.sin(RA.t*2.3)*.07+Math.sin(RA.t*5.7)*.05,now_=AC.currentTime;
-  RA.hi.gn.gain.setTargetAtTime(k*.04*RA.gust*sh,now_,.2);RA.hi.fl.frequency.setTargetAtTime(1700+RA.gust*1100,now_,.3);
-  RA.lo.gn.gain.setTargetAtTime(k*.028*RA.lag,now_,.3);
-  if(k>0){RA.dt-=rdt;if(RA.dt<=0){RA.dt=rand(.04,.3)/(k*RA.gust);noise(.025,rand(.005,.016)*k,'bandpass',rand(2500,6500),0,0,0,2)}}
+  RA.hi.gn.gain.setTargetAtTime(k*.025*RA.gust*sh,now_,.2);RA.hi.fl.frequency.setTargetAtTime(1700+RA.gust*1100,now_,.3);
+  RA.lo.gn.gain.setTargetAtTime(k*.017*RA.lag,now_,.3);
+  if(k>0){RA.dt-=rdt;if(RA.dt<=0){RA.dt=rand(.04,.3)/(k*RA.gust);noise(.025,rand(.003,.01)*k,'bandpass',rand(2500,6500),0,0,0,2)}}
 }
 function drawRainSplash(){
   if(!SPL.length)return;g.lineWidth=1;
