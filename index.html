@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.86 2026-11-01';
+const VERSION='v0.88 2026-11-02';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -366,7 +366,16 @@ const SFX={
   hit(big){if(!can('hit',28))return;const hp_=Math.min(G.chain,60)*3;tone((big?170:200)+hp_,42,big?.24:.13,'sine',big?1:.7);noise(.05,big?.5:.35,'highpass',2600);if(big)noise(.2,.45,'lowpass',2200,250)},
   kill(c){if(!can('kill',30))return;tone(120,32,.32,'triangle',.7);noise(.24,.5,'lowpass',2800,300);noise(.08,.3,'bandpass',900,0,0,0,3);tone(500+Math.min(c,60)*18,0,.06,'square',.05)},
   dash(){noise(.18,.28,'highpass',1000,5200);tone(300,1100,.12,'sine',.07)}, // 突進ボスの溜め音
-  gun(){if(!can('gun',45))return;noise(.12,.3,'bandpass',1800,500,0,0,.8);tone(380,90,.07,'square',.07)},
+  // 銃声：「パン！」と鋭く割れる音（高い破裂）＋胴鳴り（低い衝撃）＋短い残響。big（狙撃・散弾など）は重く長く
+  gun(big){if(!can('gun',45))return;const t=now(),k=big?1.3:1;
+    noise(.035,1*k,'highpass',3000,1600,t,0,.7);noise(.17*k,.85,'lowpass',2600,280,t,0,.9);tone(160,42,.2*k,'sine',.75*k,t);
+    noise(.35*k,.24,'bandpass',950,300,t+.07,0,.6);noise(.25*k,.11,'bandpass',750,260,t+.2,0,.6)},
+  // バズーカの発射：「シュポッ」という低い発射音と、噴射の「シューッ」
+  rocket(){if(!can('rocket',80))return;const t=now();noise(.09,.7,'lowpass',1400,200,t,0,1);tone(110,45,.25,'sine',.6,t);noise(.7,.32,'highpass',2600,1100,t+.03,0,.7);noise(.5,.16,'bandpass',800,400,t+.05,0,.8)},
+  // 物を投げる音：「ヒュッ」と風を切る
+  toss(){if(!can('toss',60))return;noise(.16,.28,'bandpass',2400,700,0,0,1.6)},
+  // 構える音：撃つ前の「カチャッ」（撃ってくる合図）
+  cock(){if(!can('cock',120))return;const t=now();noise(.03,.35,'highpass',4200,3000,t,0,1.5);tone(2600,1900,.025,'square',.06,t);noise(.04,.3,'bandpass',2600,1800,t+.09,0,2);tone(1800,1400,.03,'square',.05,t+.09)},
   boom(){if(!can('boom',50))return;noise(.8,1,'lowpass',1600,70);tone(85,26,.7,'sine',1)},
   alarm2(){tone(988,988,.09,'square',.11);tone(740,740,.11,'square',.1,now(.13))},
   hurt(){tone(260,70,.3,'sawtooth',.3);noise(.15,.35,'lowpass',1000)},
@@ -392,10 +401,12 @@ const SFX={
     [[440,.4],[392,1.0],[349.23,1.6],[329.63,2.2]].forEach(([f,at],i)=>{tone(f,f,i===3?2.8:1.4,'triangle',.12,now(at));tone(f*2,f*2,.9,'sine',.025,now(at))});
   },
   // 弾き返し：短い金属音のあと、ジェット機が通り過ぎるような風切り音（控えめ）
-  reflect(){if(!can('rf',30))return;
-    tone(2400,1800,.06,'square',.06);
-    noise(.45,.26,'bandpass',600,4200,0,0,1.6);noise(.6,.15,'bandpass',4200,900,now(.18),0,1.2);noise(.5,.12,'lowpass',500,150,now(.05));
-  },
+  // 弾き返し：「シャキーン！」。刃が弾をこする「シャッ」（高く駆け上がる擦れ音）のあとに、金属が鳴る「キーン」という余韻。
+  // 余韻は少しずつずらした高い音を重ねて、うなりのある金属らしい響きにする。PERFECTは明るく、長く響かせる
+  reflect(pf){if(!can('rf',30))return;const t=now(),L=pf?1.25:.85;
+    noise(.11,.55,'highpass',1800,7500,t,0,1.2);noise(.06,.3,'bandpass',5200,3000,t+.02,0,2);tone(2400,1800,.05,'square',.05,t);
+    for(const [fq,v] of [[2650,.13],[2680,.1],[3980,.08],[5310,.05]].concat(pf?[[6620,.04],[1325,.05]]:[]))tone(fq,fq*.995,L,'sine',v,t+.06);
+    noise(.4,.1,'lowpass',500,150,t+.03)},
   alarm(){for(let i=0;i<3;i++){tone(880,880,.13,'square',.08,now(i*.3));tone(587,587,.13,'square',.08,now(i*.3+.15))}},
   wall(){if(!can('wall',40))return;tone(70,40,.2,'sine',.8);noise(.12,.5,'lowpass',900)},
   ui(){tone(660,990,.08,'triangle',.12)},
@@ -1144,9 +1155,11 @@ function slamAt(x,y,r,dmg){
   scorch(x,y,r*.5);
   if(dist(x,y,P.x,P.y)<r+P.r*.5)hurtPlayer(dmg,x,y);
 }
-function fire(x,y,a,spd,dmg,big){
+// kind：省略＝拳銃、'heavy'＝狙撃銃・散弾銃、'rocket'＝バズーカ、'throw'＝投げる物（斧・ナイフ・呪符。銃声も銃口の光も無し）
+function fire(x,y,a,spd,dmg,big,kind){
   const b={x,y,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,dmg,friendly:false,life:3,dodged:false,big:!!big};B.push(b);
-  fx({k:'f',x,y,r:18,life:.06,max:.06,a:0});SFX.gun();return b;
+  if(kind==='throw'){SFX.toss();return b}
+  fx({k:'f',x,y,r:kind==='heavy'?26:18,life:.06,max:.06,a:0});if(kind==='rocket')SFX.rocket();else SFX.gun(kind==='heavy');return b;
 }
 // 弾き返し：ヒットストップ＋スローで「決まった」瞬間を強調。体に届く寸前で弾くとPERFECT（威力2倍・演出強化）
 // 跳ね返した弾は雑魚を貫通し続ける（装甲・ボスに当たると止まる）
@@ -1160,7 +1173,7 @@ function reflect(b){
   b.vx=Math.cos(a)*sp;b.vy=Math.sin(a)*sp;
   // 拡散反射（強化カード）：左右に2発追加
   if(lv('split')&&!b.rocket)for(const da of [-.3,.3])B.push({...b,vx:Math.cos(a+da)*sp,vy:Math.sin(a+da)*sp,hits:new Set(),trail:[],kills:0,noPierce:true});
-  spark(b.x,b.y,a,true);spark(b.x,b.y,a+.6,true);spark(b.x,b.y,a-.6,true);SFX.reflect();if(pf)SFX.just();
+  spark(b.x,b.y,a,true);spark(b.x,b.y,a+.6,true);spark(b.x,b.y,a-.6,true);SFX.reflect(pf);if(pf)SFX.just();
   RINGS.push({x:b.x,y:b.y,r:6,R:pf?80:52,t:0,dur:.26,col:pf?'255,215,90':'127,243,255',w:pf?9:6});
   G.hitstop=Math.max(G.hitstop,pf?.13:.08);slow(pf?.55:.3,pf?.2:.35);
   G.flash=Math.max(G.flash,pf?.45:.25);G.flashCol=pf?'255,230,140':'150,240,255';G.zoom=Math.max(G.zoom,pf?.06:.04);addShake(pf?13:8);
@@ -1410,7 +1423,7 @@ function updateWindows(dt){
   if(G.phase!=='fight'||G.cards)return;
   for(const w of WINS){w.t+=dt;
     if(w.st==='idle'){w.cool-=dt;if(w.cool<=0&&!WINS.some(o=>o.st==='warn'||o.st==='throw')&&dist(w.x,w.y,P.x,P.y)>90){w.st='warn';w.t=0}}
-    else if(w.st==='warn'&&w.t>.9){w.st='throw';w.t=0;const a=Math.atan2(P.y-w.y,P.x-(w.x+w.s*16)),b=fire(w.x+w.s*16,w.y,a,250,12);b.axe=true;b.life=4;SFX.swing(1)}
+    else if(w.st==='warn'&&w.t>.9){w.st='throw';w.t=0;const a=Math.atan2(P.y-w.y,P.x-(w.x+w.s*16)),b=fire(w.x+w.s*16,w.y,a,250,12,false,'throw');b.axe=true;b.life=4}
     else if(w.st==='throw'&&w.t>1.1){w.st='idle';w.cool=rand(4,7)}
     else if(w.st==='down'&&w.t>9){w.st='idle';w.cool=rand(2,4)}}
 }
@@ -2665,7 +2678,7 @@ function updateEnemy(e,dt){
         if(E.filter(o=>o.shiki).length<18)for(let i=0;i<3;i++){const a=rand(0,TAU),r=rand(40,70),x=clamp(e.x+Math.cos(a)*r,AX0+20,AX1-20),y=clamp(e.y+Math.sin(a)*r,AY0+24,AY1-20);
           if(!nearBlock(x,y,14)){MARKS.push({x,y,ox:x,oy:y,type:Math.random()<.6?'runner':'grunt',t:.35,horde:true});paperBurst(x,y,a,6)}}
         tone(330,660,.25,'triangle',.08);e.state='recover';e.st=0;e.cd=rand(1.2,1.8)}}
-      else if(e.state==='ofudaAim'){e.aim=turn(e.aim,toP,8*dt);e.ang=e.aim;if(e.st>.6){for(let i=-1;i<=1;i++){const b=fire(e.x+Math.cos(e.aim)*20,e.y+Math.sin(e.aim)*20,e.aim+i*.25,260,9);b.ofuda=true}
+      else if(e.state==='ofudaAim'){e.aim=turn(e.aim,toP,8*dt);e.ang=e.aim;if(e.st>.6){for(let i=-1;i<=1;i++){const b=fire(e.x+Math.cos(e.aim)*20,e.y+Math.sin(e.aim)*20,e.aim+i*.25,260,9,false,'throw');b.ofuda=true}
         SFX.swing(1);e.state='recover';e.st=0;e.cd=rand(1,1.5)}}
       else if(e.state==='recover'){if(e.st>.4)e.state='chase'}
       else e.state='chase';
@@ -2692,7 +2705,7 @@ function updateEnemy(e,dt){
         e.cd-=dt;if(e.cd<=0&&los&&d<620&&!G.aimer&&G.shotGap<=0){e.state='aim';e.st=0;e.aim=toP;G.aimer=e;tone(1400,1400,.06,'square',.05)}
       }else if(e.state==='aim'){
         if(e.st<1.05)e.aim=turn(e.aim,toP,5*dt);e.ang=e.aim;
-        if(e.st>1.35){const b=fire(e.x+Math.cos(e.aim)*30,e.y+Math.sin(e.aim)*30,e.aim,640,e.dmg,true);b.snipe=true;SFX.boom();addShake(5);G.aimer=null;G.shotGap=.6/waveEase();e.state='recover';e.st=0}
+        if(e.st>1.35){const b=fire(e.x+Math.cos(e.aim)*30,e.y+Math.sin(e.aim)*30,e.aim,640,e.dmg,true,'heavy');b.snipe=true;addShake(5);G.aimer=null;G.shotGap=.6/waveEase();e.state='recover';e.st=0}
       }else if(e.state==='recover'){if(e.st>.6){e.state='chase';e.cd=rand(2.4,3.4)/waveEase()}}
       else e.state='chase';
       break;
@@ -2705,7 +2718,7 @@ function updateEnemy(e,dt){
         // 狙えるのは同時に1人だけ＋発射間隔あり → 弾は常に「単発」で飛んでくる
         // 柱の陰で射線が通らない時は撃たずに横へ回り込み、射線の通る位置を探す（遮蔽物があっても弾き返す機会を減らさない）
         const los=losClear(e.x,e.y,P.x,P.y);if(!los){e.nolos=(e.nolos||0)+dt;if(e.nolos>1.4){e.nolos=0;e.v^=1}}else e.nolos=0;
-        e.cd-=dt;if(e.cd<=0&&los&&d<430&&!G.aimer&&G.shotGap<=0){e.state='aim';e.st=0;e.aim=toP;G.aimer=e}
+        e.cd-=dt;if(e.cd<=0&&los&&d<430&&!G.aimer&&G.shotGap<=0){e.state='aim';e.st=0;e.aim=toP;G.aimer=e;SFX.cock()}
       }else if(e.state==='aim'){
         if(e.st<.5)e.aim=turn(e.aim,toP,12*dt);e.ang=e.aim;
         if(e.st>.78){fire(e.x+Math.cos(e.aim)*22,e.y+Math.sin(e.aim)*22,e.aim,360,e.dmg);G.aimer=null;G.shotGap=.5/waveEase();e.state='recover';e.st=0;e.vx-=Math.cos(e.aim)*90;e.vy-=Math.sin(e.aim)*90}
@@ -2723,7 +2736,7 @@ function updateEnemy(e,dt){
         e.cd-=dt;if(e.cd<=0&&los&&d<480&&!G.aimer&&G.shotGap<=0){e.state='aim';e.st=0;e.aim=toP;G.aimer=e}
       }else if(e.state==='aim'){
         if(e.st<.85)e.aim=turn(e.aim,toP,6*dt);e.ang=e.aim;
-        if(e.st>1.3){const b=fire(e.x+Math.cos(e.aim)*30,e.y+Math.sin(e.aim)*30,e.aim,200,e.dmg,true);b.rocket=true;b.life=4;SFX.boom();addShake(6);
+        if(e.st>1.3){const b=fire(e.x+Math.cos(e.aim)*30,e.y+Math.sin(e.aim)*30,e.aim,200,e.dmg,true,'rocket');b.rocket=true;b.life=4;addShake(6);
           G.aimer=null;G.shotGap=.8;e.state='recover';e.st=0;e.vx-=Math.cos(e.aim)*160;e.vy-=Math.sin(e.aim)*160}
       }else if(e.state==='recover'){if(e.st>.6){e.state='chase';e.cd=rand(3,4.5);if(Math.random()<.4)e.v^=1}}
       else e.state='chase';
@@ -2842,7 +2855,7 @@ function updateBoss(e,dt,d,toP){
         else if(d<95){e.state='slashWind';e.st=0;e.combo=0}
         break;
       case 'throwAim':e.aim=turn(e.aim,toP,8*dt);e.ang=e.aim;if(e.st>.55){const n=rage?7:5;
-        for(let i=0;i<n;i++){const a=e.aim+(i-(n-1)/2)*.2,b=fire(e.x+Math.cos(a)*24,e.y+Math.sin(a)*24,a,300,9);b.knife=true}
+        for(let i=0;i<n;i++){const a=e.aim+(i-(n-1)/2)*.2,b=fire(e.x+Math.cos(a)*24,e.y+Math.sin(a)*24,a,300,9,false,'throw');b.knife=true}
         SFX.swing(2);e.state='rest';e.st=.3;e.cd2=rand(3.5,5)*(rage?.7:1)}break;
       case 'slashWind':e.ang=turn(e.ang,toP,5*dt);if(e.st>(rage?.32:.45)){e.state='slash';e.st=0;e.aim=e.ang;e.vx=Math.cos(e.aim)*320;e.vy=Math.sin(e.aim)*320;e.hitDone=false;SFX.swing(1)}break;
       case 'slash':
@@ -2884,7 +2897,7 @@ function updateBoss(e,dt,d,toP){
       case 'gunAim':e.aim=turn(e.aim,toP,9*dt);e.ang=e.aim;if(e.st>.6){fire(e.x+Math.cos(e.aim)*26,e.y+Math.sin(e.aim)*26,e.aim+rand(-.05,.05),330,10);e.vol--;
         if(e.vol>0)e.st=.46;else{e.state='rest';e.st=0;e.cd=rand(1.4,2.2)/sm}}break;
       case 'knifeAim':e.aim=turn(e.aim,toP,7*dt);e.ang=e.aim;if(e.st>.55){const n=rage?7:5;
-        for(let i=0;i<n;i++){const a=e.aim+(i-(n-1)/2)*.22,b=fire(e.x+Math.cos(a)*24,e.y+Math.sin(a)*24,a,280,9);b.knife=true}
+        for(let i=0;i<n;i++){const a=e.aim+(i-(n-1)/2)*.22,b=fire(e.x+Math.cos(a)*24,e.y+Math.sin(a)*24,a,280,9,false,'throw');b.knife=true}
         SFX.swing(2);e.state='rest';e.st=0;e.cd=rand(1.4,2.2)/sm}break;
       case 'washAim':if(e.st<.7)e.aim=turn(e.aim,toP,6*dt);e.ang=e.aim;if(e.st>1){
         washLine(e.x,e.y,e.aim);const rx=P.x-e.x,ry=P.y-e.y,al=rx*Math.cos(e.aim)+ry*Math.sin(e.aim),sd=Math.abs(-rx*Math.sin(e.aim)+ry*Math.cos(e.aim));
@@ -2907,7 +2920,7 @@ function updateBoss(e,dt,d,toP){
         break;
       case 'shotAim':
         if(e.st<.5)e.aim=turn(e.aim,toP,10*dt);e.ang=e.aim;
-        if(e.st>.78){fire(e.x+Math.cos(e.aim)*34,e.y+Math.sin(e.aim)*34,e.aim,290,14,true);addShake(7);e.vx-=Math.cos(e.aim)*160;e.vy-=Math.sin(e.aim)*160;
+        if(e.st>.78){fire(e.x+Math.cos(e.aim)*34,e.y+Math.sin(e.aim)*34,e.aim,290,14,true,'heavy');addShake(7);e.vx-=Math.cos(e.aim)*160;e.vy-=Math.sin(e.aim)*160;
           e.vol--;if(e.vol>0)e.st=.1;else{e.state='rest';e.st=0;e.cd=rand(2,3)*(rage?.7:1)}}
         break;
       case 'slamWind':e.ang=turn(e.ang,toP,2*dt);if(e.st>(rage?.7:.9)){slamAt(e.x,e.y,118,20);RINGS.push({x:e.x,y:e.y,r:20,R:200,t:0,dur:.45,col:'255,120,120',w:4});e.state='rest';e.st=0}break;
