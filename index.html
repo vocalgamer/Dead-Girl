@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.95 2026-11-02';
+const VERSION='v0.96 2026-11-02';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -1354,18 +1354,18 @@ function pickKey(k){
 }
 function drawPick(){
   const a=clamp(stateT/.35,0,1);dim(.82*a);g.globalAlpha=a;
-  txt(G.pickBonus?'BONUS CLEAR':'STAGE '+pad2(G.wave)+' CLEAR',W/2,92,28,'#ff2f5f','center',EN,['#000',5],true);
+  txt(G.pickBonus?'BONUS CLEAR':'STAGE '+pad2(G.wave)+' CLEAR',W/2,82,28,'#ff2f5f','center',EN,['#000',5],true);
   const R=G.res;
   if(R&&!R.boss){
-    txt('RANK '+R.rank,W/2-70,128,22,R.rank==='S'?'#ffd54a':'#fff','center',EN,['#000',4],true);
-    txt('TIME '+R.time.toFixed(1)+'s',W/2+60,126,15,'#fff','center',EN,null,true);
-    if(R.isNew&&!R.first){const fl=.6+Math.sin(stateT*8)*.4;g.globalAlpha=a*fl;txt('★ NEW RECORD ★',W/2,150,14,'#ffd54a','center',EN,['#000',3],true);g.globalAlpha=a}
-    else txt('自己ベスト '+R.best.toFixed(1)+'s',W/2,150,11,'#8b93a8','center',JP,null,false,700);
-    txt('撃破 '+R.kills+'　最大連撃 '+R.chain+'　制圧 '+R.cap+'マス',W/2,168,12,'#c9cfdc','center',JP,null,false,700);
-    txt('技　PERFECT反射 '+R.pf+'　ジャストガード '+R.jg,W/2,184,11,R.pf+R.jg?'#ffd54a':'#8b93a8','center',JP,null,false,800);
+    txt('RANK '+R.rank,W/2-70,116,22,R.rank==='S'?'#ffd54a':'#fff','center',EN,['#000',4],true);
+    txt('TIME '+R.time.toFixed(1)+'s',W/2+60,114,15,'#fff','center',EN,null,true);
+    if(R.isNew&&!R.first){const fl=.6+Math.sin(stateT*8)*.4;g.globalAlpha=a*fl;txt('★ NEW RECORD ★',W/2,138,14,'#ffd54a','center',EN,['#000',3],true);g.globalAlpha=a}
+    else txt('自己ベスト '+R.best.toFixed(1)+'s',W/2,138,11,'#8b93a8','center',JP,null,false,700);
+    txt('撃破 '+R.kills+'　最大連撃 '+R.chain+'　制圧 '+R.cap+'マス',W/2,157,12,'#c9cfdc','center',JP,null,false,700);
+    txt('技　PERFECT反射 '+R.pf+'　ジャストガード '+R.jg,W/2,175,11,R.pf+R.jg?'#ffd54a':'#8b93a8','center',JP,null,false,800);
   }else if(R)txt('撃破 '+R.kills+'　最大連撃 '+R.chain,W/2,140,13,'#c9cfdc','center',JP,null,false,700);
-  txt('強化を1つ選べ',W/2,204,18,'#fff','center',JP,null,false,900);
-  txt('死ぬと、選んだ強化はすべて失う',W/2,226,11,'#8b93a8','center',JP,null,false,700);
+  txt('強化を1つ選べ',W/2,208,18,'#fff','center',JP,null,false,900);
+  txt('死ぬと、選んだ強化はすべて失う',W/2,229,11,'#8b93a8','center',JP,null,false,700);
   G.cards.forEach((c,i)=>{
     const r=CARD_R(i),sel=!touchMode&&i===G.cardSel,l=lv(c.id),x=r.x-r.w/2,y=r.y-r.h/2;
     if(sel)glow(r.x,r.y,210,c.col,.16);
