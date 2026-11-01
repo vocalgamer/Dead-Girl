@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.92 2026-11-02';
+const VERSION='v0.94 2026-11-02';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -823,9 +823,10 @@ const SOUL1=100,SOUL_MAX=200;
 function addShake(v){G.shake=Math.max(G.shake,v*FXK)}
 function slow(d,s){G.slowT=Math.max(G.slowT,d);G.slowScale=s}
 function fx(o){if(FX.length>=900)return;FX.push(o);if(Math.random()<FXK-1&&o.vx!=null)FX.push({...o,vx:o.vx*rand(.8,1.2),vy:o.vy*rand(.8,1.2)})} // 粒は約1.25倍に増やす
-function bloodBurst(x,y,ang,n,spd){
-  for(let i=0;i<n;i++){const a=Math.random()<.8?ang+rand(-.75,.75):rand(0,TAU),s=rand(.25,1)*spd,l=rand(.25,.65);
-    fx({k:'b',x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:l,max:l,sz:rand(1.5,4.2),col:pick(['#b3001b','#8a0012','#d4142e','#6d000e'])})}
+// 血しぶき：吹き飛んだ向きの前方の扇形に飛ぶ（以前は2割が全方向に飛び、後ろ側の床も少しずつ塗っていた）。np：主人公の血など、床の塗りに数えない
+function bloodBurst(x,y,ang,n,spd,np){
+  for(let i=0;i<n;i++){const a=Math.random()<.8?ang+rand(-.75,.75):ang+rand(-1.4,1.4),s=rand(.25,1)*spd,l=rand(.25,.65);
+    fx({k:'b',x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:l,max:l,sz:rand(1.5,4.2),np,col:pick(['#b3001b','#8a0012','#d4142e','#6d000e'])})}
 }
 function spark(x,y,ang,big){
   const n=big?9:5;for(let i=0;i<n;i++){const a=ang+rand(-1.1,1.1),s=rand(350,big?850:600),l=rand(.08,.18);fx({k:'s',x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:l,max:l})}
@@ -860,11 +861,14 @@ function drawBurning(e){
 // 紙吹雪：式神が斬られた時の白い紙片（回りながら舞って落ちる）
 function paperBurst(x,y,ang,n){for(let i=0;i<n;i++){const a=Math.random()<.7?ang+rand(-1,1):rand(0,TAU),s=rand(80,320),l=rand(.5,1);
   fx({k:'paper',x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:l,max:l,sz:rand(3,6),rot:rand(0,TAU),vr:rand(-14,14),red:Math.random()<.15})}}
-function splat(x,y,r,ang){
-  const d=decG;
+// 血だまり：吹き飛んだ向き（ang）の前方に広がる。床の塗りも前方へずらした範囲だけにし、後ろ側には倒れた場所のマスしか塗らない
+// （以前は倒れた場所を中心に全方向へ大きく塗っていたため、吹き飛んでいない後ろ側のマスまで塗れていた）。noPaint：絵だけ（塗りには数えない）
+function splat(x,y,r,ang,noPaint){
+  const d=decG,c=Math.cos(ang),s_=Math.sin(ang);
   for(let i=0;i<9;i++){const a=ang+rand(-.6,.6),l=rand(0,r*1.7);d.fillStyle=`rgba(${irand(85,140)},0,${irand(8,20)},${rand(.35,.7).toFixed(2)})`;d.beginPath();d.arc(x+Math.cos(a)*l,y+Math.sin(a)*l,rand(r*.12,r*.42),0,TAU);d.fill()}
-  d.fillStyle='rgba(90,0,12,.55)';d.beginPath();d.ellipse(x,y,r*.8,r*.6,ang,0,TAU);d.fill();
-  paint(x,y,r*1.6,.9);
+  d.fillStyle='rgba(90,0,12,.55)';d.beginPath();d.ellipse(x+c*r*.4,y+s_*r*.4,r*.8,r*.6,ang,0,TAU);d.fill();
+  if(noPaint)return;
+  paint(x+c*r*.85,y+s_*r*.85,r*1.05,.9);paint(x,y,r*.3,.9);
 }
 /* ---------------- 血塗り判定（クリア条件） ----------------
    アリーナを床タイル(46px)単位で区切り、血が一定量たまったタイルを「塗りつぶし済み」にする。
@@ -1241,13 +1245,13 @@ function hurtPlayer(dmg,sx,sy){
   if(G.bonus){if(!G.bonus.end)bonusEnd(false);P.inv=.8;return}
   P.hp-=dmg;P.inv=.8*(1+.5*lv('dodge'));P.blinkT=P.inv;
   P.kx=Math.cos(a)*300;P.ky=Math.sin(a)*300;
-  bloodBurst(P.x,P.y,a,14,300);addShake(11);G.flash=Math.max(G.flash,.35);G.flashCol='255,30,60';G.hitstop=Math.max(G.hitstop,.07);SFX.hurt();
+  bloodBurst(P.x,P.y,a,14,300,true);addShake(11);G.flash=Math.max(G.flash,.35);G.flashCol='255,30,60';G.hitstop=Math.max(G.hitstop,.07);SFX.hurt();
   popText(P.x,P.y-30,'-'+Math.round(dmg),'#ff4060',18,.8);
   if(G.chain>=10)popText(P.x,P.y-50,'CHAIN BREAK','#ff8090',13,.9);
   G.chain=0;G.mult=1;
   if(P.hp<=0)die(a);
 }
-function die(a){P.hp=0;P.dead=true;P.guard=false;G.deathT=0;slow(2,.25);P.atk=null;bloodBurst(P.x,P.y,a,40,500);splat(P.x,P.y,26,a);SFX.death();G.flash=.7}
+function die(a){P.hp=0;P.dead=true;P.guard=false;G.deathT=0;slow(2,.25);P.atk=null;bloodBurst(P.x,P.y,a,40,500,true);splat(P.x,P.y,26,a,true);SFX.death();G.flash=.7}
 function bossDown(e,ang){
   G.boss=null;G.kills++;const pts=Math.round(e.val*G.mult*(1+.25*lv('greed')));G.score+=pts;
   slow(1.7,.15);addShake(28);G.flash=.9;G.flashCol='255,255,255';G.hitstop=.18;G.zoom=.08;
@@ -2840,7 +2844,7 @@ function bossGrab(e,dt,d,toP){
         const dmg=14*ENEMY_DMG*(1-.1*lv('armor'));if(!DEV.god)P.hp-=dmg;P.blinkT=.8;P.inv=.7;P.recover=.35;P.atk=null;
         P.kx=Math.cos(toP)*680;P.ky=Math.sin(toP)*680;G.chain=0;G.mult=1;
         addShake(18);G.flash=Math.max(G.flash,.4);G.flashCol='255,30,60';G.hitstop=Math.max(G.hitstop,.12);SFX.hurt();SFX.wall();
-        bloodBurst(P.x,P.y,toP,18,360);popText(P.x,P.y-40,'投げ！ -'+Math.round(dmg),'#ff4060',20,1);
+        bloodBurst(P.x,P.y,toP,18,360,true);popText(P.x,P.y-40,'投げ！ -'+Math.round(dmg),'#ff4060',20,1);
         if(P.hp<=0)die(toP);
       }else popText(e.x,e.y-e.r-20,'空振り','#b8ff5a',14,.7);
       e.state='grabEnd';e.st=0;
@@ -3056,16 +3060,19 @@ function update(rdt){
       c.push2=false;o.shoveSet=new Set([o]);startShove(o,Math.atan2(o.y-e.y,o.x-e.x),Math.min(sp*.7,420));o.stun=Math.max(o.stun,.35);
       c.vx*=.5;c.vy*=.5;SFX.wall();break}
     if(sp>220&&!c.noCrash)for(const o of [...E]){if(dist(e.x,e.y,o.x,o.y)<e.r+o.r+6){c.noCrash=true;G.score+=Math.round(50*G.mult);popText(o.x,o.y-26,'CRASH!','#ffd54a',13,.6);hitEnemy(o,sp>450?3.8:2.5,Math.atan2(o.y-e.y,o.x-e.x),sp*.85,{fin:sp>550,crash:true});c.vx*=.6;c.vy*=.6;break}}
-    let wall=false;
-    if(e.x<AX0+e.r){e.x=AX0+e.r;c.vx=Math.abs(c.vx)*.4;wall=true}else if(e.x>AX1-e.r){e.x=AX1-e.r;c.vx=-Math.abs(c.vx)*.4;wall=true}
-    if(e.y<AY0+e.r){e.y=AY0+e.r;c.vy=Math.abs(c.vy)*.4;wall=true}else if(e.y>AY1-e.r){e.y=AY1-e.r;c.vy=-Math.abs(c.vy)*.4;wall=true}
-    {const n=blockPush(e);if(n){bounceOff(c,n,.4);wall=true}}
-    if(wall&&sp>320){splat(e.x,e.y,e.r*2.1,Math.atan2(c.vy,c.vx));addShake(7);SFX.wall();popText(e.x,e.y-24,'SPLASH!','#ff4d6d',14,.6);if(lv('quake')&&!c.boomed){c.boomed=true;explode(e.x,e.y,49,false)}}
+    // 壁に当たる前の進む向き（血しぶきは、跳ね返った後の向きではなく、ぶつかった壁の側へ飛ばす）
+    let wall=false;const inA=Math.atan2(c.vy,c.vx);
+    // 壁・障害物に叩きつけられた死体は、ほとんど跳ね返らずにその場に崩れ落ちる（跳ね返って戻る途中の床を塗らないように、以後は血の筋で塗らない）
+    if(e.x<AX0+e.r){e.x=AX0+e.r;c.vx=Math.abs(c.vx)*.12;wall=true}else if(e.x>AX1-e.r){e.x=AX1-e.r;c.vx=-Math.abs(c.vx)*.12;wall=true}
+    if(e.y<AY0+e.r){e.y=AY0+e.r;c.vy=Math.abs(c.vy)*.12;wall=true}else if(e.y>AY1-e.r){e.y=AY1-e.r;c.vy=-Math.abs(c.vy)*.12;wall=true}
+    {const n=blockPush(e);if(n){bounceOff(c,n,.12);wall=true}}
+    if(wall)c.slumped=true;
+    if(wall&&sp>320){splat(e.x,e.y,e.r*2.1,inA);addShake(7);SFX.wall();popText(e.x,e.y-24,'SPLASH!','#ff4d6d',14,.6);if(lv('quake')&&!c.boomed){c.boomed=true;explode(e.x,e.y,49,false)}}
     // 吹き飛ぶ死体は床に血の筋を引きずる
     // 途切れない太い血の筋を描き、通ったマスをしっかり塗る（倒す向きで塗る場所を狙える）
     if(sp>110){if(c.lx!=null){decG.strokeStyle='rgba(105,0,15,.5)';decG.lineCap='round';decG.lineWidth=e.r*(sp>500?1.1:.8);decG.beginPath();decG.moveTo(c.lx,c.ly);decG.lineTo(e.x,e.y);decG.stroke()}
-      c.lx=e.x;c.ly=e.y;c.sm=(c.sm||0)+sp*dt;if(c.sm>9){c.sm=0;paint(e.x,e.y,e.r*.7,sp>500?.36:.2)}}else c.lx=null;
-    if(sp<40&&!c.landed){c.landed=true;splat(e.x,e.y,e.r,rand(0,TAU))}
+      c.lx=e.x;c.ly=e.y;c.sm=(c.sm||0)+sp*dt;if(c.sm>9&&!c.slumped){c.sm=0;paint(e.x,e.y,e.r*.7,sp>500?.36:.2)}}else c.lx=null;
+    if(sp<40&&!c.landed){c.landed=true;splat(e.x,e.y,e.r,c.slumped?inA+Math.PI:Math.atan2(c.vy,c.vx),c.slumped)} // 壁際で崩れた死体の血だまりは絵だけ（塗りは激突の血しぶきで済んでいる）
   }
   CORPSES=CORPSES.filter(c=>c.t<1.2);
   // bullets
@@ -3113,7 +3120,7 @@ function update(rdt){
   // fx
   for(const f of FX){
     f.life-=dt;f.x+=f.vx*dt||0;f.y+=f.vy*dt||0;
-    if(f.k==='b'){const k=Math.exp(-7*dt);f.vx*=k;f.vy*=k;if(f.life<=0&&Math.random()<.25){decG.fillStyle='rgba(110,0,15,.6)';decG.beginPath();decG.arc(f.x,f.y,f.sz*.7,0,TAU);decG.fill();paint(f.x,f.y,5,.04)}}
+    if(f.k==='b'){const k=Math.exp(-7*dt);f.vx*=k;f.vy*=k;if(f.life<=0&&Math.random()<.25){decG.fillStyle='rgba(110,0,15,.6)';decG.beginPath();decG.arc(f.x,f.y,f.sz*.7,0,TAU);decG.fill();if(!f.np)paint(f.x,f.y,5,.04)}}
     else if(f.k==='fire'||f.k==='smoke'||f.k==='gold'||f.k==='powder'){const k=Math.exp(-4*dt);f.vx*=k;f.vy*=k}
     else if(f.k==='ash'){const k=Math.exp(-2.2*dt);f.vx*=k;f.vy=f.vy*k-30*dt;f.rot+=f.vr*dt}
     else if(f.k==='paper'){const k=Math.exp(-5*dt);f.vx*=k;f.vy=f.vy*k+40*dt;f.rot+=f.vr*dt}
