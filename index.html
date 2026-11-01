@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v0.62 2026-11-01';
+const VERSION='v0.63 2026-11-01';
 const ENEMY_DMG=1.5; // 敵の攻撃力倍率
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const GUARD_HEAL=.4; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値）
@@ -137,8 +137,8 @@ function drawGround(b,T_,sr){
   }else{
     // アスファルト：路面標示（あとで粒を重ねて、すり減らす）
     b.fillStyle=paint(.36);b.fillRect(x0+28,y0,4,y1-y0);b.fillRect(x1-32,y0,4,y1-y0);
-    if(gd==='alley'){b.fillRect(x0+28,560,x1-x0-56,12);roadText(T_.mark,665,.3)}
-    else{for(let y=y0;y<y1;y+=60)b.fillRect(223,y,4,30);for(let i=0;i<7;i++)b.fillRect(70+i*46,410,24,86);roadText(T_.mark,665,.26)}
+    // 路地：車1台分の細い一方通行の道。センターラインも停止線も無く、両端の路側線だけ
+    if(gd==='street'){for(let y=y0;y<y1;y+=60)b.fillRect(223,y,4,30);for(let i=0;i<7;i++)b.fillRect(70+i*46,410,24,86);roadText(T_.mark,665,.26)}
     // 骨材の粒
     for(let i=0;i<11000;i++){const x=sr()*W,y=y0+sr()*(y1-y0),r=sr();b.fillStyle=r<.45?`rgba(205,210,220,${.04+sr()*.08})`:`rgba(0,0,0,${.2+sr()*.3})`;b.fillRect(x,y,r<.9?1:1.8,r<.9?1:1.8)}
     // 補修跡（色の違う四角いアスファルト）
@@ -3167,8 +3167,8 @@ function titleArt(){
   x.fillStyle=gr;x.fillRect(-rx,-rx,rx*2,rx*2);return TART=c;
 }
 function drawTitle(){
-  g.drawImage(bgC,0,0,W,H);
-  glow(8,260,90,'#ff2f7a',.22);glow(W-8,330,90,'#29e6ff',.2);
+  // 背景の床は描かず、暗い夜の色だけ（主人公の絵と雨を引き立てる）
+  g.fillStyle='#06070b';g.fillRect(0,0,W,H);
   if(titleArt()){const ta=titleArt(),h=531,w=h*ta.width/ta.height,bob=Math.sin(G.time*1.2)*3;g.drawImage(ta,W/2-w/2,232+bob,w,h)}
   glow(W/2,470,150,'#ff1030',.18+Math.sin(G.time*2)*.05);
   const gr=g.createLinearGradient(0,0,0,H);gr.addColorStop(0,'rgba(4,4,8,.94)');gr.addColorStop(.42,'rgba(4,4,8,.72)');gr.addColorStop(.62,'rgba(4,4,8,.2)');gr.addColorStop(1,'rgba(4,4,8,.88)');g.fillStyle=gr;g.fillRect(0,0,W,H);
