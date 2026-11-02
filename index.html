@@ -27,8 +27,11 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v1.74 2026-11-02';
+const VERSION='v1.76 2026-11-03';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
+// ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
+const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
+const stageDmg=()=>G.tutMode?.5:STAGE_DMG[G.wave]||1.1;
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const BIG_HEAL_PER=.15,BIG_HEAL_CAP=2; // 怨念解放・怨霊の手の回復：巻き込んだ敵1体につき基本量の15%を上乗せ（最大で基本量の2倍）
 const bigHeal=(base,n)=>base*Math.min(BIG_HEAL_CAP,1+BIG_HEAL_PER*n);
@@ -858,7 +861,7 @@ function startWave(n){
 function pickType(n){
   const pool=[['grunt',10]];
   if(n>=2)pool.push(['runner',4+n*.3]);
-  pool.push(['gunner',Math.min(8,1.1+(n-1)*.7)]); // 銃撃手はWAVE1から少しだけ（約9%）出て、WAVEごとに増える
+  pool.push(['gunner',Math.min(8,1.1+(n-1)*.7)*(n<=3?.5:1)]); // 銃撃手はWAVE1から少しだけ（約9%）出て、WAVEごとに増える
   if(n>=4)pool.push(['brute',1.2+n*.15]);
   if(n>=6)pool.push(['bazooka',1.2+(n-6)*.25]); // バズーカ兵は後半から
   // 技が要る敵：盾持ち（6面〜）、狙撃手（8面〜）、ナイフ使い（9面〜）
@@ -1710,7 +1713,7 @@ function breakShield(e){e.shieldUp=false;addShake(8);SFX.glass();popText(e.x,fig
 function hurtPlayer(dmg,sx,sy,ho){
   if(P.dead||state!=='play'||DEV.god)return; // 開発者モードの無敵
   if(P.inv>0)return;
-  dmg*=ENEMY_DMG;const atk=dmg;dmg*=1-.1*lv('armor'); // atk：敵の攻撃力（鎧で減る前）
+  dmg*=ENEMY_DMG*stageDmg();const atk=dmg;dmg*=1-.1*lv('armor'); // atk：敵の攻撃力（鎧で減る前）
   const a=Math.atan2(P.y-sy,P.x-sx);
   // ガードは正面（向いている方向±GUARD_ARC）からの攻撃だけ防げる
   const front=Math.abs(angDiff(P.face,a+Math.PI))<guardArc();
@@ -2804,8 +2807,9 @@ function updateCapQ(){
 }
 // 囲い目標（v1.73）：通常ステージで「1回の囲いで CAP_GOAL 枚以上」または「1回の囲いで敵を3体以上まとめて沈める」を達成すると、
 // クリア時の強化が3枚から選べる（未達成は2枚から）。どちらの場合も、動画を見ればもう1枚選べる。
-// 目標の枚数は床の形で変える（障害物の多い面は小さめ、端の開いた屋上は大きめ）。ボス戦・ボーナス面は今までどおり3枚から
-const CAP_GOAL_T={7:8,13:8,14:8,17:12,18:14},capGoal=w=>CAP_GOAL_T[w]||10,SINK_GOAL=3;
+// 目標の枚数は、序盤ほどゆるく後半ほど高く（1〜3面7枚 → 16面以降12枚）。そのうえで床の形で調整する（障害物の多い7・13・14面は低め、
+// 端の開いた屋上の17・18面は高め）。ENDLESS（21面〜）は12枚。ボス戦・ボーナス面は今までどおり3枚から
+const CAP_GOAL_T={1:7,2:7,3:7,4:8,6:8,7:7,8:9,9:9,11:10,12:10,13:8,14:9,16:12,17:13,18:15,19:12},capGoal=w=>CAP_GOAL_T[w]||12,SINK_GOAL=3;
 const goalOn=()=>!G.tutMode&&!G.isBossWave&&!G.bonus;
 function goalCheck(){if(G.goalMet||!goalOn()||G.phase!=='fight')return;
   if((G.capBest||0)>=capGoal(G.wave)||(G.sinkBest||0)>=SINK_GOAL){G.goalMet=true;SFX.just();addShake(6);
@@ -3505,7 +3509,7 @@ const inside=e=>e.x>AX0+e.r&&e.x<AX1-e.r&&e.y>AY0+e.r&&e.y<AY1-e.r;
 // 同時に近接攻撃（構え・斬りかかり中）しているチンピラ・走り屋の数
 const MAX_MELEE=3;
 // WAVE1だけ易しく：敵の出現数と攻撃の頻度を75%に（同時に出る数の上限×0.75と出現間隔×1.15で、画面上の数が約75%に。攻撃は1サイクル全体が÷0.75の長さになるよう休みを延ばす）
-const waveEase=()=>G.wave===1?.75:1;
+const waveEase=()=>G.tutMode?1:G.wave===1?.75:G.wave===2?.8:G.wave===3?.88:1;
 function meleeBusy(){let n=0;for(const o of E)if((o.type==='grunt'||o.type==='runner'||o.type==='shield'||o.type==='slasher')&&(o.state==='windup'||o.state==='strike'))n++;return n}
 function mv(e,a,s,dt){if(e.boss&&e.onBlood)s*=.75; // 血溜まりの上のボスは足を取られて遅い
 if(!e.boss&&lv('mire')){const i=tileAt(e.x,e.y);if(i>=0&&DONE[i]&&!BLOCK[i])s*=1-.18*lv('mire')} // 血の沼（強化カード）：塗った床の上の雑魚も遅くなる
@@ -3741,7 +3745,7 @@ function bossGrab(e,dt,d,toP){
     e.ang=turn(e.ang,toP,6*dt);
     if(e.st>=.5){
       if(!P.dead&&P.inv<=0&&d<e.r+P.r+30){
-        const dmg=14*ENEMY_DMG*(1-.1*lv('armor'));if(!DEV.god){P.hp-=dmg;G.wdmg=true}P.blinkT=.8;P.inv=.7;P.recover=.35;P.atk=null;
+        const dmg=14*ENEMY_DMG*stageDmg()*(1-.1*lv('armor'));if(!DEV.god){P.hp-=dmg;G.wdmg=true}P.blinkT=.8;P.inv=.7;P.recover=.35;P.atk=null;
         P.kx=Math.cos(toP)*680;P.ky=Math.sin(toP)*680;G.chain=0;G.mult=1;
         addShake(18);G.flash=Math.max(G.flash,.4);G.flashCol='255,30,60';G.hitstop=Math.max(G.hitstop,.12);SFX.hurt();SFX.wall();
         bloodBurst(P.x,P.y,toP,18,360,true);popText(P.x,P.y-40,'投げ！ -'+Math.round(dmg),'#ff4060',20,1);
