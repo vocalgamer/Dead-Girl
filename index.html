@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v1.68 2026-11-02';
+const VERSION='v1.69 2026-11-02';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const BIG_HEAL_PER=.15,BIG_HEAL_CAP=2; // 怨念解放・怨霊の手の回復：巻き込んだ敵1体につき基本量の15%を上乗せ（最大で基本量の2倍）
@@ -513,6 +513,7 @@ const SFX={
     for(let k=0;k<4;k++)noise(.18,.18,'highpass',3000,2000,t+.35+k*.28+Math.random()*.06,0,.6)},
   wash(){if(!can('wash',80))return;noise(.35,.3,'bandpass',1800,500,0,0,.7);tone(420,260,.2,'sine',.1)},
   drugRush(){const t=now();noise(.25,.2,'highpass',3000,6000,t);tone(70,40,.3,'sine',.6,t+.05);tone(60,38,.3,'sine',.5,t+.35);tone(880,1760,.5,'sawtooth',.04,t+.1);tone(1320,2640,.5,'sawtooth',.03,t+.1)},
+  shove(){if(!can('shove',40))return;const t=now(),dst=distBus();tone(95,42,.22,'sine',1.5,t);tone(170,60,.12,'triangle',2.4,t,dst);noise(.16,6.5,'lowpass',1900,170,t,dst,.8);noise(.045,2.6,'highpass',1600,800,t,dst,.7)},
   canKick(){if(!can('can',60))return;const t=now();tone(380,300,.14,'square',.07,t);for(const [fq,v] of [[1180,.05],[2350,.03],[3400,.02]])tone(fq,fq*.97,.22,'sine',v,t);noise(.08,.3,'bandpass',2200,900,t,0,1.4);tone(120,70,.1,'sine',.3,t)},
   beamDrop(){const t=now(),bus=echoBus(),dst=distBus();
     tone(90,28,1.1,'sine',1,t);tone(60,24,.9,'triangle',.25,t,dst); // 「ドッ」：胸に響く重い衝撃
@@ -3907,7 +3908,7 @@ function update(rdt){
         e.shoveSet=new Set([e]);e.shove=.35; // 弾かれた敵が別の敵に当たると、その敵も押し飛ばす（ダメージなし）
         if(e.state!=='chase'&&e.state!=='enter'&&e.state!=='vanish'){if(G.aimer===e)G.aimer=null;e.state='chase'}
         e.tilt=clamp(fx_,-1,1)*.38;e.tiltT=GP_TILT;e.gpT=GP_CD;
-        tone(95,45,.16,'sine',.6);tone(170,70,.06,'triangle',.3);noise(.09,.42,'lowpass',520,140);addShake(3);continue}
+        SFX.shove();addShake(3);continue}
       // 盾を構えた盾持ちは、ガード同士でぶつかると動かない（ボスと同じく重い）
       const we=e.boss||(P.guard&&e.type==='shield'&&e.shieldUp)?.1:.75;e.x+=ux*p*we;e.y+=uy*p*we;P.x-=ux*p*(1-we);P.y-=uy*p*(1-we)}
   }
