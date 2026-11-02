@@ -26,7 +26,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v1.34 2026-11-02';
+const VERSION='v1.37 2026-11-02';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const BIG_HEAL_PER=.15,BIG_HEAL_CAP=2; // 怨念解放・怨霊の手の回復：巻き込んだ敵1体につき基本量の15%を上乗せ（最大で基本量の2倍）
@@ -727,7 +727,7 @@ const BONUS_INFO={gun:{name:'弾丸返し',sub:'銃撃手の弾を15発弾き返
   shiki:{name:'式神斬り',sub:'25秒間、式神を斬りまくれ。攻撃を受けたら終了',need:0}};
 const BONUS_THEME={name:'血の試練場',base:'#140810',grid:'200,120,140',refl:['255,60,90','255,200,90'],hi:'235,190,200',tube:['#ffd23f','#ff3f6a','#ffd23f'],mark:'試練'};
 const bonusKind=n=>n===5?'gun':n===10?'gunaxe':n===15?'shiki':['gun','gunaxe','shiki'][(n/5)%3];
-function startBonus(kind){G.bossWon=false;VOID.fill(0);VOIDN=0;HOLE.fill(0);HOLEN=0;
+function startBonus(kind){G.bossWon=false;VOID.fill(0);VOIDN=0;HOLE.fill(0);HOLEN=0;HOLEC=0;
   state='play';stateT=0;E=[];B=[];MARKS=[];CORPSES=[];
   G.bonus={kind,ref:0,kills:0,got:[],need:BONUS_INFO[kind].need,t:0,wait:2.4,dur:25,end:false,ok:false,endT:0};
   G.phase='fight';G.isBossWave=true;G.boss=null;G.bossPending=0;G.rush=0;G.aimer=null;G.shotGap=1;G.cards=null;G.gim=null;G.crests=[];
@@ -818,7 +818,7 @@ function startWave(n){
   if(!G.tutMode&&lv('seed'))G.soul=Math.min(SOUL_MAX,G.soul+25*lv('seed')); // 怨念の種
   // 床の形：STAGE1・ボス・チュートリアルは素の長方形。ストーリーはステージごとに決まった形、ENDLESSは自動生成
   makeLayout(G.tutMode||bk||n===1?null:n<=20?n*7919:(G.runSeed*7919+n*104729),n<=20?STORY_TPL[n]:null);
-  VOID.fill(0);VOIDN=0;HOLE.fill(0);HOLEN=0;if(!G.tutMode&&!bk&&themeFor(n).gim==='edge')applyVoid(); // 屋上：左右の端は床がない
+  VOID.fill(0);VOIDN=0;HOLE.fill(0);HOLEN=0;HOLEC=0;if(!G.tutMode&&!bk&&themeFor(n).gim==='edge')applyVoid(); // 屋上：左右の端は床がない
   // どのステージも同じ場所（床の中央やや下。どの床の形でもここは空けてある）から始め、最初に少し止めて自分の位置を見せる
   if(!G.tutMode){Object.assign(P,{x:W/2,y:540,vx:0,vy:0,kx:0,ky:0,lx:0,ly:0,face:-Math.PI/2,atk:null});P.trail=[];G.ready=READY_T;G.readyOn=false}else G.ready=0;
   placePlayerSafe();
@@ -1152,18 +1152,23 @@ function tileAt(x,y){const cx=Math.floor((x-AX0)/TS),cy=Math.floor((y-AY0)/TS);r
 const BLOCK=new Uint8Array(GN);let nBlock=0;
 // 屋上の外（左右1列ずつ床がない）。歩けず、塗る対象にもならない。ここへ滑り込んだ敵や死体は下の通りへ転落する
 const VOID=new Uint8Array(GN);let VOIDN=0;
-const HOLE=new Uint8Array(GN);let HOLEN=0;
+const HOLE=new Uint8Array(GN);let HOLEN=0,HOLEC=0; // HOLEN：穴のマス数　HOLEC：穴の数（1ステージ4つまで）
+const HOLE_MAX=4;
 const voidAt=(x,y)=>{const i=tileAt(x,y);return i>=0&&(VOID[i]===1||HOLE[i]===1)};
 const fallZone=()=>VOIDN||HOLEN; // 落ちる場所（屋上の外・床の穴）があるか
-// 鉄骨の下の床を抜く：鉄骨の向きに沿った2〜3マス。ステージで合計6マスまで、空きマスが分断される穴は開けない
+// 鉄骨の下の床を抜く：鉄骨の向きに沿ったマス（最大3マス）。穴はステージで4つまで（4つ開いたら、もう鉄骨は落ちてこない）。
+// 全部抜くと空きマスが分断される時は、2マス→1マスと短くして、抜ける範囲だけ抜く（毎回どこかは必ず抜けるように）
 function punchHole(w){
-  if(HOLEN>=6)return false;const set=new Set();
-  for(let u=-44;u<=44;u+=11){const i=tileAt(w.x+Math.cos(w.a)*u,w.y+Math.sin(w.a)*u);if(i>=0&&!BLOCK[i])set.add(i)}
-  const add=[...set].slice(0,Math.max(0,6-HOLEN));if(add.length<2)return false;
-  for(const i of add)BLOCK[i]=1;if(!layoutOK2()){for(const i of add)BLOCK[i]=0;return false}
-  for(const i of add){HOLE[i]=1;HOLEN++;nBlock++;if(!DONE[i]){DONE[i]=1;painted++}}paintVer++;
-  for(const e of E){const n=blockPush(e);if(n)bounceOff(e,n,.3)} // 穴の縁にいた敵は押し出す
-  return true}
+  if(HOLEC>=HOLE_MAX)return false;const cap=3;const line=[];
+  for(let u=-44;u<=44;u+=11){const i=tileAt(w.x+Math.cos(w.a)*u,w.y+Math.sin(w.a)*u);if(i>=0&&!BLOCK[i]&&!line.includes(i))line.push(i)}
+  if(!line.length)return false;
+  const tries=[line.slice(0,Math.min(3,cap))];for(let k=0;k+1<line.length;k++)tries.push(line.slice(k,k+2));const mid=line[Math.floor(line.length/2)];tries.push([mid]);for(const i of line)if(i!==mid)tries.push([i]);
+  for(const set of tries){if(set.length>cap)continue;for(const i of set)BLOCK[i]=1;if(layoutOK2()){
+      for(const i of set){HOLE[i]=1;HOLEN++;nBlock++;if(!DONE[i]){DONE[i]=1;painted++}}paintVer++;HOLEC++;
+      for(const e of E){const n=blockPush(e);if(n)bounceOff(e,n,.3)} // 穴の縁にいた敵は押し出す
+      return true}
+    for(const i of set)BLOCK[i]=0}
+  return false}
 function applyVoid(){VOID.fill(0);VOIDN=0;for(let y=0;y<GR;y++)for(const x of [0,GC-1]){const i=y*GC+x;VOID[i]=1;BLOCK[i]=1;VOIDN++}
   if(!layoutOK2())for(let i=0;i<GN;i++)if(!VOID[i])BLOCK[i]=0; // 外側を削った結果、空きマスが分断されたら中の障害物をなくす
   nBlock=BLOCK.reduce((a,v)=>a+v,0)}
@@ -1799,7 +1804,7 @@ function propSpot(){
 }
 function newProp(k){const p=propSpot();return{k,x:p.x,y:p.y,r:k==='cart'?20:k==='oil'?20:k==='tires'?18:16,used:false,lit:false,fuse:0,t:0,vx:0,vy:0,a:k==='cart'?(Math.random()<.5?0:Math.PI/2):0,hits:new Set(),fall:null,fly:null,cargo:true}}
 function setupGimmick(){
-  PROPS=[];SMOKES=[];WARNS=[];SHOCKS=[];SPILLS=[];TIRES=[];SLICKS=[];G.beamT=rand(3,5);
+  PROPS=[];SMOKES=[];WARNS=[];SHOCKS=[];SPILLS=[];TIRES=[];SLICKS=[];G.beamT=rand(7,10);
   G.gim=G.isBossWave?null:(theme.gim||null);
   if(G.gim&&PROP_N[G.gim])for(let i=0;i<PROP_N[G.gim];i++)PROPS.push(newProp(G.gim));
 }
@@ -2028,9 +2033,10 @@ function updateGimmicks(dt){
   SPILLS=SPILLS.filter(sp=>sp.t<sp.dur);
   for(const e of E)if(e.smoked>0)e.smoked-=dt;
   // 廃工場：一定間隔で鉄骨が落ちてくる（影で予告。敵の近くを狙いやすい）
-  if(G.gim==='beam'&&G.phase==='fight'){G.beamT-=dt;if(G.beamT<=0){G.beamT=rand(9,12);
+  if(G.gim==='beam'&&G.phase==='fight'&&HOLEC<HOLE_MAX){G.beamT-=dt;if(G.beamT<=0){G.beamT=rand(15,20); // 鉄骨は15〜20秒に1本
     const tg=E.length&&Math.random()<.7?pick(E):null;
-    if(WARNS.filter(w=>!w.done).length<2){const x=tg?clamp(tg.x,AX0+60,AX1-60):rand(AX0+60,AX1-60),y=tg?clamp(tg.y,AY0+60,AY1-50):rand(AY0+70,AY1-50),a=rand(0,Math.PI);
+    if(!WARNS.some(w=>!w.done)){/* 吊られている鉄骨は1本ずつ */let x=tg?clamp(tg.x,AX0+60,AX1-60):rand(AX0+60,AX1-60),y=tg?clamp(tg.y,AY0+60,AY1-50):rand(AY0+70,AY1-50);const a=rand(0,Math.PI);
+      for(let k=0;k<20&&nearBlock(x,y,30);k++){x=rand(AX0+60,AX1-60);y=rand(AY0+70,AY1-50)} // 障害物の上には落とさない
       WARNS.push({ax:x,ay:y,x,y,a0:a,a,ph:rand(0,TAU),r:44,t:0,hang:3.2,fall:1,dur:4.2,done:false,cr:.4})}}}
   for(const w of WARNS){w.t+=dt;if(w.thru!=null)w.thru+=dt;
     // 吊られている間：振り子のように揺れる（影がその下の床を動く）。ときどき金属がきしむ。外れる瞬間に「ガシャン」
@@ -3319,7 +3325,7 @@ function wallCheck(e,sp){
   let hit=false,nx=0,ny=0;
   if(e.x<AX0+e.r){e.x=AX0+e.r;hit=true;nx=1}else if(e.x>AX1-e.r){e.x=AX1-e.r;hit=true;nx=-1}
   if(e.y<AY0+e.r){e.y=AY0+e.r;hit=true;ny=1}else if(e.y>AY1-e.r){e.y=AY1-e.r;hit=true;ny=-1}
-  if(!hit&&fallZone()&&!e.boss&&sp>200&&e.state!=='enter'){const va=Math.atan2(e.vy,e.vx);if(voidAt(e.x,e.y)||voidAt(e.x+Math.cos(va)*e.r*1.2,e.y+Math.sin(va)*e.r*1.2)){fallOff(e,va,true);return true}}
+  if(!hit&&fallZone()&&!e.boss&&sp>40&&e.state!=='enter'&&e.state!=='strike'&&e.state!=='charge'){const va=Math.atan2(e.vy,e.vx);if(voidAt(e.x,e.y)||voidAt(e.x+Math.cos(va)*e.r*1.2,e.y+Math.sin(va)*e.r*1.2)){fallOff(e,va,true);return true}}
   if(!hit){
     // ふさがったマス（柱など）：壁と同じく跳ね返り、強く飛ばされていれば叩きつけ（転落はしない）
     const n=blockPush(e);if(!n)return false;bounceOff(e,n,.35);
