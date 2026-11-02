@@ -26,7 +26,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v1.40 2026-11-02';
+const VERSION='v1.42 2026-11-02';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const BIG_HEAL_PER=.15,BIG_HEAL_CAP=2; // 怨念解放・怨霊の手の回復：巻き込んだ敵1体につき基本量の15%を上乗せ（最大で基本量の2倍）
@@ -1218,9 +1218,10 @@ function drawReady(){
   const gr=g.createRadialGradient(x,y,34,x,y,150);gr.addColorStop(0,'rgba(0,0,0,0)');gr.addColorStop(1,'rgba(0,0,0,'+(.62*a)+')');
   g.fillStyle=gr;g.fillRect(AX0-60,AY0-120,AX1-AX0+120,AY1-AY0+240);
   g.lineWidth=3;for(let k=0;k<2;k++){const q=(tm*1.3+k*.5)%1;g.strokeStyle='rgba(127,243,255,'+((1-q)*a)+')';g.beginPath();g.arc(x,y,lerp(95,30,q),0,TAU);g.stroke()}
-  g.globalAlpha=a;const by=P.y-78-Math.abs(Math.sin(tm*6))*7;
-  g.fillStyle='#7ff3ff';g.strokeStyle='#002a30';g.lineWidth=3;g.beginPath();g.moveTo(x-11,by-12);g.lineTo(x+11,by-12);g.lineTo(x,by);g.closePath();g.stroke();g.fill();
-  txt('あなた',x,by-18,15,'#7ff3ff','center',JP,['#002a30',4],false,900);
+  // 頭上の▼を点滅させて位置を知らせる（文字は出さない）
+  const by=P.y-72,on=Math.floor(tm*5)%2===0;g.globalAlpha=a*(on?1:.15);
+  g.fillStyle='#7ff3ff';g.strokeStyle='#002a30';g.lineWidth=3;g.beginPath();g.moveTo(x-13,by-14);g.lineTo(x+13,by-14);g.lineTo(x,by);g.closePath();g.stroke();g.fill();
+  if(on)glow(x,by-7,22,'#7ff3ff',.35);
   if(G.ready<.5){const k=1-G.ready/.5;g.globalAlpha=Math.min(1,G.ready/.12);txt('GO!',(AX0+AX1)/2,AY0+(AY1-AY0)*.4,Math.round(40+k*14),'#ff2f5f','center',EN,['#000',6],true)}
   g.globalAlpha=1;
 }
@@ -1625,6 +1626,7 @@ function hurtPlayer(dmg,sx,sy,ho){
     spark(P.x-Math.cos(a)*18,P.y-Math.sin(a)*18,a+Math.PI,true);
     RINGS.push({x:P.x,y:P.y,r:14,R:46,t:0,dur:.22,col:'110,240,255',w:5});
     addShake(5);G.hitstop=Math.max(G.hitstop,.05);SFX.guard();
+    for(let k=0;k<8;k++){const an=a+Math.PI+rand(-.9,.9),v=rand(80,220),l=rand(.3,.55);fx({k:'chip',x:P.x+Math.cos(P.face)*30,y:P.y+Math.sin(P.face)*30-20,vx:Math.cos(an)*v,vy:Math.sin(an)*v-60,life:l,max:l,sz:rand(1.5,3)})} // 枝の木片
     popText(tpx,tpy,'GUARD +'+Math.max(1,Math.round(heal)),'#6dff9c',15,.7);
     return;
   }
@@ -3926,40 +3928,51 @@ function girlPose(face){
 // SOUL満タン中の金色のオーラ（炎のように揺らめく光＋立ちのぼる光の粒＋ときどき走る稲妻）
 // ガードの盾：厚みのある弧の刃。両端は尖らせ、中は区切り線でパネル状に。光の筋が左右に走り、防いだ瞬間は白く光って波紋が出る
 // fx：防いだ直後の残り時間（P.guardFx）、k：構えた瞬間の広がり（0→1）
-// エネルギーの盾：主人公の前の床から立ち上がる、湾曲した半透明の光の壁。蜂の巣の格子、上端と両端の鋭い光、下から上へ走る光の帯。
-// 防いだ瞬間は全体が白く弾けて外へ波紋。part='back' は主人公より奥の部分（主人公の前に描く）、'front' は手前の部分（主人公の後に描く）
 // 主人公の足元の案内（ガードの押し直し・怨念解放OK）：人物や障害物に隠れないよう、全部を描いた後に重ねる
 function drawPlayerLabels(){const rdy=G.soul>=100;
         if(P.guardLock&&(inp.guardKey||inp.guardMouse||inp.guardTouch!=null||inp.padGuard))txt('離して押し直し',P.x,P.y+56,12,'#7ff3ff','center',JP,['#000',4],false,900);
         if(rdy&&!(G.ready>0)){const pl=.5+Math.sin(G.time*8)*.5,p2=G.soul>=SOUL_MAX,over=E.some(e=>Math.abs(e.x-P.x)<55&&e.y<P.y&&P.y-e.y<130);g.globalAlpha=(.75+pl*.25)*(over?.3:1);txt(p2?(touchMode?'タップで怨霊の手！':'怨霊の手 OK!（L／E）'):(touchMode?'タップで怨念解放！':'怨念解放 OK!'),P.x,P.y+(P.guardLock&&P.guard?74:58)+pl*2,15,p2?'#e0c0ff':'#ffe27a','center',JP,[p2?'#2a0040':'#3a1a00',4],false,900);g.globalAlpha=1}
 }
+// 盾：主人公の両腕が、ねじれた枯れ枝に変わって前へ広がったもの（有機的でゾンビらしい防御）。
+// 肩から樹皮に覆われた太い前腕が伸び、手の先から指のように枝が扇状に分かれて絡み合い、前に湾曲した盾になる。
+// 防御だと一目で分かるよう、枝の中を青白く光る脈が走り、隙間に淡い青の霞、枝先が光る。防いだ瞬間は白く弾けて外へ波紋。
+// part='back' は主人公より奥の部分（主人公の前に描く）、'front' は手前の部分（主人公の後に描く）
 function drawShield(x,y,f,A,fx,k,part){
-  const hit=fx>0,h=hit?fx/.25:0,e=1-Math.pow(1-k,3),aA=A*(.6+.4*e),a0=f-aA,a1=f+aA,al=hit?1:.85+Math.sin(G.time*9)*.08;
-  const R=34,Hs=64*e,by=y+10,N=16;
-  const Pt=(a,v)=>[x+Math.cos(a)*R*(1+.05*v),by+Math.sin(a)*R*.55-v*Hs];
-  const seg=i=>a0+(a1-a0)*i/N,isFront=a=>Math.sin(a)>0;
-  g.save();g.globalCompositeOperation='lighter';g.lineCap='round';g.lineJoin='round';
-  const ln=(p,q,col,w)=>{g.strokeStyle=col;g.lineWidth=w;g.beginPath();g.moveTo(p[0],p[1]);g.lineTo(q[0],q[1]);g.stroke()};
-  const scan=(G.time*.9)%1;
-  for(let i=0;i<N;i++){const b0=seg(i),b1=seg(i+1),m=(b0+b1)/2,fr=isFront(m);if((part==='front')!==fr)continue;
-    const p00=Pt(b0,0),p10=Pt(b1,0),p11=Pt(b1,1),p01=Pt(b0,1),pm0=Pt(m,0),pm1=Pt(m,1);
-    // 膜：下と上の縁ほど明るく、手前の面ほど濃い
-    const gr=g.createLinearGradient(pm0[0],pm0[1],pm1[0],pm1[1]),kk=(fr?1:.6)*al;
-    gr.addColorStop(0,`rgba(60,170,255,${.3*kk})`);gr.addColorStop(.45,`rgba(40,130,240,${.1*kk})`);gr.addColorStop(.9,`rgba(110,220,255,${.3*kk})`);gr.addColorStop(1,`rgba(200,250,255,${.45*kk})`);
-    g.fillStyle=gr;g.beginPath();g.moveTo(p00[0],p00[1]);g.lineTo(p10[0],p10[1]);g.lineTo(p11[0],p11[1]);g.lineTo(p01[0],p01[1]);g.closePath();g.fill();
-    // 蜂の巣の格子：段ごとに上下へ折れる線で六角形の並びに見せる
-    g.strokeStyle=`rgba(170,240,255,${.3*kk})`;g.lineWidth=.8;g.beginPath();
-    for(let r=0;r<5;r++){const v0=r/5,v1=(r+1)/5,va=i%2?v1:v0,vb=i%2?v0:v1,p=Pt(b0,va),q=Pt(b1,vb);g.moveTo(p[0],p[1]);g.lineTo(q[0],q[1]);
-      if(i%2===0){const s0=Pt(b0,v0),s1=Pt(b0,v0+.1);g.moveTo(s0[0],s0[1]);g.lineTo(s1[0],s1[1])}}
-    g.stroke();
-    // 上端（鋭く白い光）と下端（床との接地）、走る光の帯
-    ln(p01,p11,`rgba(80,200,255,${.4*kk})`,5);ln(p01,p11,hit?'#ffffff':`rgba(235,255,255,${.95*kk})`,hit?2.6+2*h:1.5);
-    ln(p00,p10,`rgba(120,220,255,${.5*kk})`,1.2);
-    const sa=Pt(b0,scan),sb=Pt(b1,scan);ln(sa,sb,`rgba(255,255,255,${.55*kk*(1-scan)})`,2);
-    if(hit){g.fillStyle=`rgba(255,255,255,${.45*h})`;g.beginPath();g.moveTo(p00[0],p00[1]);g.lineTo(p10[0],p10[1]);g.lineTo(p11[0],p11[1]);g.lineTo(p01[0],p01[1]);g.closePath();g.fill()}}
-  // 両端の縦の光（その端がこちら側にある時に描く）
-  for(const a of [a0,a1])if((part==='front')===isFront(a)){const p=Pt(a,0),q=Pt(a,1);ln(p,q,`rgba(90,210,255,${.45*al})`,4);ln(p,q,`rgba(230,255,255,${.95*al})`,1.4)}
-  // 防いだ瞬間：中ほどの高さで、外へ広がる光の輪（手前側で描く）
+  const hit=fx>0,h=hit?fx/.25:0,e=1-Math.pow(1-k,3),aA=A*(.55+.45*e),a0=f-aA,a1=f+aA,tm=G.time;
+  const R=14+22*e,Hs=66,by=y+10,NB=11,isFront=a=>Math.sin(a)>0;
+  const Pt=(a,v,r)=>[x+Math.cos(a)*(r==null?R:r)*(1+.06*v),by+Math.sin(a)*(r==null?R:r)*.55-v*Hs];
+  const pulse=.6+Math.sin(tm*5)*.25+(hit?.6*h:0);
+  const bark=hit?'#cfeff8':'#3a2630',dark='#0b0608',vein=`rgba(90,220,255,${Math.min(1,.55*pulse)})`;
+  const stroke=(pts,w0,w1,col)=>{for(let q=1;q<pts.length;q++){const t=q/(pts.length-1);g.strokeStyle=col;g.lineWidth=w0+(w1-w0)*t;g.beginPath();g.moveTo(pts[q-1][0],pts[q-1][1]);g.lineTo(pts[q][0],pts[q][1]);g.stroke()}};
+  const limb=(pts,w0,w1)=>{stroke(pts,w0+2.4,w1+2,dark);stroke(pts,w0,w1,bark);g.globalCompositeOperation='lighter';stroke(pts,Math.max(1.2,w0*.38),.7,vein);g.globalCompositeOperation='source-over'};
+  // 曲がりながら進む線（2点の間を、こぶのように揺らして結ぶ）
+  const bend=(p,q,n,amp,sd)=>{const out=[],dx=q[0]-p[0],dy=q[1]-p[1],L=Math.hypot(dx,dy)||1,nx=-dy/L,ny=dx/L;
+    for(let k2=0;k2<=n;k2++){const t=k2/n,w=Math.sin(t*Math.PI)*amp*Math.sin(sd+t*4)+Math.sin(tm*1.8+sd)*1.2*t;out.push([p[0]+dx*t+nx*w,p[1]+dy*t+ny*w])}return out};
+  g.save();g.lineCap='round';g.lineJoin='round';
+  // 盾の範囲の淡い青の霞
+  g.globalCompositeOperation='lighter';
+  for(let s2=0;s2<12;s2++){const b0=a0+(a1-a0)*s2/12,b1=a0+(a1-a0)*(s2+1)/12,m=(b0+b1)/2;if((part==='front')!==isFront(m))continue;
+    const p00=Pt(b0,.08),p10=Pt(b1,.08),p11=Pt(b1,.92),p01=Pt(b0,.92),gr=g.createLinearGradient(0,p00[1],0,p01[1]);
+    gr.addColorStop(0,'rgba(60,200,255,0)');gr.addColorStop(.5,`rgba(60,200,255,${(isFront(m)?.32:.2)*pulse*e})`);gr.addColorStop(1,'rgba(60,200,255,0)');g.fillStyle=gr;
+    g.beginPath();g.moveTo(p00[0],p00[1]);g.lineTo(p10[0],p10[1]);g.lineTo(p11[0],p11[1]);g.lineTo(p01[0],p01[1]);g.closePath();g.fill()}
+    g.strokeStyle=`rgba(110,225,255,${.42*pulse*e})`;g.lineWidth=2;
+  for(let s2=0;s2<12;s2++){const b0=a0+(a1-a0)*s2/12,b1=a0+(a1-a0)*(s2+1)/12,m=(b0+b1)/2;if((part==='front')!==isFront(m))continue;const p=Pt(b0,.96),q=Pt(b1,.96);g.beginPath();g.moveTo(p[0],p[1]);g.lineTo(q[0],q[1]);g.stroke()}
+  for(const a of [a0,a1])if((part==='front')===isFront(a)){const p=Pt(a,.05),q=Pt(a,.96);g.beginPath();g.moveTo(p[0],p[1]);g.lineTo(q[0],q[1]);g.stroke()}
+  g.globalCompositeOperation='source-over';
+  // 両腕：肩から前へ伸びる樹皮の前腕（向きで奥・手前が決まる）
+  const hand=sd=>Pt(f+sd*.55,.5,11),sh=sd=>Pt(f+sd*1.25,.62,7);
+  for(const sd of [-1,1]){if((part==='front')!==isFront(f+sd*.55))continue;limb(bend(sh(sd),hand(sd),5,1.5,sd*2),7,6)}
+  // 手の先から扇状に分かれる枝（指のように）。行き先は盾の湾曲面の上の、高さの違う点
+  const VT=[.92,.38,.72,.16,.84,.5,.28,.66,.95,.22,.8];
+  for(let i=0;i<NB;i++){const sd=i<NB/2?-1:1,a=a0+(a1-a0)*(i+.5)/NB,vt=VT[i];if((part==='front')!==isFront(a))continue;
+    const hp=hand(sd),tp=Pt(a+Math.sin(tm*1.5+i)*.03*e,vt),br=bend(hp,tp,9,4+i%3,i*1.7);limb(br,6.5,2);
+    // 隣の枝へ伸びて絡む小枝
+    const mid=br[5],nb=Pt(a+(i%2?1:-1)*(a1-a0)/NB*.9,Math.min(1,vt+(i%3-1)*.18));limb(bend(mid,nb,5,3,i),3.2,1.2);
+    const m2=br[7],nb2=Pt(a+(i%2?-1:1)*(a1-a0)/NB,Math.max(.05,vt-.22));limb(bend(m2,nb2,4,2.5,i+5),2.4,1);
+    // とげ
+    g.fillStyle=dark;for(const q of [3,7]){const p=br[q],s3=(i+q)%2?1:-1;g.beginPath();g.moveTo(p[0],p[1]-2);g.lineTo(p[0]+s3*6,p[1]-4);g.lineTo(p[0],p[1]+2);g.closePath();g.fill()}
+    glow(tp[0],tp[1],10,'#5ad8ff',.5*pulse*e);circ(tp[0],tp[1],1.4,'#d8f8ff')}
+  // 防いだ瞬間：中ほどの高さで外へ広がる光の輪
   if(hit&&part==='front'){const rr=R+6+(1-h)*30;g.strokeStyle=`rgba(150,245,255,${h})`;g.lineWidth=2+3*h;g.beginPath();g.ellipse(x,by-Hs*.5,rr,rr*.55,0,a0-.15,a1+.15);g.stroke()}
   g.restore();
 }
