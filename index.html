@@ -26,7 +26,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v1.25 2026-11-02';
+const VERSION='v1.31 2026-11-02';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const BIG_HEAL_PER=.15,BIG_HEAL_CAP=2; // 怨念解放・怨霊の手の回復：巻き込んだ敵1体につき基本量の15%を上乗せ（最大で基本量の2倍）
@@ -525,7 +525,7 @@ let musTitle=null;
 function scheduler(){
   if(!AC)return;
   // 主人公が死んだらBGMを止め、死の効果音だけを聴かせる
-  const keep=(G.bossWon&&(state==='pick'||state==='offer'))||state==='epilogue'||state==='clear';
+  const keep=(G.bossWon&&(state==='pick'||state==='offer'))||state==='epilogue';
   if((state!=='play'&&state!=='title'&&state!=='stintro'&&!keep)||muted||(state==='play'&&P.dead)){nextNote=Math.max(nextNote,AC.currentTime+.05);return}
   const tr=musTrack();
   // タイトルBGMは、プロローグが終わって「DEAD GIRL」のロゴが出た瞬間から鳴らす
@@ -659,7 +659,7 @@ function ikeiStep(s,t){
   if(s===63){noise(.03,.35,'bandpass',2600,2400,t,musG,6);noise(.03,.3,'bandpass',2600,2400,t+.09,musG,6)} // 拍子木
 }
 const TRACKS={ikei:{bpm:84,step:ikeiStep},title:{bpm:70,step:titleStep},stage:{bpm:146,step:playStep},boss:{bpm:168,step:bossStep},final:{bpm:100,step:finalStep},bonus:{bpm:150,step:bonusStep},win:{bpm:112,step:winStep},end:{bpm:66,step:endStep}};
-const musTrack=()=>state==='title'?'title':state==='epilogue'||state==='clear'?'end':G.bonus?'bonus':G.bossWon?'win':G.phase==='rebirth'?'title':G.isBossWave?(bossFor(G.wave)==='kito'?(G.boss&&G.boss.ikei?'ikei':'final'):'boss'):'stage';
+const musTrack=()=>state==='title'?'title':state==='epilogue'||G.phase==='sink'?'end':G.bonus?'bonus':G.bossWon?'win':G.phase==='rebirth'||G.phase==='devour'?'title':G.isBossWave?(bossFor(G.wave)==='kito'?(G.boss&&G.boss.ikei?'ikei':'final'):'boss'):'stage';
 function toggleMute(){muted=!muted;try{localStorage.setItem('nb_mute',muted?'1':'0')}catch(e){}if(master)master.gain.value=muted?0:.85}
 
 /* ---------------- state ---------------- */
@@ -726,7 +726,7 @@ const BONUS_INFO={gun:{name:'弾丸返し',sub:'銃撃手の弾を15発弾き返
   shiki:{name:'式神斬り',sub:'25秒間、式神を斬りまくれ。攻撃を受けたら終了',need:0}};
 const BONUS_THEME={name:'血の試練場',base:'#140810',grid:'200,120,140',refl:['255,60,90','255,200,90'],hi:'235,190,200',tube:['#ffd23f','#ff3f6a','#ffd23f'],mark:'試練'};
 const bonusKind=n=>n===5?'gun':n===10?'gunaxe':n===15?'shiki':['gun','gunaxe','shiki'][(n/5)%3];
-function startBonus(kind){G.bossWon=false;
+function startBonus(kind){G.bossWon=false;VOID.fill(0);VOIDN=0;
   state='play';stateT=0;E=[];B=[];MARKS=[];CORPSES=[];
   G.bonus={kind,ref:0,kills:0,got:[],need:BONUS_INFO[kind].need,t:0,wait:2.4,dur:25,end:false,ok:false,endT:0};
   G.phase='fight';G.isBossWave=true;G.boss=null;G.bossPending=0;G.rush=0;G.aimer=null;G.shotGap=1;G.cards=null;G.gim=null;G.crests=[];
@@ -817,6 +817,7 @@ function startWave(n){
   if(!G.tutMode&&lv('seed'))G.soul=Math.min(SOUL_MAX,G.soul+25*lv('seed')); // 怨念の種
   // 床の形：STAGE1・ボス・チュートリアルは素の長方形。ストーリーはステージごとに決まった形、ENDLESSは自動生成
   makeLayout(G.tutMode||bk||n===1?null:n<=20?n*7919:(G.runSeed*7919+n*104729),n<=20?STORY_TPL[n]:null);
+  VOID.fill(0);VOIDN=0;if(!G.tutMode&&!bk&&themeFor(n).gim==='edge')applyVoid(); // 屋上：左右の端は床がない
   // どのステージも同じ場所（床の中央やや下。どの床の形でもここは空けてある）から始め、最初に少し止めて自分の位置を見せる
   if(!G.tutMode){Object.assign(P,{x:W/2,y:540,vx:0,vy:0,kx:0,ky:0,lx:0,ly:0,face:-Math.PI/2,atk:null});P.trail=[];G.ready=READY_T;G.readyOn=false}else G.ready=0;
   placePlayerSafe();
@@ -876,6 +877,7 @@ function queueSpawn(type,sub){
     const t=tileRect(pick(left)),tx=t.x+t.w/2,ty=t.y+t.h/2,m=Math.min(tx-AX0,AX1-tx,ty-AY0,AY1-ty);
     side=m===ty-AY0?0:m===AX1-tx?1:m===AY1-ty?2:3;ax=clamp(tx,AX0+20,AX1-20);ay=clamp(ty,AY0+20,AY1-20);assist=true;
   }
+  if(VOIDN&&(side===1||side===3))side=side===1?0:2; // 屋上：左右は床の外なので、上下からだけ来る
   let x,y,ox,oy;
   if(side===0){x=ax;y=AY0+14;ox=x;oy=AY0-26}
   else if(side===1){x=AX1-14;y=ay;ox=AX1+30;oy=y}
@@ -894,6 +896,62 @@ function makeEnemy(type,x,y){
   E.push(e);return e;
 }
 const MASTER_NAME='大陰陽師・御影';
+// 結末（約9.5秒）：倒れた異形の鬼頭に御影が近づき、力を取り戻そうと手を伸ばした瞬間、鬼頭の腕に掴まれて喰われる。鬼頭は塵となって崩れ落ちる
+function updateDevour(dt){
+  const t0=G.devT;G.devT+=dt;const t=G.devT,D=G.dv,K=D.k,hit=k=>t0<k&&t>=k;P.inv=Math.max(P.inv,.5);
+  const say=(txt,who,dur)=>TEXTS.push({x:0,y:0,txt,col:'#fff',size:15,t:0,dur:dur||2,vy:0,speech:true,follow:who});
+  if(hit(2)){const sd=K.x<AXM?1:-1;D.m={type:'onmyo',master:true,x:K.x+sd*120,y:K.y+10,r:15,ang:Math.PI,walk:0,state:'chase',st:0,flash:0,id:98,sd};
+    for(let i=0;i<18;i++){const a=rand(0,TAU),v=rand(30,130),l=rand(.5,1);fx({k:'smoke',x:D.m.x,y:D.m.y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:l,max:l,sz:rand(10,18)})}noise(1,.15,'lowpass',600,80)}
+  const M=D.m;
+  if(M&&t<5.2){const tx=K.x+M.sd*86;M.x+=(tx-M.x)*Math.min(1,dt*1.6);M.walk+=dt*8;M.ang=Math.atan2(K.y-M.y,K.x-M.x)}
+  if(hit(2.6))say('……使えぬ器だったな。',M,1.8);
+  if(hit(4))say('その力、返してもらおう——',M,1.4);
+  if(t>4&&t<5.2&&M)M.state='windup';
+  if(hit(5.2)){M.state='chase';addShake(16);SFX.hands();G.flash=.5;G.flashCol='120,0,40';say('……ハラ……ガ……ヘッタ……',D.kf,1.6)}
+  if(hit(5.9))say('な……放せ、化け物め……！',M,1.2);
+  // 喰らう：御影は鬼頭へ引きずり込まれ、小さく潰れて消える。肉を噛み砕く音、血しぶき、遠ざかる悲鳴
+  if(hit(6.6)){for(let k=0;k<6;k++){noise(.14,.45,'lowpass',700,180,now(k*.17));tone(95,45,.12,'sine',.35,now(k*.17))}SFX.scream(0);SFX.scream(.3);addShake(22);G.flash=.7;G.flashCol='160,0,20'}
+  if(t>6.6&&t<7.9&&M){const p=(t-6.6)/1.3;M.pull=p;if(Math.random()<.5)bloodBurst(K.x,K.y-20,rand(0,TAU),5,220,true)}
+  if(hit(7.9)){D.m=null;splat(K.x,K.y,46,rand(0,TAU),true)}
+  // 塵となって崩れ落ちる
+  if(t>8.2){D.a=Math.max(0,1-(t-8.2)/1.2);if(Math.random()<.7)fx({k:'ash',x:K.x+rand(-34,34),y:K.y+rand(-30,10),vx:rand(-20,20),vy:rand(-80,-30),life:1,max:1,sz:rand(2,5),rot:rand(0,TAU)})}
+  if(hit(8.2)){tone(60,30,1.5,'sine',.3);noise(1.5,.2,'lowpass',800,100)}
+  if(t>9.6){G.dv=null;G.phase='sink';G.snT=0;G.snX=P.x;G.snY=P.y;G.sink=0}
+}
+// 主人公の最期（約9秒）：床が一面の血の海になり、主人公は「私の復讐は、終わった」と呟く。最後の力で怨霊の手を呼び、自分自身を血の海の底へ沈める
+function updateSink(dt){
+  const t0=G.snT;G.snT+=dt;const t=G.snT,hit=k=>t0<k&&t>=k;
+  P.x=G.snX;P.y=G.snY;P.vx=P.vy=P.kx=P.ky=0;P.atk=null;P.guard=false;P.inv=9;
+  const say=(txt,dur)=>TEXTS.push({x:0,y:0,txt,col:'#fff',size:15,t:0,dur:dur||2,vy:0,speech:true,follow:P});
+  if(hit(.8))say('……終わった。',1.6);
+  if(hit(2.6))say('私の復讐は、終わった……',2);
+  if(hit(4.8)){say('……最後に、もう一度だけ。',1.6);SFX.soulUp(true)}
+  // 怨霊の手：足元の血の海から何本も伸び、主人公を抱えて沈めていく
+  if(hit(6.2)){SFX.hands();addShake(10);G.flash=.4;G.flashCol='60,0,90';
+    for(let k=0;k<7;k++){const a=k/7*TAU,r=rand(10,30);HANDS.push({e:null,x:P.x+Math.cos(a)*r,y:P.y+12+Math.sin(a)*r*.5,t:-k*.08,dur:2.2,n:1+((Math.random()*2)|0),seed:Math.random()*9,deco:true})}}
+  if(t>6.4)G.sink=Math.min(1,(t-6.4)/2);
+  if(t>6.4&&t<8.6&&Math.random()<dt*6)RINGS.push({x:P.x,y:P.y+14,r:6,R:rand(40,70),t:0,dur:.8,col:'120,0,20',w:3});
+  if(t>9.4){state='epilogue';stateT=0;saveBest();lsSet('dg_cleared','1');G.phase='done';G.sink=0}
+}
+function drawSink(){
+  if(G.phase!=='sink')return;const t=G.snT,a=Math.min(1,t/2.2);
+  // 一面の血の海：暗い赤に、光を受けたつやと、ゆっくり広がる波紋
+  g.fillStyle=`rgba(70,0,10,${.78*a})`;g.fillRect(AX0,AY0,AX1-AX0,AY1-AY0);
+  g.globalAlpha=a*.35;for(let k=0;k<7;k++){const x=AX0+((k*97+t*14)%(AX1-AX0)),y=AY0+((k*173+t*9)%(AY1-AY0));g.fillStyle='rgba(255,120,130,.5)';g.beginPath();g.ellipse(x,y,30,4,0,0,TAU);g.fill()}g.globalAlpha=1;
+  if(t>8.4){g.fillStyle=`rgba(0,0,0,${Math.min(1,(t-8.4)/1)})`;g.fillRect(AX0-40,AY0-80,AX1-AX0+80,AY1-AY0+160)}
+}
+function drawDevour(){
+  const D=G.dv;if(!D)return;const K=D.k,M=D.m,t=G.devT;
+  g.fillStyle=`rgba(20,0,8,${Math.min(.4,t*.12)})`;g.fillRect(AX0,AY0,AX1-AX0,AY1-AY0);
+  drawThug(K,null,D.a);
+  if(M){
+    // 鬼頭の腕が御影を掴む（5.2秒以降）
+    if(t>5.2){const ax=K.x+M.sd*40,ay=K.y-14;g.strokeStyle='#120a14';g.lineWidth=9;g.lineCap='round';g.beginPath();g.moveTo(ax,ay);g.quadraticCurveTo((ax+M.x)/2,ay-28,M.x,M.y-26);g.stroke();
+      g.strokeStyle='#5a3a4a';g.lineWidth=5;g.stroke()}
+    const p=M.pull||0,x=lerp(M.x,K.x,p*p),y=lerp(M.y,K.y-10,p*p),sc=1-p*.95;
+    g.save();g.translate(x,y);g.scale(sc,sc);g.rotate(p*2.2*M.sd);g.translate(-x,-y);const mo={...M,x,y};drawThug(mo,null,1);g.restore();
+    if(!p)txt(MASTER_NAME,M.x,figTop(M)-8,11,'#d8a8ff','center',JP,['#000',3],false,900)}
+}
 function updateRebirth(dt){
   const t0=G.rebT;G.rebT+=dt;const t=G.rebT,R=G.reb,hit=k=>t0<k&&t>=k;P.inv=Math.max(P.inv,.5);
   if(hit(2.2)){G.master={x:clamp(R.x+(R.x<AXM?140:-140),AX0+50,AX1-50),y:clamp(R.y+90,AY0+230,AY1-80),t:0};for(let i=0;i<20;i++){const a=rand(0,TAU),v=rand(30,140),l=rand(.5,1);fx({k:'smoke',x:G.master.x,y:G.master.y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:l,max:l,sz:rand(10,18)})}
@@ -973,6 +1031,8 @@ function updateWave(dt){
     }
   }else if(G.phase==='break'){G.breakT-=dt;if(G.breakT<=0)openPick()}
   else if(G.phase==='rebirth')updateRebirth(dt);
+  else if(G.phase==='devour')updateDevour(dt);
+  else if(G.phase==='sink')updateSink(dt);
   else if(G.phase==='ending'){G.endT-=dt;if(G.endT<=0){state='epilogue';stateT=0;saveBest();lsSet('dg_cleared','1')}}
 }
 const SEA_FOCUS=.75; // 血の海達成の前に、最後の1マスへ寄って見せる秒数
@@ -1089,6 +1149,16 @@ function tileAt(x,y){const cx=Math.floor((x-AX0)/TS),cy=Math.floor((y-AY0)/TS);r
    ふさがったマス（BLOCK）は最初から「塗り済み」扱いにして、囲いの壁としても働かせる。
    ストーリーのステージは毎回同じ形（ステージ番号で決まる）、ENDLESSは自動生成で無限に変わる */
 const BLOCK=new Uint8Array(GN);let nBlock=0;
+// 屋上の外（左右1列ずつ床がない）。歩けず、塗る対象にもならない。ここへ滑り込んだ敵や死体は下の通りへ転落する
+const VOID=new Uint8Array(GN);let VOIDN=0;
+const voidAt=(x,y)=>{const i=tileAt(x,y);return i>=0&&VOID[i]===1};
+function applyVoid(){VOID.fill(0);VOIDN=0;for(let y=0;y<GR;y++)for(const x of [0,GC-1]){const i=y*GC+x;VOID[i]=1;BLOCK[i]=1;VOIDN++}
+  if(!layoutOK2())for(let i=0;i<GN;i++)if(!VOID[i])BLOCK[i]=0; // 外側を削った結果、空きマスが分断されたら中の障害物をなくす
+  nBlock=BLOCK.reduce((a,v)=>a+v,0)}
+// 空いているマスがすべてつながっているか（外側を削った後の確認用）
+function layoutOK2(){let st=-1,n=0;for(let i=0;i<GN;i++)if(!BLOCK[i]){n++;if(st<0)st=i}if(st<0)return false;
+  const seen=new Uint8Array(GN),q=[st];seen[st]=1;let c=0;while(q.length){const j=q.pop();c++;const x=j%GC,y=(j/GC)|0;for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=GC||ny>=GR)continue;const k=ny*GC+nx;if(!BLOCK[k]&&!seen[k]){seen[k]=1;q.push(k)}}}
+  return c===n}
 const prog=()=>(painted-nBlock)/Math.max(1,GN-nBlock); // 塗りの進み具合（ふさがったマスを除く）
 function srand(seed){let s=(seed>>>0)||1;return()=>{s^=s<<13;s^=s>>>17;s^=s<<5;return(s>>>0)/4294967296}}
 // tpl：形の種類を指定（ストーリーのステージで形がかぶらないように）。省略時はランダム
@@ -1192,9 +1262,38 @@ function bounceOff(v,n,k){const d=v.vx*n[0]+v.vy*n[1];if(d<0){v.vx-=(1+k)*d*n[0]
 // ふさがったマス：その場所に実際にありそうな物として描く（駐車場の柱・倉庫の木箱・事務所の机・中庭の池など）。
 // 斜め上から見た形にするため、上面を高さぶん上にずらし、下が空いているマスは手前の側面も描く
 const BLK_H={pillar:26,wpillar:26,crate:16,ammo:14,machine:20,desk:10,table:9,counter:14,shelf:28,hvac:14,trash:12,planter:10,pond:0,barricade:0};
+// 屋上の外：はるか下の夜の通り（車のライト・街灯・向かいの低いビルの窓）、ビルの外壁、屋上の縁（コンクリートの立ち上がりと黄黒の危険表示）
+function drawVoid(){
+  if(!VOIDN)return;const tm=G.time;
+  for(const sd of [-1,1]){const x0=sd<0?AX0-20:AX1-TS,x1=sd<0?AX0+TS:AX1+20,w=x1-x0;
+    const gr=g.createLinearGradient(sd<0?x1:x0,0,sd<0?x0:x1,0);gr.addColorStop(0,'#05070c');gr.addColorStop(1,'#0b1020');g.fillStyle=gr;g.fillRect(x0,AY0-20,w,AY1-AY0+40);
+    g.save();g.beginPath();g.rect(x0,AY0-20,w,AY1-AY0+40);g.clip();
+    // はるか下の通り（約40m下）：歩道と車道、中央の白い破線、行き交う車（前照灯と尾灯のにじみ）、街灯の光の輪、向かいの低いビルの屋上
+    const rx=sd<0?x0+4:x0+18,rw=26;g.fillStyle='#161b26';g.fillRect(rx,AY0-20,rw,AY1-AY0+40);
+    g.fillStyle='#232a36';g.fillRect(rx-3,AY0-20,3,AY1-AY0+40);g.fillRect(rx+rw,AY0-20,3,AY1-AY0+40);
+    g.fillStyle='rgba(220,220,210,.35)';for(let y=AY0-20+((tm*30)%16);y<AY1+20;y+=16)g.fillRect(rx+rw/2-.5,y,1,7);
+    for(let k=0;k<6;k++){const up=k%2,sp=(up?70:85)+k*9,y=up?AY1+30-((tm*sp+k*190)%(AY1-AY0+80)):AY0-30+((tm*sp+k*190)%(AY1-AY0+80)),cx=rx+(up?7:rw-7);
+      g.fillStyle='#2a2f38';g.fillRect(cx-3.5,y-6,7,12);glow(cx-2,y+(up?-6:6),9,up?'#fff2c8':'#ff3020',.6);glow(cx+2,y+(up?-6:6),9,up?'#fff2c8':'#ff3020',.6)}
+    for(let k=0;k<6;k++){const y=AY0+30+k*135;glow(rx-2,y,26,'#ffb060',.4);circ(rx-2,y,1.6,'#ffe6c0')}
+    const bx=sd<0?x0+33:x0+1;g.fillStyle='#121722';for(let k=0;k<4;k++){const y=AY0+k*205+20;g.fillRect(bx,y,13,100);g.fillStyle='#1d2330';g.fillRect(bx+2,y+6,9,8);g.fillStyle='rgba(255,210,140,.5)';for(let q=0;q<4;q++)if((k+q)%2)g.fillRect(bx+4,y+24+q*18,4,4);g.fillStyle='#121722'}
+    // 高さを感じさせる霞と、縁のすぐ下の外壁の影
+    g.fillStyle='rgba(120,140,170,.08)';g.fillRect(x0,AY0-20,w,AY1-AY0+40);
+    const sg=g.createLinearGradient(sd<0?x1:x0,0,sd<0?x1-20:x0+20,0);sg.addColorStop(0,'rgba(0,0,0,.7)');sg.addColorStop(1,'rgba(0,0,0,0)');g.fillStyle=sg;g.fillRect(sd<0?x1-20:x0,AY0-20,20,AY1-AY0+40);
+    g.restore();
+    // ビルの外壁（縁の外へ落ち込む面）と、屋上の縁
+    const ex=sd<0?AX0+TS:AX1-TS,fw=10;g.fillStyle='#1c212b';g.fillRect(sd<0?ex-fw:ex,AY0-20,fw,AY1-AY0+40);
+    g.fillStyle='rgba(255,220,150,.25)';for(let y=AY0;y<AY1;y+=34)g.fillRect((sd<0?ex-fw:ex)+3,y,4,6);
+    g.fillStyle='#5a5e66';g.fillRect(sd<0?ex:ex-5,AY0-20,5,AY1-AY0+40);g.fillStyle='rgba(255,255,255,.18)';g.fillRect(sd<0?ex:ex-5,AY0-20,1.5,AY1-AY0+40);
+    g.save();g.beginPath();g.rect(sd<0?ex+5:ex-14,AY0-20,9,AY1-AY0+40);g.clip();g.fillStyle='#e0b020';g.fillRect(sd<0?ex+5:ex-14,AY0-20,9,AY1-AY0+40);
+    g.fillStyle='#151515';for(let y=AY0-30;y<AY1+20;y+=16){g.beginPath();g.moveTo(sd<0?ex+5:ex-14,y);g.lineTo((sd<0?ex+5:ex-14)+9,y+9);g.lineTo((sd<0?ex+5:ex-14)+9,y+17);g.lineTo(sd<0?ex+5:ex-14,y+8);g.closePath();g.fill()}g.restore()}
+  // 落ちていく敵：縁の外で、回りながら小さく（遠く）なっていく
+  for(const fl of FALLERS){const t=fl.t,s=1/(1+t*2.4),x=fl.x0+fl.side*(18+t*30),y=fl.y0+t*t*24,a=t>1?1-(t-1)/.7:1;
+    const cx0=fl.side<0?AX0-20:AX1-TS+2,cw=TS+18;g.save();g.beginPath();g.rect(cx0,AY0-30,cw,AY1-AY0+60);g.clip();
+    g.translate(x,y);g.scale(s,s);g.translate(-x,-y);fl.e.x=x;fl.e.y=y;drawThug(fl.e,fl.vr*t,clamp(a,0,1));g.restore()}
+}
 function drawBlocks(){
   if(!nBlock)return;const st=theme.blk||'',set=new Set();
-  for(let i=0;i<GN;i++)if(BLOCK[i])set.add(i);
+  for(let i=0;i<GN;i++)if(BLOCK[i]&&!VOID[i])set.add(i);
   if(st==='pond'||st==='barricade'){drawFlatBlocks(st,set);return}
   // 影だけ先に床へ描く。物そのものは drawWorld で人物と一緒に足元の位置順に描く（奥の敵が手前の机に隠れるように）
   g.fillStyle='rgba(0,0,0,.45)';for(const i of set){const t=tileRect(i);g.fillRect(t.x+5,t.y+7,t.w,t.h)}
@@ -1317,7 +1416,7 @@ function rankOf(c){return c>=150?'UNDEAD GOD':c>=100?'MASSACRE':c>=50?'SAVAGE':c
 
 /* ---------------- combat ---------------- */
 function hitEnemy(e,dmg,ang,kb,o){
-  o=o||{};if(e.dead)return;
+  o=o||{};if(e.dead)return;if(e.boss&&G.phase==='rebirth')return;
   if(e.type==='shield'&&e.shieldUp&&!(e.smoked>0)){ // むせている盾持ちは盾を構えられない
     const fromFront=Math.abs(angDiff(e.ang,Math.atan2(P.y-e.y,P.x-e.x)))<1.45;
     if(o.melee&&fromFront){ // 正面からの斬撃は盾に弾かれ、主人公がよろける
@@ -1360,6 +1459,20 @@ function hitEnemy(e,dmg,ang,kb,o){
   if(e.hp<=0)killEnemy(e,ang,o.sink||o.crush?0:(o.fin&&!o.spin?720:Math.min(720,(o.spin?480:360)*(1+.08*lv('heavy'))))*KO_K,o);
 }
 const KO_K=.59; // 吹き飛ぶ距離の倍率（v1.04で、普通の攻撃で倒した時が約3.4マス→約2マスになるよう全体を縮めた）
+const inA0=c=>Math.atan2(c.vy,c.vx);
+// 屋上から下の通りへ転落：回りながら小さくなって落ちていき、遠ざかる悲鳴、少し遅れて遠くで「ドサッ」
+let FALLERS=[];
+function fallOff(e,a,alive){
+  const side=e.x<AXM?-1:1;
+  if(alive){const pc=G.cause;G.cause='edge';G.score+=Math.round(150*G.mult);killEnemy(e,a,0,{fall:true});G.cause=pc}
+  else{G.score+=Math.round(150*G.mult)}
+  popText(e.x,figTop(e)-6,'転落！','#ffd54a',17,.9);
+  FALLERS.push({e,x0:e.x,y0:e.y,side,t:0,rot:0,vr:rand(5,9)*side});
+  const t=now();const o=AC&&AC.createOscillator();if(o){const gn=AC.createGain();o.type='sawtooth';o.frequency.setValueAtTime(rand(560,700),t);o.frequency.exponentialRampToValueAtTime(180,t+1.4);
+    const bp=AC.createBiquadFilter();bp.type='bandpass';bp.frequency.value=1100;bp.Q.value=1.2;gn.gain.setValueAtTime(.0001,t);gn.gain.exponentialRampToValueAtTime(.06,t+.05);gn.gain.exponentialRampToValueAtTime(.0001,t+1.4);
+    o.connect(bp);bp.connect(gn);gn.connect(sfxG);o.start(t);o.stop(t+1.45)}
+  tone(70,40,.25,'sine',.12,now(1.9));noise(.15,.06,'lowpass',500,150,now(1.9));
+}
 function killEnemy(e,ang,spd,o){
   o=o||{};if(e.dead)return;e.dead=true;
   const i=E.indexOf(e);if(i>=0)E.splice(i,1);
@@ -1377,7 +1490,8 @@ function killEnemy(e,ang,spd,o){
   if(e.type==='onmyo'){G.rush=0;popText(e.x,figTop(e)-10,'術が解けた！','#d8a8ff',18,1.1);addShake(10);for(const o of [...E])if(o.shiki)killEnemy(o,Math.atan2(o.y-e.y,o.x-e.x),300,{})}
   // 式神（紙の人形）：血は出ず、斬り裂かれた紙が舞い散る。死体も残らない（床は塗れない）
   if(e.shiki){paperBurst(e.x,e.y,ang,16);SFX.swing(0);if(G.bonus&&!G.bonus.end)G.bonus.kills++;return}
-  if(o.fall){for(let i=0;i<8;i++){const a=rand(0,TAU),v=rand(30,120),l=rand(.3,.6);fx({k:'smoke',x:e.x,y:e.y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:l,max:l,sz:rand(8,14)})}}
+  if(o.fall&&VOIDN){}
+  else if(o.fall){for(let i=0;i<8;i++){const a=rand(0,TAU),v=rand(30,120),l=rand(.3,.6);fx({k:'smoke',x:e.x,y:e.y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:l,max:l,sz:rand(8,14)})}}
   // 連続撃破ほど血しぶきが大きくなる（25連で最大1.8倍）
   else{const cs=1+Math.min(.5,G.chain/40),pk=PAINT_K;PAINT_K=o.spin?SPIN_PAINT:1;splat(e.x,e.y,e.r*1.5*cs,ang,o.sink||o.crush);bloodBurst(e.x,e.y,ang,Math.round(18*cs),440*cs,o.sink||o.crush);PAINT_K=pk;
     if(!o.sink&&!o.crush)for(const c of CAPPV){if(DONE[c.i])continue;const t=tileRect(c.i),tx=t.x+t.w/2,ty=t.y+t.h/2;if(dist(e.x,e.y,tx,ty)>TS*1.5)continue;
@@ -1444,7 +1558,7 @@ function justGuard(foe,a){
   if(foe&&foe.boss)foe.stun=Math.max(foe.stun,.6);
   slow(.5,.25);G.hitstop=Math.max(G.hitstop,.1);addShake(10);G.flash=Math.max(G.flash,.4);G.flashCol='255,230,140';G.zoom=Math.max(G.zoom,.05);
   RINGS.push({x:P.x,y:P.y,r:10,R:80,t:0,dur:.3,col:'255,220,110',w:9});spark(P.x-Math.cos(a)*18,P.y-Math.sin(a)*18,a+Math.PI,true);spark(P.x-Math.cos(a)*18,P.y-Math.sin(a)*18,a+Math.PI+.5,true);
-  popText(P.x,P.y-64,'JUST GUARD!','#ffd54a',20,.9);SFX.just();
+  popText(P.x+Math.cos(a)*48,P.y+Math.sin(a)*48-34,'JUST GUARD!','#ffd54a',20,.9);SFX.just();
 }
 // 盾持ちの盾が壊れる（反射弾・爆発・仕掛け・ジャストガード）
 function breakShield(e){e.shieldUp=false;addShake(8);SFX.glass();popText(e.x,figTop(e)-8,'盾破壊！','#ffd54a',16,.9);
@@ -1460,10 +1574,11 @@ function hurtPlayer(dmg,sx,sy,ho){
   if(P.guard&&front&&!(ho&&ho.noGuard)){
     // ガード：ダメージを完全に防ぎ、敵の攻撃力と同じ数値だけライフが回復し、SOULもたまる。ノックバック小、連撃は途切れない
     const heal=atk*GUARD_HEAL*(1+.5*lv('guardh'));P.hp=Math.min(P.maxhp,P.hp+heal);P.guardLock=true;tutComplete(4,.6);
-    G.soul=Math.min(SOUL_MAX,G.soul+heal);popText(P.x+26,P.y-30,'+'+Math.round(heal),'#7fd8ff',12,.6);
+    G.soul=Math.min(SOUL_MAX,G.soul+heal);
     // ジャストガード：攻撃が当たる直前（JG_WIN秒以内）にガードを押していた。相手を大きくよろけさせ、次の一撃は必ずクリティカル
     const just=G.time-(P.gStart||-9)<JG_WIN;
-    if(lv('counter')&&!P.crit){P.crit=.7;popText(P.x,P.y-48,'COUNTER!','#7fd8ff',15,.7)}
+    const tpx=P.x+Math.cos(a)*48,tpy=P.y+Math.sin(a)*48-14; // 文字を出す位置：敵と反対側
+    if(lv('counter')&&!P.crit){P.crit=.7;popText(tpx,tpy-36,'COUNTER!','#7fd8ff',15,.7)}
     // 防いだ相手（近接攻撃なら攻撃元の近くの敵）を弾き飛ばして少し怯ませ、間合いを作る
     let foe=null,fd=48;for(const e of E){if(e.boss)continue;const dd=dist(e.x,e.y,sx,sy);if(dd<fd){fd=dd;foe=e}}
     if(foe){const ka=Math.atan2(foe.y-P.y,foe.x-P.x);foe.vx+=Math.cos(ka)*(foe.armor?220:380);foe.vy+=Math.sin(ka)*(foe.armor?220:380);foe.stun=Math.max(foe.stun,foe.armor?.25:.45);if(foe.state!=='enter')foe.state='chase';foe.wait=false}P.inv=.3;P.guardFx=.25;P.kx=Math.cos(a)*150;P.ky=Math.sin(a)*150;
@@ -1471,7 +1586,7 @@ function hurtPlayer(dmg,sx,sy,ho){
     spark(P.x-Math.cos(a)*18,P.y-Math.sin(a)*18,a+Math.PI,true);
     RINGS.push({x:P.x,y:P.y,r:14,R:46,t:0,dur:.22,col:'110,240,255',w:5});
     addShake(5);G.hitstop=Math.max(G.hitstop,.05);SFX.guard();
-    popText(P.x,P.y-30,'GUARD +'+Math.max(1,Math.round(heal)),'#6dff9c',15,.7);
+    popText(tpx,tpy,'GUARD +'+Math.max(1,Math.round(heal)),'#6dff9c',15,.7);
     return;
   }
   // ボーナス面は1発でも被弾したら即終了（ライフは減らない）
@@ -1496,8 +1611,11 @@ function bossDown(e,ang){
   MARKS.length=0;B.length=0;
   PWARN.length=0;G.banner={top:BOSSES[e.bk].name,main:'撃 破',sub:'+'+pts,t:0,dur:2.8,col:'#ff2f5f'};
   const reborn=e.type==='kito'&&!G.endless&&!e.ikei;
-  if(!reborn)G.bossWon=true;
+  if(!reborn&&!e.ikei)G.bossWon=true;
   if(reborn){G.phase='rebirth';G.rebT=0;G.rebE=e;G.reb={x:clamp(e.x+Math.cos(ang)*60,AX0+60,AX1-60),y:clamp(e.y+Math.sin(ang)*60,AY0+200,AY1-120)};G.master=null}
+  else if(e.ikei&&!G.endless){G.master=null;G.phase='devour';G.devT=0;CORPSES=CORPSES.filter(c=>c.e!==e);
+    const x=clamp(e.x,AX0+90,AX1-90),y=clamp(e.y,AY0+200,AY1-120);
+    G.dv={k:{type:'kito',ikei:true,x,y,r:34,ang:Math.PI/2,walk:0,state:'chase',st:0,flash:0,id:77,slipT:1.45,slipRot:1.5},kf:{x,y:y-20,r:20},m:null,a:1}}
   else if(e.type==='kito'&&!G.endless){G.phase='ending';G.endT=3.4}
   else{G.phase='break';G.breakT=3.4;healP(35+15*lv('mend'));G.res={boss:true,kills:G.wk,chain:G.wchain}}
 }
@@ -1634,7 +1752,7 @@ const GIMMICKS={
   cart:   {name:'荷物を積んだ台車',hint:'台車を殴ると滑り出し、敵を撥ね飛ばす。壁に激突すると荷物が散らばる'},
   tires:  {name:'タイヤの山',  hint:'殴るとタイヤがばらけて転がり、当たった敵を撥ね飛ばす'},
   beam:   {name:'落下する鉄骨',hint:'天井のクレーンから鉄骨が落ちてくる。床の影の下に敵を誘い込め——自分は避けろ'},
-  edge:   {name:'柵のない屋上',hint:'左右の端へ吹き飛ばすと、敵は転落する'},
+  edge:   {name:'柵のない屋上',hint:'屋上の左右は床がない。縁の近くで倒すか吹き飛ばすと、敵は下の通りへ転落する'},
   ext:    {name:'消火器',      hint:'殴ると煙が噴き出す。むせた敵は動けず、攻撃がすべてクリティカル'}
 };
 const DYN_FUSE=1.55; // ダイナマイトが点火から爆発するまでの秒数（弾が当たった場合は0.45秒短い。誘爆は0.18秒）
@@ -2531,7 +2649,7 @@ const lsGet=k=>{try{return localStorage.getItem(k)}catch(e){return null}},lsSet=
 // 画面に出す文字は描く直前に tr() で英語に置き換える。辞書は「日本語の文字列（またはその一部）→英語」。
 // 数字と組み合わせた文は、知っている部分ごとに置き換える。新しい文字を足した時は、必ず EN_DICT にも英語を足すこと
 let LANG=lsGet('dg_lang')||((navigator.language||'ja').toLowerCase().startsWith('ja')?'ja':'en');
-const EN_DICT={"血溜まりの上に立つボスは、動きが鈍り、受けるダメージが1.5倍。体力が半分を切ると、天井から柱が落ちてくる": "A boss standing in blood slows down and takes 1.5x damage. Below half HP, pillars fall from the ceiling", "拳銃とナイフは攻撃で弾き返せる。血の上に長くいると立ち止まって掃除を始める——その間は総攻撃のチャンス": "Bullets and knives can be knocked back. Stand him in blood too long and he stops to clean — go all out", "蹴ると油をまき散らしながら床を滑る。油を踏んだ敵は足を滑らせて転び、滑った体が周りの敵もなぎ倒す": "Kick it to send it sliding and spilling oil. Enemies who step in oil slip, fall, and take others down with them", "移動:WASD  攻撃:J/左クリック  ガード:U/右クリック  怨念/怨霊の手:L/E": "Move:WASD  Attack:J/LMB  Guard:U/RMB  Burst/Hands:L/E", "ドアが開くと、戸口の敵が斧を投げてくる。攻撃で弾き返せ——戸口に打ち返せば撃退できる": "When a door opens, the thug inside throws an axe. Knock it back into the doorway to drive him off", "左ドラッグ:移動  右タップ:攻撃  右長押し:ガード  光る主人公タップ:怨念": "L-drag:Move  R-tap:Attack  R-hold:Guard  Tap glowing girl:Burst", "床を塗るほど強くなる。ライフも大きく回復し、引きずり込んだ敵が多いほど回復も多い": "The more floor you paint, the stronger it gets. Heals a lot — more enemies dragged, more healing", "盾は今向いている方向に出る（向きは移動で変える）。背後や横からの攻撃は防げない": "The shield faces where you face (turn by moving). It can't block attacks from behind or the side", "天井のクレーンから鉄骨が落ちてくる。床の影の下に敵を誘い込め——自分は避けろ": "Steel beams drop from the ceiling crane. Lure enemies under the shadows — and stay clear yourself", "体に届く寸前で弾くと「PERFECT」。威力2倍で、SOULも大きくたまる": "Hit it right before it reaches you for PERFECT: 2x power and a big SOUL boost", "周りの敵を焼き尽くし、ライフも回復する。巻き込んだ敵が多いほど回復も多い": "Burns nearby enemies to ash and heals you. More enemies caught, more healing", "銃撃手の弾は、当たる直前に攻撃すると跳ね返せる（斧・ナイフ・ロケットも）": "Attack a gunner's bullet just before it hits to send it back (axes, knives, rockets too)", "まずは最初から通して遊ぼう（修了すると、操作ごとに選べるようになる）": "Play it through from the start first (finish it to unlock single lessons)", "防ぐと、敵の攻撃力と同じだけライフが回復し、SOULも同じだけたまる": "Blocking heals you by the enemy's attack power and fills SOUL by the same", "SOUL2段目（紫）満タンで発動。血の床の上の敵を全員引きずり込む": "Use at full 2nd SOUL bar (purple). Drags down every enemy on blood", "モップ（1マスずつ）、高圧洗浄機（一直線）、漂白剤（周り）の3種類": "Three kinds: mop (one tile), pressure washer (a line), bleach (an area)", "台車を殴ると滑り出し、敵を撥ね飛ばす。壁に激突すると荷物が散らばる": "Hit the cart to send it rolling into enemies. Crash it into a wall and the boxes scatter", "攻撃が当たる直前（約0.2秒前）にガードを押すと「ジャストガード」": "Guard right before a hit lands (~0.2s) for a JUST GUARD", "再開すると、マウスは再びゲーム画面に固定されます（ESCで解除）": "On resume the mouse is locked to the game again (ESC to release)", "SOULをさらにためて、2段目（紫）が満タンになると使える大技": "A finisher you can use when the 2nd SOUL bar (purple) is full", "WASD／矢印：移動　Enter：スタート　T：チュートリアル": "WASD/Arrows: Move   Enter: Start   T: Tutorial", "囲むと中が一気に染まる。光る「囲える」マスの近くで倒せば埋まる": "Enclose an area to fill it. Kill near a glowing tile to close it", "攻撃が当たる直前にガード！相手がよろけ、次の一撃がクリティカル": "Guard right before the hit! The enemy staggers and your next strike crits", "殴ると煙が噴き出す。むせた敵は動けず、攻撃がすべてクリティカル": "Hit it to blast powder. Choking enemies can't move and take crits", "血で塗った床の上にいる敵を、画面のどこにいても全員引きずり込む": "Drags down every enemy standing on blood, anywhere on screen", "【DEAD GIRL】鬼頭組を一夜で壊滅させた。SCORE ": "[DEAD GIRL] I wiped out the Kito clan in one night. SCORE ", "攻撃は、走っている向き（止まっていれば向いている方向）へ出る": "You attack the way you're running (or facing, if standing still)", "血は、敵が吹き飛んだ向きに広がる。死体が床を滑った跡も塗れる": "Blood spreads the way enemies fly. Sliding bodies paint too", "それとも、別の何かに動かされているのか。答えはわからない。": "Or is something else moving me? I don't know.", "光るマスの近くで敵を倒すと、血が流れ込んでそのマスが埋まる": "Kill an enemy near a glowing tile and the blood flows in to fill it", "相手は大きくよろけ、次の一撃は必ずクリティカル（2.5倍）": "The enemy staggers and your next hit is a sure crit (2.5x)", "盾持ち：正面は斬れない。反射弾・背後・ジャストガードで崩せ": "Shield: can't cut from the front. Break it with reflects, from behind, or a Just Guard", "正面を防いでライフとSOULがたまる。直前ならジャスト": "Block from the front to gain HP and SOUL. Time it for a Just Guard", "殴る・撃たせると爆発、近くにも誘爆（近いと自分も被弾）": "Hit or shoot it to explode, chaining nearby (you get hurt up close)", "SOUL1段目（金）満タンで発動。周囲の敵を灰にする": "Use at full 1st SOUL bar (gold). Burns nearby enemies to ash", "塗ったマスで輪を閉じると、中のマスが一気に血で染まる": "Close a loop of painted tiles and everything inside turns to blood", "殴ると、殴った方向へ飛んで割れ、炎が広がって敵を焼く": "Hit it to throw it; it shatters and spreads fire over enemies", "殴るとタイヤがばらけて転がり、当たった敵を撥ね飛ばす": "Hit the stack and the tires roll off, bowling enemies over", "ナイフ使い：連撃中は怯まない。ジャストガードで崩せ": "Knifer: won't flinch mid-combo. Break him with a Just Guard", "光るマスを塗って輪を閉じろ。囲んだ中が一気に染まる": "Paint the glowing tile to close the loop. Everything inside fills", "光るマスを塗れ。床をすべて血で塗るとステージクリア": "Paint the glowing tiles. Cover the whole floor in blood to clear", "式神を呼び出す外道——術者を斬れば、式神は紙に戻る": "A sorcerer who summons shikigami — cut him down and they turn back to paper", "怨霊の手：血の床の上の敵を、すべて引きずり込む——": "Hands of the Dead: drag down every enemy on blood —", "掃除屋は、塗った血を拭き取って床を元に戻してしまう": "Cleaners wipe up your blood and restore the floor", "敵を倒すと、血で床が染まる。まず3マス塗ってみよう": "Kill enemies to stain the floor. Try painting 3 tiles", "敵を吹き飛ばす力+8%（倒した敵も少し遠くへ飛ぶ）": "Knockback +8% (kills fly a little farther)", "血で塗った床の上の敵は、足を取られて18%遅くなる": "Enemies on blood are slowed by 18%", "SOULの1段目（金）が満タンになると使える大技": "A finisher you can use when the 1st SOUL bar (gold) is full", "やり直すと、強化カードを2枚選んでから始められる": "Retry and you pick 2 upgrade cards before starting", "右半分をタップすると攻撃。連打で4段の連撃になる": "Tap the right half to attack. Keep tapping for a 4-hit combo", "御影と名乗った陰陽師は、いつの間にか消えていた。": "The sorcerer called Mikage had vanished.", "殴ると穴が開いて油が漏れ出し、引火して広く燃える": "Hit it to punch a hole; the oil spills out and ignites", "連撃中は怯まないナイフ使いや、盾持ちの盾を崩せる": "Breaks knifers mid-combo and shield guards", "銃撃手の弾を15発弾き返せ。1発でも当たれば終了": "Reflect 15 bullets. One hit and it's over", "25秒間、式神を斬りまくれ。攻撃を受けたら終了": "Slash shikigami for 25 seconds. Get hit and it's over", "4段目は全方向を斬る回転斬り。囲まれた時に強い": "The 4th hit is a spinning slash in all directions. Great when surrounded", "L／E：怨念解放（紫なら怨霊の手）　P：ポーズ": "L/E: Wrath Burst (Hands when purple)   P: Pause", "PERFECT反射の受付が広がり、弾も速くなる": "Wider PERFECT window, faster reflected shots", "U／右クリック長押し：ガード（1回防ぐと解除）": "Hold U/RMB: Guard (drops after one block)", "ロケット弾も弾き返せる——敵の群れに撃ち返せ！": "Rockets can be knocked back — send them into the crowd!", "光る主人公をタップ：怨念解放（紫なら怨霊の手）": "Tap the glowing girl: Wrath Burst (Hands when purple)", "冷たいアスファルトの上で、私の心臓は止まった。": "On the cold asphalt, my heart stopped.", "射線上の血を一気に洗い流す——撃たれる前に潰せ": "Blasts away the blood in a line — crush him before he fires", "銃撃手の弾は、当たる直前に攻撃すると跳ね返せる": "Attack a gunner's bullet just before it hits to send it back", "鬼頭組の「取引」を見てしまった私は、殺された。": "I saw the Kito clan's \"deal\". So they killed me.", "1回防ぐと解除される。続けて守るなら押し直す": "Guard drops after one block. Press again to keep guarding", "J／左クリックで攻撃。連打で4段の連撃になる": "J/LMB to attack. Keep pressing for a 4-hit combo", "で正面ガード。防ぐとライフとSOULがたまる": " to guard the front. Blocking gives HP and SOUL", "ならば、その骸に——異形の力をくれてやろう。": "Then I shall grant your corpse — the power of the abyss.", "反射弾が3方向に分裂（左右の弾は貫通しない）": "Reflected shots split in 3 (side shots don't pierce)", "周りの血を一気に洗い流す——撒かれる前に潰せ": "Bleaches all the blood around — crush him first", "塗り残しが少なくなると、残りのマスが点滅する": "When few tiles remain, they start blinking", "壁も囲いになる。光るマスを塗って角を切り取れ": "Walls count as a fence. Paint the glowing tile to cut off the corner", "左半分をドラッグで移動、右半分をタップで攻撃": "Drag the left half to move, tap the right half to attack", "弾と斧を18発弾き返せ。1発でも当たれば終了": "Reflect 18 bullets and axes. One hit and it's over", "敵を倒すと血が飛び散り、床のマスが赤く染まる": "Killing enemies splatters blood and turns tiles red", "画面の左半分をドラッグすると、その方向へ走る": "Drag on the left half of the screen to run that way", "1・2・3キー ／ 矢印で選んでEnter": "Keys 1/2/3 or arrows, then Enter", "WASD／矢印で移動、J／左クリックで攻撃": "WASD/Arrows to move, J/LMB to attack", "「あと1マスで囲える」マスは光って知らせる": "Tiles that would close a loop glow", "クリアで1枚。やり直す時は2枚選んで始める": "1 per clear. On retry, pick 2 before starting", "天井が崩れる——落ちてくる柱の影から離れろ": "The ceiling is collapsing — stay out of the falling shadows", "最初から通して遊ぶか、練習したい操作を選ぶ": "Play it all through, or pick a move to practice", "残りのマスの近くで敵を倒して、塗りつぶそう": "Kill enemies near the remaining tiles to fill them", "狙撃手：赤い線のあとに強烈な一発。弾き返せ": "Sniper: a heavy shot after the red line. Send it back", "異形と化した鬼頭は、塵となって崩れ落ちた。": "Kito, now a monster, crumbled into dust.", "目的：血で床を塗りつぶせ。囲めば一気に制圧": "Goal: paint the floor with blood. Enclose areas to fill fast", "Enter：やり直す　Esc：タイトルへ": "Enter: Retry   Esc: Title", "冷たい風が、乾いた血の匂いを運んでいく。": "A cold wind carries away the smell of dried blood.", "右半分を長押し：ガード（1回防ぐと解除）": "Hold the right half: Guard (drops after one block)", "塗った血を消しに来る。消される前に倒せ！": "They come to erase your blood. Kill them first!", "敵を倒すと床に血。床をすべて塗るとクリア": "Kills leave blood. Paint the whole floor to clear", "血を消す男がいる。なら、もっと流すだけ。": "Someone erases the blood. Then I'll spill more.", "SOULも普通のガードより大きくたまる": "Also gives more SOUL than a normal guard", "クリック / Enter でタイトルへ": "Click / Enter for title", "ファクトリーリセット（全データ初期化）": "Factory reset (erase all data)", "光っているマスを塗れば、ステージクリア": "Paint the glowing tiles to clear the stage", "地下から入る。一人残らず、地獄へ送る。": "In through the basement. Every one of them goes to hell.", "屋上に出ると、夜が明けようとしていた。": "On the roof, dawn was breaking.", "復讐は終わらない —— ENDLESS": "Revenge never ends — ENDLESS", "汚い……汚い汚い！ 全部、消してやる！": "Filthy... filthy, filthy! I'll wipe it all away!", "賭けは終わり。払うのは、お前たちの命。": "The game's over. You pay with your lives.", "跳ね返した弾は、敵を貫通して飛んでいく": "Reflected shots pierce through enemies", "近づくと掴んで投げてくる（ガード不能）": "Grabs and throws you up close (can't be guarded)", "連撃が続くほど、1体で塗れる量が増える": "Longer combos paint more per kill", "陰陽師に異形の力を与えられた成れの果て": "What's left after a sorcerer gave him monstrous power", "HPが30%以下の間、攻撃力+40%": "Attack +40% while HP is 30% or less", "SOUND: MUTE(右上で解除)": "SOUND: MUTE (unmute top right)", "ガード成功時の回復とSOUL+50%": "Guard heal and SOUL +50%", "ガード成功直後の一撃が弱クリティカル": "Your strike right after a block is a mini-crit", "クリック / Enter でスタート": "Click / Enter to start", "左右の端へ吹き飛ばすと、敵は転落する": "Knock enemies off the left/right edge to drop them", "敵の弾やロケットは、攻撃で跳ね返せる": "Enemy bullets and rockets can be knocked back", "焼いた敵は灰になるので、床は塗れない": "Burned enemies turn to ash, so they don't paint", "紫に光る主人公をタップで「怨霊の手」": "Tap the purple-glowing girl for Hands of the Dead", "逃げ場はない。お前たちにも、私にも。": "Nowhere to run. Not for you, not for me.", "連撃4段目で衝撃波が広がる。弾も弾く": "The 4th hit sends out a shockwave that also deflects shots", "銃なんて怖くない。もう死んでるから。": "Guns don't scare me. I'm already dead.", "陰陽師：式神を呼ぶ。斬れば術が解ける": "Onmyoji: summons shikigami. Cut him to break the spell", "鬼頭組の「後始末」を請け負う潔癖の男": "A clean freak who cleans up the Kito clan's messes", " 次こそ復讐を。#DEADGIRL": " Revenge next time. #DEADGIRL", "J／左クリック：攻撃（連打で連撃）": "J/LMB: Attack (mash for a combo)", "——なのに、あの声はまだ止まない。": "— And yet the voice won't stop.", "……それでも、この渇きは消えない。": "...Even so, this thirst won't fade.", "……鬼頭。人の身では、ここまでか。": "...Kito. So this is a mortal's limit.", "【DEAD GIRL】STAGE ": "[DEAD GIRL] STAGE ", "光る主人公をタップで「怨念解放」！": "Tap the glowing girl for Wrath Burst!", "動画を見ると、強化をもう1枚選べる": "Watch a video to pick one more upgrade", "反射弾の装甲・ボスへの威力+50%": "Reflected shots +50% vs armor and bosses", "右半分をタップ：攻撃（連打で連撃）": "Tap the right half: Attack (tap fast for a combo)", "塗った血を消しに来る。最優先で倒せ": "They erase your blood. Kill them first", "始める前に、強化カードを2枚選ぶ（": "Pick 2 upgrade cards before you start (", "帳簿も書類も、全部血で汚してやる。": "Ledgers, files — I'll soak them all in blood.", "怨念解放のあと、SOULが30残る": "Keep 30 SOUL after a Wrath Burst", "本番では、ここに動画広告が流れます": "A video ad will play here in the release", "熱い？ 痛い？ もう何も感じない。": "Hot? Painful? I feel nothing anymore.", "痛みを感じない——速く、重くなった": "Feels no pain — faster and heavier now", "盾持ちの盾も、跳ね返した弾で壊せる": "Reflected shots also break shields", " —　敵の血で、画面を塗りつぶせ": " — Paint the screen with their blood", "L / E キーで「怨念解放」！": "Press L / E for Wrath Burst!", "L／Eキー（またはQ／K）で発動": "Use with L/E (or Q/K)", "この扉の向こうに、あの男がいる。": "He's behind this door.", "これで一通りの操作を体験しました": "You've tried every basic move", "ただ、脳裏に響き続ける声がある。": "All I know is a voice keeps echoing in my head.", "クリック / Enter で次へ": "Click / Enter to continue", "バズーカ兵：ロケットも弾き返せる": "Bazooka: rockets can be knocked back too", "マウス固定 ON（ESCで解除）": "Mouse lock ON (ESC to release)", "ロケットごと、まとめて送り返す。": "Rockets and all, I'll send it back.", "今度こそ、跡形もなく消してやる。": "This time I'll leave nothing of you.", "光っているマスを、すべて血で塗れ": "Paint all the glowing tiles with blood", "吹き飛んだ死体が壁に当たると爆発": "Bodies explode when they hit a wall", "本当に全部消す？（もう一度押す）": "Erase everything? (press again)", "綺麗な庭。血の色が、よく映える。": "A pretty garden. Blood looks good on it.", "足場が崩れても、私は止まらない。": "Even if the floor gives way, I won't stop.", "連撃が途切れるまでの時間+30%": "Combo timer +30%", "Enter：全チュートリアル　": "Enter: Full tutorial   ", "ステージクリアで強化を1つ選択": "Pick one upgrade per stage clear", "ステージ開始時にSOUL+25": "+25 SOUL at stage start", "攻撃力+4%（何度でも重なる）": "Attack +4% (stacks forever)", "正面ガードの範囲が左右に広がる": "Wider guard arc", "死ぬと、選んだ強化はすべて失う": "Dying loses all your upgrades", "血を拭き取られる前に始末しろ！": "Kill them before they wipe the blood!", "金色に光る主人公をタップで発動": "Tap the gold-glowing girl to use", "鬼頭組は、一夜にして壊滅した。": "The Kito clan fell in a single night.", "　強化カードをもう1枚選べる": "   Pick one more upgrade card", "あの夜の借りを、返しに来た。": "I'm here to repay that night.", "ここを塗れ（近くで敵を倒す）": "Paint here (kill an enemy nearby)", "この街の空は、もう血の色だ。": "The sky over this city is already blood red.", "さあ——楽しませてもらおう。": "Now — entertain me.", "まだだ……まだ終わらせねぇ。": "Not yet... I'm not done yet.", "まだ足りない。全然足りない。": "Not enough. Nowhere near enough.", "ステージの物を殴ると発動する": "Hit objects in the stage to trigger them", "ステージクリア時の回復+15": "+15 HP on stage clear", "チュートリアル（初めての方）": "Tutorial (first time)", "チュートリアル（手順を選ぶ）": "Tutorial (choose a lesson)", "上の説明を読んでから始めよう": "Read the notes above, then start", "壁や障害物も囲いの一部になる": "Walls and obstacles count as part of the fence", "屋外のステージには出てこない": "They don't appear outdoors", "床を全部塗るとステージクリア": "Paint the whole floor to clear the stage", "怨念解放の範囲が17%広がる": "Wrath Burst range +17%", "戻る操作（画面端のスワイプ）": "Back gesture (edge swipe)", "最大HP+18（その分回復）": "Max HP +18 (and heal it)", "消される前に、優先して倒そう": "Take them out before they erase it", "紫に光る主人公をタップで発動": "Tap the purple-glowing girl to use", "薬で痛みを捨てて戻ってきた男": "Back again, drugged past all pain", "銃撃手：弾は攻撃で弾き返せる": "Gunner: knock bullets back with attacks", "高圧洗浄機：射線上の血を消す": "Washer: erases blood in a line", "鬼頭ビル。あの男たちの巣だ。": "Kito Tower. Their nest.", "ESCでマウスの固定を解除": "ESC releases the mouse", "P / Enter で再開": "P / Enter to resume", "SOULの溜まる量+28%": "SOUL gain +28%", "SOUND: タップで有効": "SOUND: tap to enable", "U／右クリックを押したまま": "Hold U/RMB", "— チュートリアル完了 —": "— Tutorial complete —", "——でも、怒りは消えない。": "— But the rage won't die.", "……死んだはずだろ、お前。": "...You're supposed to be dead.", "▶ 動画を見てもう1枚選ぶ": "▶ Watch a video for 1 more", "『奴らを、血の海に沈めろ』": "\"Drown them in a sea of blood.\"", "で力尽きた……SCORE ": " — fell. SCORE ", "マスを一気に血で染めた　+": " tiles drowned in blood  +", "仕掛けが30%早く元に戻る": "Stage gimmicks reset 30% faster", "復讐するために蘇ったのか。": "Did I come back for revenge?", "怨霊の手 OK!（L／E）": "Hands OK! (L/E)", "掃除屋：血を消す。先に倒せ": "Cleaner: erases blood. Kill first", "操作をひとつずつ体験しよう": "Try each move one at a time", "斬れ——血で床を塗りつぶせ": "Cut them down — paint the floor in blood", "血に足を取られた！ 今だ！": "Slipping in blood! Now!", "L／Eキーで「怨霊の手」": "L/E for Hands of the Dead", "WASD／矢印キーで走る": "Run with WASD/arrow keys", "……消毒済みの、特製だ。": "...Sterilized. My special blend.", "▶ 全チュートリアル開始": "▶ Start full tutorial", "★ 自己ベスト更新！ ★": "★ NEW PERSONAL BEST! ★", "　使わずにためると……？": "   Save it instead...?", "これで闘う準備はできた。": "Now you're ready to fight.", "で、正面からの攻撃を防ぐ": " to block attacks from the front", "タップ（長押しでガード）": "Tap (hold to guard)", "ボスへのダメージ+25%": "Damage to bosses +25%", "化け物が……！ 殺せェ！": "Monster...! Kill her!", "広く囲むほど、一気に進む": "The bigger the loop, the faster you progress", "技　PERFECT反射 ": "Skill  PERFECT ", "敵を倒すたびHP+1.4": "+1.4 HP per kill", "用心棒：赤い円から離れろ": "Bruiser: stay out of the red circle", "画面のフォーカスが外れた": "The game lost focus", "被弾後の無敵時間+50%": "Invincibility after hits +50%", "鬼頭組を裏で操っていた男": "The man pulling the Kito clan's strings", "1〜9・0キー：選ぶ　": "Keys 1-9, 0: select   ", "20ステージ制覇で開放": "Unlocks after clearing 20 stages", "——でも、私は蘇った。": "— But I came back.", "　強化をもう1枚選べる": "   Pick one more upgrade", "カードをタップして決定": "Tap a card to choose", "チュートリアルを終える": "Quit tutorial", "受けるダメージ-10%": "Damage taken -10%", "始めたいステージを選ぶ": "Choose a starting stage", "左半分をドラッグ：移動": "Drag the left half: Move", "斬られる直前にガード！": "Guard just before the cut!", "次へ進む（Enter）": "Next (Enter)", "漂白剤：周りの血を消す": "Bleach: erases blood around", "用心棒？ 骨ごと砕く。": "Bodyguards? I'll break them, bones and all.", "私の心臓を撃ち抜いた男": "The man who shot me through the heart", "紫に光る主人公をタップ": "Tap the purple-glowing girl", "血の床の上に敵がいない": "No enemies on blood", "　到達 STAGE ": "  Reached STAGE ", "この手順からやり直し": "Retry this lesson", "アプリ切替・画面オフ": "App switch / screen off", "グ……オオオオォッ！": "Gr... RAAAAGH!", "マス　ベストタイム ": " tiles  Best time ", "怒りは、まだ消えない": "The rage still burns", "手順の選択に戻ります": "Back to lesson select", "攻撃に合わせてガード": "Guard as they attack", "白鷺清掃 社長・白鷺": "Shirasagi, CEO of Shirasagi Cleaning", "紫のSOUL満タン！": "Purple SOUL full!", "自分の記録 TOP5": "Your TOP 5", "血の床は、怨霊の巣だ": "Bloody floors are where the dead dwell", "Enter で次へ": "Enter to continue", "SOULが満タン！": "SOUL full!", "s　BONUS +": "s  BONUS +", "⑤ ジャストガード": "5 Just Guard", "▶ 動画を見て復活": "▶ Watch a video to revive", "　ジャストガード ": "  Just Guard ", "　ノーダメージ ✓": "  No damage ✓", "で血の床の敵を一掃": " to wipe out enemies on blood", "もう一度、復讐を。": "Once more, for revenge.", "タップでタイトルへ": "Tap for title", "タップで怨念解放！": "Tap for Wrath Burst!", "タップで怨霊の手！": "Tap for Hands of the Dead!", "マウス固定 OFF": "Mouse lock OFF", "光る主人公をタップ": "Tap the glowing girl", "広告（テスト表示）": "Ad (test)", "復讐は、終わった。": "My revenge is done.", "復讐を遂げるのだ！": "Take your revenge!", "撃破スコア+25%": "Kill score +25%", "消される前に倒せ！": "Kill them before they erase it!", "清掃班、全員出ろ！": "Cleaning crew, all of you, out!", "若頭・霧島（本気）": "Underboss Kirishima (Unleashed)", "L／Eキーで発動": "Use with L/E", "① 動かす・攻撃": "1 Move & Attack", "③ 囲う（壁際）": "3 Enclose (walls)", "　Esc：終える": "   Esc: Quit", "　次のステージへ": "  Next stage", "『もっと、血を』": "\"More. More blood.\"", "また、殺された。": "Killed again.", "タップでスタート": "Tap to start", "チュートリアル ": "Tutorial ", "バズーカ兵 出現": "Bazooka incoming", "体 引きずり込み": " dragged under", "地下駐車場 B1": "Parking Garage B1", "地下駐車場 B2": "Parking Garage B2", "床の塗り+10%": "Floor paint +10%", "怨念解放 OK!": "Wrath Burst OK!", "掃除中——今だ！": "Cleaning — now!", "攻撃の速さ+8%": "Attack speed +8%", "攻撃範囲+10%": "Attack range +10%", "最初からやり直す": "Start over", "背後を取られた！": "Hit from behind!", "荷物を積んだ台車": "Loaded hand cart", "高圧洗浄機 出現": "Pressure washer incoming", "鬼頭ビル前の通り": "Street outside Kito Tower", "— 訓練場 —": "— Training ground —", "　R：もう一度": "   R: Again", "お前ら、やれ！": "Get her, all of you!", "ゲームスタート": "Start game", "コントローラー": "Controller", "タイトルへ戻る": "Back to title", "チュートリアル": "Tutorial", "ドアからの投擲": "Doorway throwers", "ボスは血に弱い": "Bosses hate blood", "右半分を長押し": "Hold the right half", "囲め！ 潰せ！": "Surround her! Crush her!", "大陰陽師・御影": "Grand Onmyoji Mikage", "強化を1つ選べ": "Choose an upgrade", "怨 念 解 放": "W R A T H  B U R S T", "怨 霊 の 手": "H A N D S  O F  T H E  D E A D", "掃除屋 全滅！": "Cleaners wiped out!", "改装中のフロア": "Floor under renovation", "攻撃力+17%": "Attack +17%", "潔癖の男・白鷺": "Shirasagi the clean freak", "秒　斬った数 ": "s  Cut ", "移動速度+8%": "Move speed +8%", "第 2 形 態": "P H A S E  2", "組長室前の廊下": "Hall before the boss's office", "薬 物 強 化": "D R U G G E D", "離して押し直し": "Release and press again", "食用油の一斗缶": "Can of cooking oil", "1F ロビー": "1F Lobby", "Enter：": "Enter: ", "Esc：戻る": "Esc: Back", "HPを全回復": "Fully restore HP", "⑥ 弾き返し": "6 Reflect", "⑦ 怨念解放": "7 Wrath Burst", "⑧ 怨霊の手": "8 Hands of the Dead", "　TIME ": "  TIME ", "　最大連撃 ": "  Max combo ", "すべての元凶": "The root of it all", "で周りを一掃": " to clear everything around you", "タップで再開": "Tap to resume", "タップで次へ": "Tap to continue", "ダイナマイト": "Dynamite", "ポーズボタン": "Pause button", "事務所フロア": "Office floor", "停止の理由：": "Paused because: ", "囲った！ +": "Enclosed! +", "弾を跳ね返せ": "Knock shots back", "弾丸返し・改": "Bullet Return EX", "復讐、完了。": "Revenge complete.", "怨念 MAX": "WRATH MAX", "怨念の残り火": "Lingering Wrath", "怨霊 MAX": "SPIRITS MAX", "掃除屋 出現": "Cleaner incoming", "搬入口・倉庫": "Loading dock / warehouse", "斬った式神 ": "Shikigami cut ", "柵のない屋上": "Rooftop with no railing", "漂白剤 出現": "Bleach crew incoming", "結果をシェア": "Share result", "臨兵闘者……": "Rin, pyo, to, sha...", "落下する鉄骨": "Falling steel beams", "血の海達成！": "SEA OF BLOOD!", "術が解けた！": "Spell broken!", "途切れぬ怒り": "Unbroken Rage", "開発者モード": "Developer mode", "陰陽師 出現": "Onmyoji incoming", "高圧洗浄 -": "Washed -", " クリア！": " clear!", "L／Eキー": "L/E key", "④ ガード": "4 Guard", "⑨ 掃除屋": "9 Cleaners", "⑩ クリア": "10 Clear", "　HP +": "  HP +", "あと25%": "25% left", "あの夜——": "That night —", "タイトルへ": "Title", "タイヤの山": "Tire stack", "チャンス！": "Opening!", "ボイラー室": "Boiler room", "ボーナス面": "Bonus stage", "制 圧 ！": "S W E P T !", "囲まれた！": "Surrounded!", "屍の生命力": "Corpse Vitality", "強化カード": "Upgrade cards", "弾き返し ": "Reflects ", "戦いの余韻": "Afterglow", "投げ！ -": "Thrown! -", "掃除屋 ×": "Cleaners x", "死者の皮膚": "Dead Skin", "汚い……！": "Filthy...!", "消えた……": "Gone...", "濃い返り血": "Thick Spatter", "画面の回転": "Screen rotation", "異形・鬼頭": "Kito the Abomination", "畳の大広間": "Great tatami hall", "組長・鬼頭": "Boss Kito", "若頭・霧島": "Underboss Kirishima", "血に弱る！": "Weak in blood!", "血の試練場": "Blood trial", "雨の路地裏": "Rainy back alley", "／2枚目）": "/2)", "② 塗る": "2 Paint", "③ 囲う": "3 Enclose", "　制圧 ": "  Swept ", "もう一度": "Again", "ガキン！": "CLANG!", "キー操作": "Keyboard", "タップ！": "Tap!", "ドラッグ": "Drag", "ドラム缶": "Oil drum", "ナイス！": "Nice!", "リネン室": "Linen room", "仕掛け屋": "Trapsmith", "伸びる爪": "Long Claws", "体当たり": "Shield bash", "受け流し": "Deflect", "吸血の爪": "Vampire Claws", "失敗……": "Failed...", "守りの糧": "Guard Feast", "屋上庭園": "Rooftop garden", "式神斬り": "Shikigami Slash", "弾き返し": "Reflect", "弾丸返し": "Bullet Return", "怨念の滴": "Wrath Drop", "怨念の種": "Wrath Seed", "怨念増幅": "Wrath Amp", "怨念拡散": "Wrath Spread", "怨念解放": "Wrath Burst", "怨霊の手": "Hands of the Dead", "拡散反射": "Split Reflect", "撥ねた！": "Rammed!", "次へ ▶": "Next ▶", "次へ進む": "Next", "死体爆弾": "Corpse Bomb", "死者の脚": "Dead Legs", "盾破壊！": "Shield broken!", "組長の間": "The boss's chamber", "血の補給": "Blood Refill", "証拠隠滅": "Evidence wipe", "鉄の構え": "Iron Stance", "鉄骨落下": "FALLING BEAM", "閉じた！": "Closed!", "高圧洗浄": "Washer", " ほか": " etc.", " 獲得": " acquired", "L／E": "L/E", "あなた": "YOU", "ガード": "Guard", "ゴホッ": "*cough*", "シェア": "Share", "ツルッ": "Slip!", "仕掛け": "Gimmick", "倍返し": "Payback", "再挑戦": "Retry", "囲える": "CLOSE", "復 活": "R E V I V E", "所持：": "Owned: ", "掃除屋": "Cleaner", "掴み！": "GRAB!", "撃 破": "D E F E A T E D", "撃破 ": "Kills ", "撃退！": "Repelled!", "次は ": "Next: ", "武器庫": "Armory", "残り ": "Left ", "殴れ！": "Hit it!", "消火器": "Extinguisher", "漂白剤": "Bleach", "火炎瓶": "Molotov", "無敵：": "God mode: ", "獲 得": "G E T", "着火！": "Ignited!", "空振り": "Whiff", "終 了": "O V E R", "血の宴": "Blood Feast", "血の沼": "Blood Bog", "衝撃波": "Shockwave", "見切り": "Insight", "訓練場": "Training ground", "転落！": "Fell!", "返し技": "Counter", "速い爪": "Quick Claws", "遊び方": "How to play", "閉じる": "Close", "鬼殺し": "Oni Slayer", "あと": "", "ボス": "Boss", "マス": " tiles", "中庭": "Courtyard", "剛腕": "Brute Force", "厨房": "Kitchen", "回目": "th", "囲う": "Enclose", "執念": "Obsession", "塗る": "Paint", "屋上": "Rooftop", "怪力": "Mighty", "戻る": "Back", "攻撃": "Attack", "次へ": "Next", "漂白": "Bleached", "無敵": "God mode", "狙撃": "SNIPE", "移動": "Move", "練習": "Practice", "背水": "Last Stand", "試練": "Trial", "賭場": "Gambling den", "道場": "Dojo", "回": "x", "枚": "", "ゲームに戻る": "Back to game", "反撃！": "Counter!", "盾持ちの体当たりの直前にガード！盾が壊れ、次の一撃がクリティカル": "Guard right before the shield bash! The shield breaks and your next hit crits", "盾持ちは正面の攻撃を盾で止め、殴り続けると盾で反撃してくる": "Shield guards stop frontal attacks, and bash back if you keep hitting", "その体当たりをジャストガードすれば盾が壊れる（ナイフ使いの連撃も崩せる）": "Just Guard that bash to break the shield (it also breaks a knifer's combo)", "盾持ち：殴り続けると盾で反撃。体当たりをジャストガードで盾が壊れる": "Shield: bashes back if you keep hitting. Just Guard the bash to break it"};
+const EN_DICT={"血溜まりの上に立つボスは、動きが鈍り、受けるダメージが1.5倍。体力が半分を切ると、天井から柱が落ちてくる": "A boss standing in blood slows down and takes 1.5x damage. Below half HP, pillars fall from the ceiling", "拳銃とナイフは攻撃で弾き返せる。血の上に長くいると立ち止まって掃除を始める——その間は総攻撃のチャンス": "Bullets and knives can be knocked back. Stand him in blood too long and he stops to clean — go all out", "蹴ると油をまき散らしながら床を滑る。油を踏んだ敵は足を滑らせて転び、滑った体が周りの敵もなぎ倒す": "Kick it to send it sliding and spilling oil. Enemies who step in oil slip, fall, and take others down with them", "移動:WASD  攻撃:J/左クリック  ガード:U/右クリック  怨念/怨霊の手:L/E": "Move:WASD  Attack:J/LMB  Guard:U/RMB  Burst/Hands:L/E", "ドアが開くと、戸口の敵が斧を投げてくる。攻撃で弾き返せ——戸口に打ち返せば撃退できる": "When a door opens, the thug inside throws an axe. Knock it back into the doorway to drive him off", "左ドラッグ:移動  右タップ:攻撃  右長押し:ガード  光る主人公タップ:怨念": "L-drag:Move  R-tap:Attack  R-hold:Guard  Tap glowing girl:Burst", "床を塗るほど強くなる。ライフも大きく回復し、引きずり込んだ敵が多いほど回復も多い": "The more floor you paint, the stronger it gets. Heals a lot — more enemies dragged, more healing", "盾は今向いている方向に出る（向きは移動で変える）。背後や横からの攻撃は防げない": "The shield faces where you face (turn by moving). It can't block attacks from behind or the side", "天井のクレーンから鉄骨が落ちてくる。床の影の下に敵を誘い込め——自分は避けろ": "Steel beams drop from the ceiling crane. Lure enemies under the shadows — and stay clear yourself", "体に届く寸前で弾くと「PERFECT」。威力2倍で、SOULも大きくたまる": "Hit it right before it reaches you for PERFECT: 2x power and a big SOUL boost", "周りの敵を焼き尽くし、ライフも回復する。巻き込んだ敵が多いほど回復も多い": "Burns nearby enemies to ash and heals you. More enemies caught, more healing", "銃撃手の弾は、当たる直前に攻撃すると跳ね返せる（斧・ナイフ・ロケットも）": "Attack a gunner's bullet just before it hits to send it back (axes, knives, rockets too)", "まずは最初から通して遊ぼう（修了すると、操作ごとに選べるようになる）": "Play it through from the start first (finish it to unlock single lessons)", "防ぐと、敵の攻撃力と同じだけライフが回復し、SOULも同じだけたまる": "Blocking heals you by the enemy's attack power and fills SOUL by the same", "SOUL2段目（紫）満タンで発動。血の床の上の敵を全員引きずり込む": "Use at full 2nd SOUL bar (purple). Drags down every enemy on blood", "モップ（1マスずつ）、高圧洗浄機（一直線）、漂白剤（周り）の3種類": "Three kinds: mop (one tile), pressure washer (a line), bleach (an area)", "台車を殴ると滑り出し、敵を撥ね飛ばす。壁に激突すると荷物が散らばる": "Hit the cart to send it rolling into enemies. Crash it into a wall and the boxes scatter", "攻撃が当たる直前（約0.2秒前）にガードを押すと「ジャストガード」": "Guard right before a hit lands (~0.2s) for a JUST GUARD", "再開すると、マウスは再びゲーム画面に固定されます（ESCで解除）": "On resume the mouse is locked to the game again (ESC to release)", "SOULをさらにためて、2段目（紫）が満タンになると使える大技": "A finisher you can use when the 2nd SOUL bar (purple) is full", "WASD／矢印：移動　Enter：スタート　T：チュートリアル": "WASD/Arrows: Move   Enter: Start   T: Tutorial", "囲むと中が一気に染まる。光る「囲える」マスの近くで倒せば埋まる": "Enclose an area to fill it. Kill near a glowing tile to close it", "攻撃が当たる直前にガード！相手がよろけ、次の一撃がクリティカル": "Guard right before the hit! The enemy staggers and your next strike crits", "殴ると煙が噴き出す。むせた敵は動けず、攻撃がすべてクリティカル": "Hit it to blast powder. Choking enemies can't move and take crits", "血で塗った床の上にいる敵を、画面のどこにいても全員引きずり込む": "Drags down every enemy standing on blood, anywhere on screen", "【DEAD GIRL】鬼頭組を一夜で壊滅させた。SCORE ": "[DEAD GIRL] I wiped out the Kito clan in one night. SCORE ", "攻撃は、走っている向き（止まっていれば向いている方向）へ出る": "You attack the way you're running (or facing, if standing still)", "血は、敵が吹き飛んだ向きに広がる。死体が床を滑った跡も塗れる": "Blood spreads the way enemies fly. Sliding bodies paint too", "それとも、別の何かに動かされているのか。答えはわからない。": "Or is something else moving me? I don't know.", "光るマスの近くで敵を倒すと、血が流れ込んでそのマスが埋まる": "Kill an enemy near a glowing tile and the blood flows in to fill it", "相手は大きくよろけ、次の一撃は必ずクリティカル（2.5倍）": "The enemy staggers and your next hit is a sure crit (2.5x)", "盾持ち：正面は斬れない。反射弾・背後・ジャストガードで崩せ": "Shield: can't cut from the front. Break it with reflects, from behind, or a Just Guard", "正面を防いでライフとSOULがたまる。直前ならジャスト": "Block from the front to gain HP and SOUL. Time it for a Just Guard", "殴る・撃たせると爆発、近くにも誘爆（近いと自分も被弾）": "Hit or shoot it to explode, chaining nearby (you get hurt up close)", "SOUL1段目（金）満タンで発動。周囲の敵を灰にする": "Use at full 1st SOUL bar (gold). Burns nearby enemies to ash", "塗ったマスで輪を閉じると、中のマスが一気に血で染まる": "Close a loop of painted tiles and everything inside turns to blood", "殴ると、殴った方向へ飛んで割れ、炎が広がって敵を焼く": "Hit it to throw it; it shatters and spreads fire over enemies", "殴るとタイヤがばらけて転がり、当たった敵を撥ね飛ばす": "Hit the stack and the tires roll off, bowling enemies over", "ナイフ使い：連撃中は怯まない。ジャストガードで崩せ": "Knifer: won't flinch mid-combo. Break him with a Just Guard", "光るマスを塗って輪を閉じろ。囲んだ中が一気に染まる": "Paint the glowing tile to close the loop. Everything inside fills", "光るマスを塗れ。床をすべて血で塗るとステージクリア": "Paint the glowing tiles. Cover the whole floor in blood to clear", "式神を呼び出す外道——術者を斬れば、式神は紙に戻る": "A sorcerer who summons shikigami — cut him down and they turn back to paper", "怨霊の手：血の床の上の敵を、すべて引きずり込む——": "Hands of the Dead: drag down every enemy on blood —", "掃除屋は、塗った血を拭き取って床を元に戻してしまう": "Cleaners wipe up your blood and restore the floor", "敵を倒すと、血で床が染まる。まず3マス塗ってみよう": "Kill enemies to stain the floor. Try painting 3 tiles", "敵を吹き飛ばす力+8%（倒した敵も少し遠くへ飛ぶ）": "Knockback +8% (kills fly a little farther)", "血で塗った床の上の敵は、足を取られて18%遅くなる": "Enemies on blood are slowed by 18%", "SOULの1段目（金）が満タンになると使える大技": "A finisher you can use when the 1st SOUL bar (gold) is full", "やり直すと、強化カードを2枚選んでから始められる": "Retry and you pick 2 upgrade cards before starting", "右半分をタップすると攻撃。連打で4段の連撃になる": "Tap the right half to attack. Keep tapping for a 4-hit combo", "御影と名乗った陰陽師は、いつの間にか消えていた。": "The sorcerer called Mikage had vanished.", "殴ると穴が開いて油が漏れ出し、引火して広く燃える": "Hit it to punch a hole; the oil spills out and ignites", "連撃中は怯まないナイフ使いや、盾持ちの盾を崩せる": "Breaks knifers mid-combo and shield guards", "銃撃手の弾を15発弾き返せ。1発でも当たれば終了": "Reflect 15 bullets. One hit and it's over", "25秒間、式神を斬りまくれ。攻撃を受けたら終了": "Slash shikigami for 25 seconds. Get hit and it's over", "4段目は全方向を斬る回転斬り。囲まれた時に強い": "The 4th hit is a spinning slash in all directions. Great when surrounded", "L／E：怨念解放（紫なら怨霊の手）　P：ポーズ": "L/E: Wrath Burst (Hands when purple)   P: Pause", "PERFECT反射の受付が広がり、弾も速くなる": "Wider PERFECT window, faster reflected shots", "U／右クリック長押し：ガード（1回防ぐと解除）": "Hold U/RMB: Guard (drops after one block)", "ロケット弾も弾き返せる——敵の群れに撃ち返せ！": "Rockets can be knocked back — send them into the crowd!", "光る主人公をタップ：怨念解放（紫なら怨霊の手）": "Tap the glowing girl: Wrath Burst (Hands when purple)", "冷たいアスファルトの上で、私の心臓は止まった。": "On the cold asphalt, my heart stopped.", "射線上の血を一気に洗い流す——撃たれる前に潰せ": "Blasts away the blood in a line — crush him before he fires", "銃撃手の弾は、当たる直前に攻撃すると跳ね返せる": "Attack a gunner's bullet just before it hits to send it back", "鬼頭組の「取引」を見てしまった私は、殺された。": "I saw the Kito clan's \"deal\". So they killed me.", "1回防ぐと解除される。続けて守るなら押し直す": "Guard drops after one block. Press again to keep guarding", "J／左クリックで攻撃。連打で4段の連撃になる": "J/LMB to attack. Keep pressing for a 4-hit combo", "で正面ガード。防ぐとライフとSOULがたまる": " to guard the front. Blocking gives HP and SOUL", "ならば、その骸に——異形の力をくれてやろう。": "Then I shall grant your corpse — the power of the abyss.", "反射弾が3方向に分裂（左右の弾は貫通しない）": "Reflected shots split in 3 (side shots don't pierce)", "周りの血を一気に洗い流す——撒かれる前に潰せ": "Bleaches all the blood around — crush him first", "塗り残しが少なくなると、残りのマスが点滅する": "When few tiles remain, they start blinking", "壁も囲いになる。光るマスを塗って角を切り取れ": "Walls count as a fence. Paint the glowing tile to cut off the corner", "左半分をドラッグで移動、右半分をタップで攻撃": "Drag the left half to move, tap the right half to attack", "弾と斧を18発弾き返せ。1発でも当たれば終了": "Reflect 18 bullets and axes. One hit and it's over", "敵を倒すと血が飛び散り、床のマスが赤く染まる": "Killing enemies splatters blood and turns tiles red", "画面の左半分をドラッグすると、その方向へ走る": "Drag on the left half of the screen to run that way", "1・2・3キー ／ 矢印で選んでEnter": "Keys 1/2/3 or arrows, then Enter", "WASD／矢印で移動、J／左クリックで攻撃": "WASD/Arrows to move, J/LMB to attack", "「あと1マスで囲える」マスは光って知らせる": "Tiles that would close a loop glow", "クリアで1枚。やり直す時は2枚選んで始める": "1 per clear. On retry, pick 2 before starting", "天井が崩れる——落ちてくる柱の影から離れろ": "The ceiling is collapsing — stay out of the falling shadows", "最初から通して遊ぶか、練習したい操作を選ぶ": "Play it all through, or pick a move to practice", "残りのマスの近くで敵を倒して、塗りつぶそう": "Kill enemies near the remaining tiles to fill them", "狙撃手：赤い線のあとに強烈な一発。弾き返せ": "Sniper: a heavy shot after the red line. Send it back", "異形と化した鬼頭は、塵となって崩れ落ちた。": "Kito, now a monster, crumbled into dust.", "目的：血で床を塗りつぶせ。囲めば一気に制圧": "Goal: paint the floor with blood. Enclose areas to fill fast", "Enter：やり直す　Esc：タイトルへ": "Enter: Retry   Esc: Title", "冷たい風が、乾いた血の匂いを運んでいく。": "A cold wind carries away the smell of dried blood.", "右半分を長押し：ガード（1回防ぐと解除）": "Hold the right half: Guard (drops after one block)", "塗った血を消しに来る。消される前に倒せ！": "They come to erase your blood. Kill them first!", "敵を倒すと床に血。床をすべて塗るとクリア": "Kills leave blood. Paint the whole floor to clear", "血を消す男がいる。なら、もっと流すだけ。": "Someone erases the blood. Then I'll spill more.", "SOULも普通のガードより大きくたまる": "Also gives more SOUL than a normal guard", "クリック / Enter でタイトルへ": "Click / Enter for title", "ファクトリーリセット（全データ初期化）": "Factory reset (erase all data)", "光っているマスを塗れば、ステージクリア": "Paint the glowing tiles to clear the stage", "地下から入る。一人残らず、地獄へ送る。": "In through the basement. Every one of them goes to hell.", "屋上に出ると、夜が明けようとしていた。": "On the roof, dawn was breaking.", "復讐は終わらない —— ENDLESS": "Revenge never ends — ENDLESS", "汚い……汚い汚い！ 全部、消してやる！": "Filthy... filthy, filthy! I'll wipe it all away!", "賭けは終わり。払うのは、お前たちの命。": "The game's over. You pay with your lives.", "跳ね返した弾は、敵を貫通して飛んでいく": "Reflected shots pierce through enemies", "近づくと掴んで投げてくる（ガード不能）": "Grabs and throws you up close (can't be guarded)", "連撃が続くほど、1体で塗れる量が増える": "Longer combos paint more per kill", "陰陽師に異形の力を与えられた成れの果て": "What's left after a sorcerer gave him monstrous power", "HPが30%以下の間、攻撃力+40%": "Attack +40% while HP is 30% or less", "SOUND: MUTE(右上で解除)": "SOUND: MUTE (unmute top right)", "ガード成功時の回復とSOUL+50%": "Guard heal and SOUL +50%", "ガード成功直後の一撃が弱クリティカル": "Your strike right after a block is a mini-crit", "クリック / Enter でスタート": "Click / Enter to start", "左右の端へ吹き飛ばすと、敵は転落する": "Knock enemies off the left/right edge to drop them", "敵の弾やロケットは、攻撃で跳ね返せる": "Enemy bullets and rockets can be knocked back", "焼いた敵は灰になるので、床は塗れない": "Burned enemies turn to ash, so they don't paint", "紫に光る主人公をタップで「怨霊の手」": "Tap the purple-glowing girl for Hands of the Dead", "逃げ場はない。お前たちにも、私にも。": "Nowhere to run. Not for you, not for me.", "連撃4段目で衝撃波が広がる。弾も弾く": "The 4th hit sends out a shockwave that also deflects shots", "銃なんて怖くない。もう死んでるから。": "Guns don't scare me. I'm already dead.", "陰陽師：式神を呼ぶ。斬れば術が解ける": "Onmyoji: summons shikigami. Cut him to break the spell", "鬼頭組の「後始末」を請け負う潔癖の男": "A clean freak who cleans up the Kito clan's messes", " 次こそ復讐を。#DEADGIRL": " Revenge next time. #DEADGIRL", "J／左クリック：攻撃（連打で連撃）": "J/LMB: Attack (mash for a combo)", "——なのに、あの声はまだ止まない。": "— And yet the voice won't stop.", "……それでも、この渇きは消えない。": "...Even so, this thirst won't fade.", "……鬼頭。人の身では、ここまでか。": "...Kito. So this is a mortal's limit.", "【DEAD GIRL】STAGE ": "[DEAD GIRL] STAGE ", "光る主人公をタップで「怨念解放」！": "Tap the glowing girl for Wrath Burst!", "動画を見ると、強化をもう1枚選べる": "Watch a video to pick one more upgrade", "反射弾の装甲・ボスへの威力+50%": "Reflected shots +50% vs armor and bosses", "右半分をタップ：攻撃（連打で連撃）": "Tap the right half: Attack (tap fast for a combo)", "塗った血を消しに来る。最優先で倒せ": "They erase your blood. Kill them first", "始める前に、強化カードを2枚選ぶ（": "Pick 2 upgrade cards before you start (", "帳簿も書類も、全部血で汚してやる。": "Ledgers, files — I'll soak them all in blood.", "怨念解放のあと、SOULが30残る": "Keep 30 SOUL after a Wrath Burst", "本番では、ここに動画広告が流れます": "A video ad will play here in the release", "熱い？ 痛い？ もう何も感じない。": "Hot? Painful? I feel nothing anymore.", "痛みを感じない——速く、重くなった": "Feels no pain — faster and heavier now", "盾持ちの盾も、跳ね返した弾で壊せる": "Reflected shots also break shields", " —　敵の血で、画面を塗りつぶせ": " — Paint the screen with their blood", "L / E キーで「怨念解放」！": "Press L / E for Wrath Burst!", "L／Eキー（またはQ／K）で発動": "Use with L/E (or Q/K)", "この扉の向こうに、あの男がいる。": "He's behind this door.", "これで一通りの操作を体験しました": "You've tried every basic move", "ただ、脳裏に響き続ける声がある。": "All I know is a voice keeps echoing in my head.", "クリック / Enter で次へ": "Click / Enter to continue", "バズーカ兵：ロケットも弾き返せる": "Bazooka: rockets can be knocked back too", "マウス固定 ON（ESCで解除）": "Mouse lock ON (ESC to release)", "ロケットごと、まとめて送り返す。": "Rockets and all, I'll send it back.", "今度こそ、跡形もなく消してやる。": "This time I'll leave nothing of you.", "光っているマスを、すべて血で塗れ": "Paint all the glowing tiles with blood", "吹き飛んだ死体が壁に当たると爆発": "Bodies explode when they hit a wall", "本当に全部消す？（もう一度押す）": "Erase everything? (press again)", "綺麗な庭。血の色が、よく映える。": "A pretty garden. Blood looks good on it.", "足場が崩れても、私は止まらない。": "Even if the floor gives way, I won't stop.", "連撃が途切れるまでの時間+30%": "Combo timer +30%", "Enter：全チュートリアル　": "Enter: Full tutorial   ", "ステージクリアで強化を1つ選択": "Pick one upgrade per stage clear", "ステージ開始時にSOUL+25": "+25 SOUL at stage start", "攻撃力+4%（何度でも重なる）": "Attack +4% (stacks forever)", "正面ガードの範囲が左右に広がる": "Wider guard arc", "死ぬと、選んだ強化はすべて失う": "Dying loses all your upgrades", "血を拭き取られる前に始末しろ！": "Kill them before they wipe the blood!", "金色に光る主人公をタップで発動": "Tap the gold-glowing girl to use", "鬼頭組は、一夜にして壊滅した。": "The Kito clan fell in a single night.", "　強化カードをもう1枚選べる": "   Pick one more upgrade card", "あの夜の借りを、返しに来た。": "I'm here to repay that night.", "ここを塗れ（近くで敵を倒す）": "Paint here (kill an enemy nearby)", "この街の空は、もう血の色だ。": "The sky over this city is already blood red.", "さあ——楽しませてもらおう。": "Now — entertain me.", "まだだ……まだ終わらせねぇ。": "Not yet... I'm not done yet.", "まだ足りない。全然足りない。": "Not enough. Nowhere near enough.", "ステージの物を殴ると発動する": "Hit objects in the stage to trigger them", "ステージクリア時の回復+15": "+15 HP on stage clear", "チュートリアル（初めての方）": "Tutorial (first time)", "チュートリアル（手順を選ぶ）": "Tutorial (choose a lesson)", "上の説明を読んでから始めよう": "Read the notes above, then start", "壁や障害物も囲いの一部になる": "Walls and obstacles count as part of the fence", "屋外のステージには出てこない": "They don't appear outdoors", "床を全部塗るとステージクリア": "Paint the whole floor to clear the stage", "怨念解放の範囲が17%広がる": "Wrath Burst range +17%", "戻る操作（画面端のスワイプ）": "Back gesture (edge swipe)", "最大HP+18（その分回復）": "Max HP +18 (and heal it)", "消される前に、優先して倒そう": "Take them out before they erase it", "紫に光る主人公をタップで発動": "Tap the purple-glowing girl to use", "薬で痛みを捨てて戻ってきた男": "Back again, drugged past all pain", "銃撃手：弾は攻撃で弾き返せる": "Gunner: knock bullets back with attacks", "高圧洗浄機：射線上の血を消す": "Washer: erases blood in a line", "鬼頭ビル。あの男たちの巣だ。": "Kito Tower. Their nest.", "ESCでマウスの固定を解除": "ESC releases the mouse", "P / Enter で再開": "P / Enter to resume", "SOULの溜まる量+28%": "SOUL gain +28%", "SOUND: タップで有効": "SOUND: tap to enable", "U／右クリックを押したまま": "Hold U/RMB", "— チュートリアル完了 —": "— Tutorial complete —", "——でも、怒りは消えない。": "— But the rage won't die.", "……死んだはずだろ、お前。": "...You're supposed to be dead.", "▶ 動画を見てもう1枚選ぶ": "▶ Watch a video for 1 more", "『奴らを、血の海に沈めろ』": "\"Drown them in a sea of blood.\"", "で力尽きた……SCORE ": " — fell. SCORE ", "マスを一気に血で染めた　+": " tiles drowned in blood  +", "仕掛けが30%早く元に戻る": "Stage gimmicks reset 30% faster", "復讐するために蘇ったのか。": "Did I come back for revenge?", "怨霊の手 OK!（L／E）": "Hands OK! (L/E)", "掃除屋：血を消す。先に倒せ": "Cleaner: erases blood. Kill first", "操作をひとつずつ体験しよう": "Try each move one at a time", "斬れ——血で床を塗りつぶせ": "Cut them down — paint the floor in blood", "血に足を取られた！ 今だ！": "Slipping in blood! Now!", "L／Eキーで「怨霊の手」": "L/E for Hands of the Dead", "WASD／矢印キーで走る": "Run with WASD/arrow keys", "……消毒済みの、特製だ。": "...Sterilized. My special blend.", "▶ 全チュートリアル開始": "▶ Start full tutorial", "★ 自己ベスト更新！ ★": "★ NEW PERSONAL BEST! ★", "　使わずにためると……？": "   Save it instead...?", "これで闘う準備はできた。": "Now you're ready to fight.", "で、正面からの攻撃を防ぐ": " to block attacks from the front", "タップ（長押しでガード）": "Tap (hold to guard)", "ボスへのダメージ+25%": "Damage to bosses +25%", "化け物が……！ 殺せェ！": "Monster...! Kill her!", "広く囲むほど、一気に進む": "The bigger the loop, the faster you progress", "技　PERFECT反射 ": "Skill  PERFECT ", "敵を倒すたびHP+1.4": "+1.4 HP per kill", "用心棒：赤い円から離れろ": "Bruiser: stay out of the red circle", "画面のフォーカスが外れた": "The game lost focus", "被弾後の無敵時間+50%": "Invincibility after hits +50%", "鬼頭組を裏で操っていた男": "The man pulling the Kito clan's strings", "1〜9・0キー：選ぶ　": "Keys 1-9, 0: select   ", "20ステージ制覇で開放": "Unlocks after clearing 20 stages", "——でも、私は蘇った。": "— But I came back.", "　強化をもう1枚選べる": "   Pick one more upgrade", "カードをタップして決定": "Tap a card to choose", "チュートリアルを終える": "Quit tutorial", "受けるダメージ-10%": "Damage taken -10%", "始めたいステージを選ぶ": "Choose a starting stage", "左半分をドラッグ：移動": "Drag the left half: Move", "斬られる直前にガード！": "Guard just before the cut!", "次へ進む（Enter）": "Next (Enter)", "漂白剤：周りの血を消す": "Bleach: erases blood around", "用心棒？ 骨ごと砕く。": "Bodyguards? I'll break them, bones and all.", "私の心臓を撃ち抜いた男": "The man who shot me through the heart", "紫に光る主人公をタップ": "Tap the purple-glowing girl", "血の床の上に敵がいない": "No enemies on blood", "　到達 STAGE ": "  Reached STAGE ", "この手順からやり直し": "Retry this lesson", "アプリ切替・画面オフ": "App switch / screen off", "グ……オオオオォッ！": "Gr... RAAAAGH!", "マス　ベストタイム ": " tiles  Best time ", "怒りは、まだ消えない": "The rage still burns", "手順の選択に戻ります": "Back to lesson select", "攻撃に合わせてガード": "Guard as they attack", "白鷺清掃 社長・白鷺": "Shirasagi, CEO of Shirasagi Cleaning", "紫のSOUL満タン！": "Purple SOUL full!", "自分の記録 TOP5": "Your TOP 5", "血の床は、怨霊の巣だ": "Bloody floors are where the dead dwell", "Enter で次へ": "Enter to continue", "SOULが満タン！": "SOUL full!", "s　BONUS +": "s  BONUS +", "⑤ ジャストガード": "5 Just Guard", "▶ 動画を見て復活": "▶ Watch a video to revive", "　ジャストガード ": "  Just Guard ", "　ノーダメージ ✓": "  No damage ✓", "で血の床の敵を一掃": " to wipe out enemies on blood", "もう一度、復讐を。": "Once more, for revenge.", "タップでタイトルへ": "Tap for title", "タップで怨念解放！": "Tap for Wrath Burst!", "タップで怨霊の手！": "Tap for Hands of the Dead!", "マウス固定 OFF": "Mouse lock OFF", "光る主人公をタップ": "Tap the glowing girl", "広告（テスト表示）": "Ad (test)", "復讐は、終わった。": "My revenge is done.", "復讐を遂げるのだ！": "Take your revenge!", "撃破スコア+25%": "Kill score +25%", "消される前に倒せ！": "Kill them before they erase it!", "清掃班、全員出ろ！": "Cleaning crew, all of you, out!", "若頭・霧島（本気）": "Underboss Kirishima (Unleashed)", "L／Eキーで発動": "Use with L/E", "① 動かす・攻撃": "1 Move & Attack", "③ 囲う（壁際）": "3 Enclose (walls)", "　Esc：終える": "   Esc: Quit", "　次のステージへ": "  Next stage", "『もっと、血を』": "\"More. More blood.\"", "また、殺された。": "Killed again.", "タップでスタート": "Tap to start", "チュートリアル ": "Tutorial ", "バズーカ兵 出現": "Bazooka incoming", "体 引きずり込み": " dragged under", "地下駐車場 B1": "Parking Garage B1", "地下駐車場 B2": "Parking Garage B2", "床の塗り+10%": "Floor paint +10%", "怨念解放 OK!": "Wrath Burst OK!", "掃除中——今だ！": "Cleaning — now!", "攻撃の速さ+8%": "Attack speed +8%", "攻撃範囲+10%": "Attack range +10%", "最初からやり直す": "Start over", "背後を取られた！": "Hit from behind!", "荷物を積んだ台車": "Loaded hand cart", "高圧洗浄機 出現": "Pressure washer incoming", "鬼頭ビル前の通り": "Street outside Kito Tower", "— 訓練場 —": "— Training ground —", "　R：もう一度": "   R: Again", "お前ら、やれ！": "Get her, all of you!", "ゲームスタート": "Start game", "コントローラー": "Controller", "タイトルへ戻る": "Back to title", "チュートリアル": "Tutorial", "ドアからの投擲": "Doorway throwers", "ボスは血に弱い": "Bosses hate blood", "右半分を長押し": "Hold the right half", "囲め！ 潰せ！": "Surround her! Crush her!", "大陰陽師・御影": "Grand Onmyoji Mikage", "強化を1つ選べ": "Choose an upgrade", "怨 念 解 放": "W R A T H  B U R S T", "怨 霊 の 手": "H A N D S  O F  T H E  D E A D", "掃除屋 全滅！": "Cleaners wiped out!", "改装中のフロア": "Floor under renovation", "攻撃力+17%": "Attack +17%", "潔癖の男・白鷺": "Shirasagi the clean freak", "秒　斬った数 ": "s  Cut ", "移動速度+8%": "Move speed +8%", "第 2 形 態": "P H A S E  2", "組長室前の廊下": "Hall before the boss's office", "薬 物 強 化": "D R U G G E D", "離して押し直し": "Release and press again", "食用油の一斗缶": "Can of cooking oil", "1F ロビー": "1F Lobby", "Enter：": "Enter: ", "Esc：戻る": "Esc: Back", "HPを全回復": "Fully restore HP", "⑥ 弾き返し": "6 Reflect", "⑦ 怨念解放": "7 Wrath Burst", "⑧ 怨霊の手": "8 Hands of the Dead", "　TIME ": "  TIME ", "　最大連撃 ": "  Max combo ", "すべての元凶": "The root of it all", "で周りを一掃": " to clear everything around you", "タップで再開": "Tap to resume", "タップで次へ": "Tap to continue", "ダイナマイト": "Dynamite", "ポーズボタン": "Pause button", "事務所フロア": "Office floor", "停止の理由：": "Paused because: ", "囲った！ +": "Enclosed! +", "弾を跳ね返せ": "Knock shots back", "弾丸返し・改": "Bullet Return EX", "復讐、完了。": "Revenge complete.", "怨念 MAX": "WRATH MAX", "怨念の残り火": "Lingering Wrath", "怨霊 MAX": "SPIRITS MAX", "掃除屋 出現": "Cleaner incoming", "搬入口・倉庫": "Loading dock / warehouse", "斬った式神 ": "Shikigami cut ", "柵のない屋上": "Rooftop with no railing", "漂白剤 出現": "Bleach crew incoming", "結果をシェア": "Share result", "臨兵闘者……": "Rin, pyo, to, sha...", "落下する鉄骨": "Falling steel beams", "血の海達成！": "SEA OF BLOOD!", "術が解けた！": "Spell broken!", "途切れぬ怒り": "Unbroken Rage", "開発者モード": "Developer mode", "陰陽師 出現": "Onmyoji incoming", "高圧洗浄 -": "Washed -", " クリア！": " clear!", "L／Eキー": "L/E key", "④ ガード": "4 Guard", "⑨ 掃除屋": "9 Cleaners", "⑩ クリア": "10 Clear", "　HP +": "  HP +", "あと25%": "25% left", "あの夜——": "That night —", "タイトルへ": "Title", "タイヤの山": "Tire stack", "チャンス！": "Opening!", "ボイラー室": "Boiler room", "ボーナス面": "Bonus stage", "制 圧 ！": "S W E P T !", "囲まれた！": "Surrounded!", "屍の生命力": "Corpse Vitality", "強化カード": "Upgrade cards", "弾き返し ": "Reflects ", "戦いの余韻": "Afterglow", "投げ！ -": "Thrown! -", "掃除屋 ×": "Cleaners x", "死者の皮膚": "Dead Skin", "汚い……！": "Filthy...!", "消えた……": "Gone...", "濃い返り血": "Thick Spatter", "画面の回転": "Screen rotation", "異形・鬼頭": "Kito the Abomination", "畳の大広間": "Great tatami hall", "組長・鬼頭": "Boss Kito", "若頭・霧島": "Underboss Kirishima", "血に弱る！": "Weak in blood!", "血の試練場": "Blood trial", "雨の路地裏": "Rainy back alley", "／2枚目）": "/2)", "② 塗る": "2 Paint", "③ 囲う": "3 Enclose", "　制圧 ": "  Swept ", "もう一度": "Again", "ガキン！": "CLANG!", "キー操作": "Keyboard", "タップ！": "Tap!", "ドラッグ": "Drag", "ドラム缶": "Oil drum", "ナイス！": "Nice!", "リネン室": "Linen room", "仕掛け屋": "Trapsmith", "伸びる爪": "Long Claws", "体当たり": "Shield bash", "受け流し": "Deflect", "吸血の爪": "Vampire Claws", "失敗……": "Failed...", "守りの糧": "Guard Feast", "屋上庭園": "Rooftop garden", "式神斬り": "Shikigami Slash", "弾き返し": "Reflect", "弾丸返し": "Bullet Return", "怨念の滴": "Wrath Drop", "怨念の種": "Wrath Seed", "怨念増幅": "Wrath Amp", "怨念拡散": "Wrath Spread", "怨念解放": "Wrath Burst", "怨霊の手": "Hands of the Dead", "拡散反射": "Split Reflect", "撥ねた！": "Rammed!", "次へ ▶": "Next ▶", "次へ進む": "Next", "死体爆弾": "Corpse Bomb", "死者の脚": "Dead Legs", "盾破壊！": "Shield broken!", "組長の間": "The boss's chamber", "血の補給": "Blood Refill", "証拠隠滅": "Evidence wipe", "鉄の構え": "Iron Stance", "鉄骨落下": "FALLING BEAM", "閉じた！": "Closed!", "高圧洗浄": "Washer", " ほか": " etc.", " 獲得": " acquired", "L／E": "L/E", "あなた": "YOU", "ガード": "Guard", "ゴホッ": "*cough*", "シェア": "Share", "ツルッ": "Slip!", "仕掛け": "Gimmick", "倍返し": "Payback", "再挑戦": "Retry", "囲える": "CLOSE", "復 活": "R E V I V E", "所持：": "Owned: ", "掃除屋": "Cleaner", "掴み！": "GRAB!", "撃 破": "D E F E A T E D", "撃破 ": "Kills ", "撃退！": "Repelled!", "次は ": "Next: ", "武器庫": "Armory", "残り ": "Left ", "殴れ！": "Hit it!", "消火器": "Extinguisher", "漂白剤": "Bleach", "火炎瓶": "Molotov", "無敵：": "God mode: ", "獲 得": "G E T", "着火！": "Ignited!", "空振り": "Whiff", "終 了": "O V E R", "血の宴": "Blood Feast", "血の沼": "Blood Bog", "衝撃波": "Shockwave", "見切り": "Insight", "訓練場": "Training ground", "転落！": "Fell!", "返し技": "Counter", "速い爪": "Quick Claws", "遊び方": "How to play", "閉じる": "Close", "鬼殺し": "Oni Slayer", "あと": "", "ボス": "Boss", "マス": " tiles", "中庭": "Courtyard", "剛腕": "Brute Force", "厨房": "Kitchen", "回目": "th", "囲う": "Enclose", "執念": "Obsession", "塗る": "Paint", "屋上": "Rooftop", "怪力": "Mighty", "戻る": "Back", "攻撃": "Attack", "次へ": "Next", "漂白": "Bleached", "無敵": "God mode", "狙撃": "SNIPE", "移動": "Move", "練習": "Practice", "背水": "Last Stand", "試練": "Trial", "賭場": "Gambling den", "道場": "Dojo", "回": "x", "枚": "", "ゲームに戻る": "Back to game", "反撃！": "Counter!", "盾持ちの体当たりの直前にガード！盾が壊れ、次の一撃がクリティカル": "Guard right before the shield bash! The shield breaks and your next hit crits", "盾持ちは正面の攻撃を盾で止め、殴り続けると盾で反撃してくる": "Shield guards stop frontal attacks, and bash back if you keep hitting", "その体当たりをジャストガードすれば盾が壊れる（ナイフ使いの連撃も崩せる）": "Just Guard that bash to break the shield (it also breaks a knifer's combo)", "盾持ち：殴り続けると盾で反撃。体当たりをジャストガードで盾が壊れる": "Shield: bashes back if you keep hitting. Just Guard the bash to break it", "屋上の左右は床がない。縁の近くで倒すか吹き飛ばすと、敵は下の通りへ転落する": "No floor past the left and right edges. Kill or knock enemies near the edge and they fall to the street below", "……使えぬ器だったな。": "...A useless vessel after all.", "その力、返してもらおう——": "I'll be taking that power back —", "……ハラ……ガ……ヘッタ……": "...SO... HUN... GRY...", "な……放せ、化け物め……！": "Wh... let go, you monster...!", "異形と化した鬼頭は、御影を喰らい、塵となって崩れ落ちた。": "Kito, now a monster, devoured Mikage and crumbled into dust.", "鬼頭組も、それを操っていた男も、もういない。": "The Kito clan and the man behind it are gone.", "……終わった。": "...It's over.", "私の復讐は、終わった……": "My revenge... is over...", "……最後に、もう一度だけ。": "...Just once more. One last time.", "夜が明ける。ビルには、もう誰もいない。": "Dawn breaks. No one is left in the building.", "血の海の底で、少女は静かに眠っている。": "At the bottom of the sea of blood, the girl sleeps quietly.", "——もう、あの声は聞こえない。": "— I can't hear the voice anymore."};
 const EN_KEYS=Object.keys(EN_DICT).sort((a,b)=>b.length-a.length),TRC=new Map(),JPC=/[\u3000-\u30ff\u4e00-\u9fff\uff01-\uff60]/;
 function tr(s){
   if(LANG!=='en'||typeof s!=='string'||!JPC.test(s))return s;let v=TRC.get(s);if(v!=null)return v;
@@ -3101,6 +3219,7 @@ function updatePlayer(dt){
   else if(!P.dead&&Math.random()<dt*1.2)SFX.crackle(); // 満タン中はときどきパチッと鳴る
   P.trail=P.trail.filter(t=>(t.t-=dt)>0);
   if(P.dead)return;
+  if(G.phase==='sink')return; // 最期の場面では操作できない
   P.inv-=dt;P.blinkT-=dt;P.comboWin-=dt;P.recover-=dt;P.atkBuf-=dt;
   let ix=inp.kx+inp.tx+inp.px,iy=inp.ky+inp.ty+inp.py;const il=Math.hypot(ix,iy);if(il>1){ix/=il;iy/=il}
   if(inp.ragePress){inp.ragePress=false;tryRage()}
@@ -3150,6 +3269,7 @@ function wallCheck(e,sp){
   let hit=false,nx=0,ny=0;
   if(e.x<AX0+e.r){e.x=AX0+e.r;hit=true;nx=1}else if(e.x>AX1-e.r){e.x=AX1-e.r;hit=true;nx=-1}
   if(e.y<AY0+e.r){e.y=AY0+e.r;hit=true;ny=1}else if(e.y>AY1-e.r){e.y=AY1-e.r;hit=true;ny=-1}
+  if(!hit&&VOIDN&&!e.boss&&sp>200&&e.state!=='enter'&&(voidAt(e.x,e.y)||voidAt(e.x+Math.sign(e.vx||0)*e.r*1.2,e.y))){fallOff(e,Math.atan2(e.vy,e.vx),true);return true}
   if(!hit){
     // ふさがったマス（柱など）：壁と同じく跳ね返り、強く飛ばされていれば叩きつけ（転落はしない）
     const n=blockPush(e);if(!n)return false;bounceOff(e,n,.35);
@@ -3612,6 +3732,7 @@ function update(rdt){
       c.vx*=.5;c.vy*=.5;SFX.wall();break}
     if(sp>220&&!c.noCrash)for(const o of [...E]){if(dist(e.x,e.y,o.x,o.y)<e.r+o.r+6){c.noCrash=true;G.score+=Math.round(50*G.mult);popText(o.x,o.y-26,'CRASH!','#ffd54a',13,.6);hitEnemy(o,sp>450?3.8:2.5,Math.atan2(o.y-e.y,o.x-e.x),sp*.85,{fin:sp>550,crash:true});c.vx*=.6;c.vy*=.6;break}}
     // 壁に当たる前の進む向き（血しぶきは、跳ね返った後の向きではなく、ぶつかった壁の側へ飛ばす）
+    if(VOIDN&&sp>30&&voidAt(e.x+Math.sign(c.vx)*e.r*1.2,e.y)){c.t=99;fallOff(e,inA0(c),false);continue}
     let wall=false;const inA=Math.atan2(c.vy,c.vx);
     // 壁・障害物に叩きつけられた死体は、ほとんど跳ね返らずにその場に崩れ落ちる（跳ね返って戻る途中の床を塗らないように、以後は血の筋で塗らない）
     if(e.x<AX0+e.r){e.x=AX0+e.r;c.vx=Math.abs(c.vx)*.12;wall=true}else if(e.x>AX1-e.r){e.x=AX1-e.r;c.vx=-Math.abs(c.vx)*.12;wall=true}
@@ -3627,6 +3748,7 @@ function update(rdt){
     if(sp<40&&!c.landed){c.landed=true;splat(e.x,e.y,e.r,c.slumped?inA+Math.PI:Math.atan2(c.vy,c.vx),c.slumped)} // 壁際で崩れた死体の血だまりは絵だけ（塗りは激突の血しぶきで済んでいる）
   }
   CORPSES=CORPSES.filter(c=>c.t<1.2);
+  for(const fl of FALLERS)fl.t+=dt;FALLERS=FALLERS.filter(fl=>fl.t<1.7);
   // bullets
   for(const b of B){
     b.x+=b.vx*dt;b.y+=b.vy*dt;b.life-=dt;
@@ -3742,35 +3864,41 @@ function girlPose(face){
 // SOUL満タン中の金色のオーラ（炎のように揺らめく光＋立ちのぼる光の粒＋ときどき走る稲妻）
 // ガードの盾：厚みのある弧の刃。両端は尖らせ、中は区切り線でパネル状に。光の筋が左右に走り、防いだ瞬間は白く光って波紋が出る
 // fx：防いだ直後の残り時間（P.guardFx）、k：構えた瞬間の広がり（0→1）
-function drawShield(x,y,f,A,fx,k){
-  // エネルギーの盾：薄い光の膜に六角形の格子が浮かび、外縁だけが鋭く光る。両端は切り欠いた形で締め、防いだ瞬間は白く弾ける
-  const hit=fx>0,h=hit?fx/.25:0,e=1-Math.pow(1-k,3),aA=A*(.55+.45*e);
-  const r0=24,r1=r0+6+6*e,rm=(r0+r1)/2,a0=f-aA,a1=f+aA,al=hit?1:.8+Math.sin(G.time*9)*.1;
-  const band=()=>{g.beginPath();g.arc(x,y,r1,a0,a1);g.lineTo(x+Math.cos(a1+.09)*rm,y+Math.sin(a1+.09)*rm);g.lineTo(x+Math.cos(a1)*r0,y+Math.sin(a1)*r0);g.arc(x,y,r0,a1,a0,true);g.lineTo(x+Math.cos(a0-.09)*rm,y+Math.sin(a0-.09)*rm);g.closePath()};
+// エネルギーの盾：主人公の前の床から立ち上がる、湾曲した半透明の光の壁。蜂の巣の格子、上端と両端の鋭い光、下から上へ走る光の帯。
+// 防いだ瞬間は全体が白く弾けて外へ波紋。part='back' は主人公より奥の部分（主人公の前に描く）、'front' は手前の部分（主人公の後に描く）
+// 主人公の足元の案内（ガードの押し直し・怨念解放OK）：人物や障害物に隠れないよう、全部を描いた後に重ねる
+function drawPlayerLabels(){const rdy=G.soul>=100;
+        if(P.guardLock&&(inp.guardKey||inp.guardMouse||inp.guardTouch!=null||inp.padGuard))txt('離して押し直し',P.x,P.y+56,12,'#7ff3ff','center',JP,['#000',4],false,900);
+        if(rdy&&!(G.ready>0)){const pl=.5+Math.sin(G.time*8)*.5,p2=G.soul>=SOUL_MAX,over=E.some(e=>Math.abs(e.x-P.x)<55&&e.y<P.y&&P.y-e.y<130);g.globalAlpha=(.75+pl*.25)*(over?.3:1);txt(p2?(touchMode?'タップで怨霊の手！':'怨霊の手 OK!（L／E）'):(touchMode?'タップで怨念解放！':'怨念解放 OK!'),P.x,P.y+(P.guardLock&&P.guard?74:58)+pl*2,15,p2?'#e0c0ff':'#ffe27a','center',JP,[p2?'#2a0040':'#3a1a00',4],false,900);g.globalAlpha=1}
+}
+function drawShield(x,y,f,A,fx,k,part){
+  const hit=fx>0,h=hit?fx/.25:0,e=1-Math.pow(1-k,3),aA=A*(.6+.4*e),a0=f-aA,a1=f+aA,al=hit?1:.85+Math.sin(G.time*9)*.08;
+  const R=34,Hs=64*e,by=y+10,N=16;
+  const Pt=(a,v)=>[x+Math.cos(a)*R*(1+.05*v),by+Math.sin(a)*R*.55-v*Hs];
+  const seg=i=>a0+(a1-a0)*i/N,isFront=a=>Math.sin(a)>0;
   g.save();g.globalCompositeOperation='lighter';g.lineCap='round';g.lineJoin='round';
-  // 膜：内側は透けて、外縁へ向かって明るく
-  const gr=g.createRadialGradient(x,y,r0-2,x,y,r1+1);
-  gr.addColorStop(0,`rgba(20,90,220,${.06*al})`);gr.addColorStop(.55,`rgba(50,170,255,${.22*al})`);gr.addColorStop(.9,`rgba(140,235,255,${.42*al})`);gr.addColorStop(1,`rgba(220,255,255,${.55*al})`);
-  g.fillStyle=gr;band();g.fill();
-  // 六角形の格子（膜の中に浮かぶ）
-  g.save();band();g.clip();g.strokeStyle=`rgba(170,240,255,${.28*al})`;g.lineWidth=.8;g.beginPath();
-  const hx=5.2;for(let ri=0;ri<3;ri++){const rr_=r0+1+ri*hx*.87,n=Math.ceil((a1-a0)*rr_/(hx*1.5))+1;
-    for(let q=0;q<n;q++){const a=a0+(q+(ri%2)*.5)*(hx*1.5)/rr_,cx=x+Math.cos(a)*rr_,cy=y+Math.sin(a)*rr_;
-      for(let v=0;v<6;v++){const t=v/6*TAU+a,px=cx+Math.cos(t)*hx*.5,py=cy+Math.sin(t)*hx*.5;v?g.lineTo(px,py):g.moveTo(px,py)}g.closePath()}}
-  g.stroke();g.restore();
-  // 外縁の発光：太くぼかした光の上に、細く鋭い白い線
-  g.strokeStyle=`rgba(80,200,255,${.35*al})`;g.lineWidth=6;g.beginPath();g.arc(x,y,r1,a0+.03,a1-.03);g.stroke();
-  g.strokeStyle=hit?'#ffffff':`rgba(235,255,255,${.95*al})`;g.lineWidth=hit?2.5+2*h:1.4;g.beginPath();g.arc(x,y,r1,a0,a1);g.stroke();
-  // 内縁は細く淡く
-  g.strokeStyle=`rgba(120,220,255,${.45*al})`;g.lineWidth=.9;g.beginPath();g.arc(x,y,r0,a0+.05,a1-.05);g.stroke();
-  // 両端の切り欠きの光
-  for(const [a,d] of [[a0,-1],[a1,1]]){g.strokeStyle=`rgba(220,255,255,${.85*al})`;g.lineWidth=1.4;g.beginPath();g.moveTo(x+Math.cos(a)*r1,y+Math.sin(a)*r1);g.lineTo(x+Math.cos(a+d*.09)*rm,y+Math.sin(a+d*.09)*rm);g.lineTo(x+Math.cos(a)*r0,y+Math.sin(a)*r0);g.stroke()}
-  // 外縁を走る光（端から端へ往復）
-  const sw=a0+(a1-a0)*(.5-.5*Math.cos(G.time*3.2));
-  g.strokeStyle=`rgba(255,255,255,${.9*al})`;g.lineWidth=2.6;g.beginPath();g.arc(x,y,r1,Math.max(a0,sw-.12),Math.min(a1,sw+.12));g.stroke();
-  // 防いだ瞬間：全体が白く弾け、外へ波紋
-  if(hit){g.fillStyle=`rgba(255,255,255,${.5*h})`;band();g.fill();
-    const rr=r1+4+(1-h)*26;g.strokeStyle=`rgba(150,245,255,${h})`;g.lineWidth=2+3*h;g.beginPath();g.arc(x,y,rr,a0-.1,a1+.1);g.stroke()}
+  const ln=(p,q,col,w)=>{g.strokeStyle=col;g.lineWidth=w;g.beginPath();g.moveTo(p[0],p[1]);g.lineTo(q[0],q[1]);g.stroke()};
+  const scan=(G.time*.9)%1;
+  for(let i=0;i<N;i++){const b0=seg(i),b1=seg(i+1),m=(b0+b1)/2,fr=isFront(m);if((part==='front')!==fr)continue;
+    const p00=Pt(b0,0),p10=Pt(b1,0),p11=Pt(b1,1),p01=Pt(b0,1),pm0=Pt(m,0),pm1=Pt(m,1);
+    // 膜：下と上の縁ほど明るく、手前の面ほど濃い
+    const gr=g.createLinearGradient(pm0[0],pm0[1],pm1[0],pm1[1]),kk=(fr?1:.6)*al;
+    gr.addColorStop(0,`rgba(60,170,255,${.3*kk})`);gr.addColorStop(.45,`rgba(40,130,240,${.1*kk})`);gr.addColorStop(.9,`rgba(110,220,255,${.3*kk})`);gr.addColorStop(1,`rgba(200,250,255,${.45*kk})`);
+    g.fillStyle=gr;g.beginPath();g.moveTo(p00[0],p00[1]);g.lineTo(p10[0],p10[1]);g.lineTo(p11[0],p11[1]);g.lineTo(p01[0],p01[1]);g.closePath();g.fill();
+    // 蜂の巣の格子：段ごとに上下へ折れる線で六角形の並びに見せる
+    g.strokeStyle=`rgba(170,240,255,${.3*kk})`;g.lineWidth=.8;g.beginPath();
+    for(let r=0;r<5;r++){const v0=r/5,v1=(r+1)/5,va=i%2?v1:v0,vb=i%2?v0:v1,p=Pt(b0,va),q=Pt(b1,vb);g.moveTo(p[0],p[1]);g.lineTo(q[0],q[1]);
+      if(i%2===0){const s0=Pt(b0,v0),s1=Pt(b0,v0+.1);g.moveTo(s0[0],s0[1]);g.lineTo(s1[0],s1[1])}}
+    g.stroke();
+    // 上端（鋭く白い光）と下端（床との接地）、走る光の帯
+    ln(p01,p11,`rgba(80,200,255,${.4*kk})`,5);ln(p01,p11,hit?'#ffffff':`rgba(235,255,255,${.95*kk})`,hit?2.6+2*h:1.5);
+    ln(p00,p10,`rgba(120,220,255,${.5*kk})`,1.2);
+    const sa=Pt(b0,scan),sb=Pt(b1,scan);ln(sa,sb,`rgba(255,255,255,${.55*kk*(1-scan)})`,2);
+    if(hit){g.fillStyle=`rgba(255,255,255,${.45*h})`;g.beginPath();g.moveTo(p00[0],p00[1]);g.lineTo(p10[0],p10[1]);g.lineTo(p11[0],p11[1]);g.lineTo(p01[0],p01[1]);g.closePath();g.fill()}}
+  // 両端の縦の光（その端がこちら側にある時に描く）
+  for(const a of [a0,a1])if((part==='front')===isFront(a)){const p=Pt(a,0),q=Pt(a,1);ln(p,q,`rgba(90,210,255,${.45*al})`,4);ln(p,q,`rgba(230,255,255,${.95*al})`,1.4)}
+  // 防いだ瞬間：中ほどの高さで、外へ広がる光の輪（手前側で描く）
+  if(hit&&part==='front'){const rr=R+6+(1-h)*30;g.strokeStyle=`rgba(150,245,255,${h})`;g.lineWidth=2+3*h;g.beginPath();g.ellipse(x,by-Hs*.5,rr,rr*.55,0,a0-.15,a1+.15);g.stroke()}
   g.restore();
 }
 function drawGoldAura(x,y,pur){
@@ -4226,7 +4354,7 @@ function drawWorld(){
     g.stroke();
     drawCapPreview();
   }
-  drawBlocks();drawPillarWarn();drawRageFx();
+  drawVoid();drawBlocks();drawPillarWarn();drawRageFx();
   // 代紋：床に描かれた鬼頭組の紋（ただの飾り。光らせず、血で塗られると暗く沈む）
   for(const c of G.crests){
     const t=tileRect(c.i),x=t.x+t.w/2,y=t.y+t.h/2,col=DONE[c.i]?'rgba(70,0,12,.55)':'rgba(200,165,90,.32)';
@@ -4243,24 +4371,25 @@ function drawWorld(){
   // entities sorted by y
   const list=E.concat(TIRES);list.push(null);
   // 高さのある障害物も、マスの下端を足元として一緒に並べる
-  if(nBlock&&!blockFlat())for(let i=0;i<GN;i++)if(BLOCK[i]){const t=tileRect(i);list.push({blk:i,y:t.y+t.h-.5})}
+  if(nBlock&&!blockFlat())for(let i=0;i<GN;i++)if(BLOCK[i]&&!VOID[i]){const t=tileRect(i);list.push({blk:i,y:t.y+t.h-.5})}
   list.sort((a,b)=>(a?a.y:P.y)-(b?b.y:P.y));
   for(const e of list){
     if(e&&e.blk!=null){drawBlockTile(e.blk);continue}
     if(e&&e.tire){drawTire(e.x,e.y,e.z,e.hd,e.lean,e.rot,e.sd,e.ph==='flat'?clamp((2.4-e.ft)/.6,0,1):1);continue}
     if(e===null){
       glow(P.x,P.y,46,'#48f1d2',.12);
+      if(P.guard&&!P.dead)drawShield(P.x,P.y,P.face,guardArc(),P.guardFx,P.gT||0,'back');
       if(P.dead){g.save();g.globalAlpha=.85;drawGirl(P.x,P.y,P.face,.85);g.restore()}
       else{
         const rdy=G.soul>=100;
-        if(rdy)drawGoldAura(P.x,P.y,G.soul>=SOUL_MAX);
-        const blink=P.blinkT>0&&Math.floor(G.time*30)%2===0;drawGirl(P.x,P.y,P.face,blink?.35:1);
-        if(P.guardLock&&(inp.guardKey||inp.guardMouse||inp.guardTouch!=null||inp.padGuard))txt('離して押し直し',P.x,P.y-56,12,'#7ff3ff','center',JP,['#000',4],false,900);
-        if(rdy&&!(G.ready>0)){const pl=.5+Math.sin(G.time*8)*.5,p2=G.soul>=SOUL_MAX;g.globalAlpha=.75+pl*.25;txt(p2?(touchMode?'タップで怨霊の手！':'怨霊の手 OK!（L／E）'):(touchMode?'タップで怨念解放！':'怨念解放 OK!'),P.x,P.y-70-pl*3,15,p2?'#e0c0ff':'#ffe27a','center',JP,[p2?'#2a0040':'#3a1a00',4],false,900);g.globalAlpha=1}
+        if(rdy&&G.phase!=='sink')drawGoldAura(P.x,P.y,G.soul>=SOUL_MAX);
+        const blink=P.blinkT>0&&Math.floor(G.time*30)%2===0;
+        if(G.sink>0){g.save();g.beginPath();g.rect(AX0-40,AY0-80,AX1-AX0+80,P.y+14-(AY0-80));g.clip();drawGirl(P.x,P.y+G.sink*66,P.face,1-G.sink*.4);g.restore()}
+        else drawGirl(P.x,P.y,P.face,blink?.35:1);
       }
       if(P.guard&&!P.dead){
         glow(P.x+Math.cos(P.face)*24,P.y+Math.sin(P.face)*24,46,'#40d8ff',P.guardFx>0?.5:.22);
-        drawShield(P.x,P.y,P.face,guardArc(),P.guardFx,P.gT||0);
+        drawShield(P.x,P.y,P.face,guardArc(),P.guardFx,P.gT||0,'front');
       }
     }else{
       if(e.boss)glow(e.x,e.y,e.r*2.6,e.type==='kito'?'#8a3cff':e.type==='shirasagi'?'#40c8ff':'#ff3355',.18);
@@ -4272,7 +4401,7 @@ function drawWorld(){
       if(!e.boss&&e.hp<e.max&&e.max>2){const w=e.r*2;g.fillStyle='rgba(0,0,0,.6)';g.fillRect(e.x-w/2,figTop(e)-8,w,4);g.fillStyle='#ff4060';g.fillRect(e.x-w/2,figTop(e)-8,w*clamp(e.hp/e.max,0,1),4)}
     }
   }
-  if(!P.dead&&state!=='title')drawPlayerGauges();
+  if(!P.dead&&state!=='title'&&G.phase!=='sink'&&G.phase!=='devour'){drawPlayerGauges();drawPlayerLabels()}
   drawHandArms(); // 怨霊の腕は人物の手前に重ねる
   // bullets
   for(const b of B){
@@ -4581,7 +4710,7 @@ function drawTitle(){
     button(SCR.tstart,'ゲームスタート','rgba(160,20,45,.92)');
     // 長押し中は、開発者メニューが開くまでの残りを輪で見せる（0.3秒を過ぎてから）
     if(devHold){const k=(performance.now()-devHold.t)/900;if(k>.33){g.strokeStyle='#ffd54a';g.lineWidth=3;g.beginPath();g.arc(SCR.tstart.x+SCR.tstart.w/2-20,SCR.tstart.y,12,-Math.PI/2,-Math.PI/2+TAU*Math.min(1,k));g.stroke()}}
-    if(first)glow(SCR.ttut.x,SCR.ttut.y,150,'#40c8ff',.18+Math.sin(stateT*4)*.08);
+    if(first){glow(SCR.ttut.x,SCR.ttut.y,150,'#40c8ff',(.18+Math.sin(stateT*4)*.08)*la);g.globalAlpha=la} // glow は透明度を1に戻すので、ロゴと同じ透明度に戻す
     button(SCR.ttut,first?'チュートリアル（初めての方）':'チュートリアル',first?'rgba(20,80,110,.95)':'rgba(30,32,44,.92)');
     // ENDLESS：全20ステージクリアで開放（それまでは鍵付きで見せて、目標にする）
     if(endlessOpen())button(SCR.tendless,'ENDLESS','rgba(160,20,45,.95)',EN);
@@ -4639,9 +4768,9 @@ function drawOver(){
 /* エンディング（約26秒・タップで場面を送れる）：
    ①血の海に沈んだ鬼頭組（雨の音）→ ②夜明けの屋上に立つ主人公 → ③終わらない声 → ④DEAD GIRL / THE END → 結果画面 */
 const EPI=[
-  {t0:0,lines:['異形と化した鬼頭は、塵となって崩れ落ちた。','御影と名乗った陰陽師は、いつの間にか消えていた。'],bg:'rain'},
-  {t0:7,lines:['屋上に出ると、夜が明けようとしていた。','冷たい風が、乾いた血の匂いを運んでいく。'],bg:'dawn'},
-  {t0:14,lines:['復讐は、終わった。','——なのに、あの声はまだ止まない。','『もっと、血を』'],bg:'art'},
+  {t0:0,lines:['異形と化した鬼頭は、御影を喰らい、塵となって崩れ落ちた。','鬼頭組も、それを操っていた男も、もういない。'],bg:'rain'},
+  {t0:7,lines:['夜が明ける。ビルには、もう誰もいない。','血の海の底で、少女は静かに眠っている。'],bg:'dawn'},
+  {t0:14,lines:['私の復讐は、終わった……','——もう、あの声は聞こえない。'],bg:'art'},
   {t0:21,lines:[],bg:'end'}];
 const EPI_END=27;
 function drawEpilogue(){
@@ -4651,7 +4780,7 @@ function drawEpilogue(){
   if(sc.bg==='rain'){
     // 血に染まった床の上に立つ主人公（後ろ姿）と、降りしきる雨
     const gr=g.createRadialGradient(W/2,560,20,W/2,560,300);gr.addColorStop(0,'rgba(120,0,16,.75)');gr.addColorStop(1,'rgba(30,0,4,0)');g.fillStyle=gr;g.fillRect(0,300,W,500);
-    drawFrame('walk','up',0,W/2,600,fade,false);
+    for(let k=0;k<3;k++){const q=(t*.4+k/3)%1;g.strokeStyle=`rgba(255,120,130,${.35*(1-q)*fade})`;g.lineWidth=1.5;g.beginPath();g.ellipse(W/2,600,20+q*120,(20+q*120)*.3,0,0,TAU);g.stroke()} // 血の海に広がる波紋（主人公はもういない）
     g.strokeStyle='rgba(170,190,220,.35)';g.lineWidth=1;g.beginPath();for(let i=0;i<70;i++){const x=(i*97+t*60)%W,y=(i*131+t*900)%H;g.moveTo(x,y);g.lineTo(x-3,y+16)}g.stroke();
   }else if(sc.bg==='dawn'){
     // 夜明けの空、ビル街の影、屋上の縁に立つ主人公
@@ -4659,7 +4788,6 @@ function drawEpilogue(){
     glow(W/2,560,140+lt*6,'#ffb070',.35);
     g.fillStyle='#120e14';for(let i=0;i<14;i++){const bw=24+(i*37)%30,bh=60+(i*53)%110,bx=i*34-10;g.fillRect(bx,568-bh,bw,bh+4);g.fillStyle='rgba(255,210,140,.5)';for(let k=0;k<4;k++)if((i+k)%3===0)g.fillRect(bx+5+k*5,568-bh+12+k*9,2,3);g.fillStyle='#120e14'}
     g.fillStyle='#050406';g.fillRect(0,640,W,160);
-    drawFrame('walk','up',0,W/2,650,fade,false);
   }else if(sc.bg==='art'){
     if(titleArt()){const ta=titleArt(),h=560,w=h*ta.width/ta.height;g.drawImage(ta,W/2-w/2,190+Math.sin(t)*3,w,h)}
     const gr=g.createLinearGradient(0,0,0,H);gr.addColorStop(0,'rgba(0,0,0,.92)');gr.addColorStop(.45,'rgba(0,0,0,.5)');gr.addColorStop(1,'rgba(0,0,0,.95)');g.fillStyle=gr;g.fillRect(0,0,W,H);
@@ -4680,7 +4808,7 @@ function drawClear(){
   const a=clamp(stateT/1,0,1);dim(.85*a);g.globalAlpha=a;
   txt('復讐、完了。',W/2,190,40,'#fff','center',JP,null,false,900);
   txt('鬼頭組は、一夜にして壊滅した。',W/2,232,14,'#c9cfdc','center',JP,null,false,700);
-  txt('……それでも、この渇きは消えない。',W/2,256,14,'#ff4d6d','center',JP,null,false,700);
+  txt('——もう、あの声は聞こえない。',W/2,256,14,'#ff4d6d','center',JP,null,false,700);
   drawStats(320);
   if(stateT>1.2){button(SCR.cshare,'結果をシェア','rgba(20,80,110,.95)');button(SCR.endless,'ENDLESS MODE ▶','rgba(160,20,45,.92)',EN);button(SCR.title,'タイトルへ','rgba(30,32,44,.92)')}
   g.globalAlpha=1;
@@ -4698,7 +4826,7 @@ function draw(){
   const sh=G.shake;if(sh>.3)g.translate(rand(-sh,sh),rand(-sh,sh));
   g.translate(0,VY0);g.scale(VS,VS);g.translate(-AX0,-AY0);
   if(G.zoom>.002){const z=G.zc||P;g.translate(z.x,z.y);g.scale(1+G.zoom,1+G.zoom);g.translate(-z.x,-z.y)}
-  drawWorld();drawSmokes();drawTutWorld();drawAmbient();drawRebirth();drawReady();
+  drawWorld();drawSmokes();drawTutWorld();drawAmbient();drawRebirth();drawDevour();drawSink();drawReady();
   g.restore();
   drawOverlays();
   drawHUD();drawTutPanel();
