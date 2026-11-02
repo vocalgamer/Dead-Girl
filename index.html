@@ -27,10 +27,12 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v1.06 2026-11-02';
+const VERSION='v1.09 2026-11-02';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
-const GUARD_HEAL=.6; // 正面ガード成功時の回復率（受けるはずだったダメージ×この値。v0.98で.4→.6）
+const BIG_HEAL_PER=.15,BIG_HEAL_CAP=2; // 怨念解放・怨霊の手の回復：巻き込んだ敵1体につき基本量の15%を上乗せ（最大で基本量の2倍）
+const bigHeal=(base,n)=>base*Math.min(BIG_HEAL_CAP,1+BIG_HEAL_PER*n);
+const GUARD_HEAL=1; // 正面ガード成功時：敵の攻撃力（受けるはずだったダメージ）と同じだけ、ライフもSOULも増える（v1.08で.6→1、SOULも同じ数値に）
 const GUARD_ARC=1.2; // 正面ガードの有効角（片側・ラジアン。1.2≒69°）
 const W=450,H=800,AX0=18,AX1=432,AY0=64,AY1=800,TAU=Math.PI*2;
 // 床の表示：遊びの座標（AX0〜AX1, AY0〜AY1）を、画面の横幅いっぱいに拡大して描く。床は9×16マスで、縦もちょうど画面いっぱい（VY0=0）。上部の表示は床の上に重ねる
@@ -392,7 +394,35 @@ const SFX={
   alarm2(){tone(988,988,.09,'square',.11);tone(740,740,.11,'square',.1,now(.13))},
   hurt(){tone(260,70,.3,'sawtooth',.3);noise(.15,.35,'lowpass',1000)},
   just(){tone(1300,2700,.25,'sine',.28);tone(1950,3900,.35,'sine',.14,now(.06))},
-  rage(){tone(55,38,1.3,'sawtooth',.55);noise(1.1,.7,'lowpass',3200,90);tone(110,52,1.1,'square',.18);tone(880,220,.6,'sawtooth',.06)},
+  rage(){tone(55,38,1.3,'sawtooth',.55);noise(1.1,.7,'lowpass',3200,90);tone(110,52,1.1,'square',.18);tone(880,220,.6,'sawtooth',.06);SFX.warCry()},
+  // 女の雄たけび「うぉおぉおおぉっ！」：喉を絞った声（のこぎり波を歪ませる）を「う→お」の響き（3つの共鳴）に通し、
+  // 低いうなり（声のがなり）と息の音を混ぜる。少しずらした声を左右に2つ重ね、長めの残響で荘厳に。最後の「っ」で声をぶつりと切る
+  warCry(){if(!AC||!can('cry',800))return;const t0=now(),D=1.38;
+    // 残響：間隔の違う4つのこだまを、こもらせながら重ねる（この声専用）
+    const out=AC.createGain();out.gain.value=1;out.connect(sfxG);
+    [[.07,.34],[.13,.27],[.21,.2],[.33,.14]].forEach(([dt,gv])=>{const d=AC.createDelay(1),lp=AC.createBiquadFilter(),g=AC.createGain();d.delayTime.value=dt;lp.type='lowpass';lp.frequency.value=2200;g.gain.value=gv;out.connect(d);d.connect(lp);lp.connect(g);g.connect(sfxG)});
+    const sh=new Float32Array(512);for(let i=0;i<512;i++){const x=i/255.5-1;sh[i]=Math.tanh(x*3.2)}
+    // 音程の流れ：「う」で低く入って「ぉ」で駆け上がり、「おぉおお」で波打ちながら少しずつ上がる
+    const F=[[0,.72],[.1,.95],[.3,1],[.5,.97],[.68,1.05],[.86,1.01],[1.04,1.09],[1.22,1.06],[D,1.13]];
+    const voice=(lag,det,pan,vol)=>{const t=t0+lag,f0=380*det,o=AC.createOscillator(),ws=AC.createWaveShaper(),pre=AC.createGain(),gn=AC.createGain(),am=AC.createGain(),
+        vb=AC.createOscillator(),vbg=AC.createGain(),gr=AC.createOscillator(),grg=AC.createGain();
+      o.type='sawtooth';o.frequency.setValueAtTime(f0*F[0][1],t);F.slice(1).forEach(([k,m])=>o.frequency.linearRampToValueAtTime(f0*m,t+k));
+      // ビブラート：後半ほど深く（張り上げた声の震え）
+      vb.frequency.value=5.6+Math.random()*.6;vbg.gain.setValueAtTime(0,t);vbg.gain.linearRampToValueAtTime(f0*.03,t+D);vb.connect(vbg);vbg.connect(o.frequency);
+      // がなり：声の大きさを速く揺らして、喉のざらつきを出す
+      gr.frequency.value=62+Math.random()*10;grg.gain.value=.38;am.gain.value=.62;gr.connect(grg);grg.connect(am.gain);
+      pre.gain.value=2.2;ws.curve=sh;o.connect(pre);pre.connect(ws);ws.connect(am);
+      // 母音の響き：「う」（F1 320／F2 780）から「お」（F1 560／F2 920）へ。F3で声の芯、F4で張りを足す
+      [[320,560,6,1],[780,920,7,.75],[2700,2700,9,.32],[3500,3500,10,.16]].forEach(([a,b,q,g])=>{const bp=AC.createBiquadFilter(),bg=AC.createGain();bp.type='bandpass';bp.Q.value=q;
+        bp.frequency.setValueAtTime(a,t);bp.frequency.linearRampToValueAtTime(b,t+.16);bg.gain.value=g;am.connect(bp);bp.connect(bg);bg.connect(gn)});
+      // 大きさ：一気に立ち上がり、一度わずかに引いてから最後まで押し上げる。「っ」で急に止める
+      gn.gain.setValueAtTime(.0001,t);gn.gain.exponentialRampToValueAtTime(vol,t+.09);gn.gain.linearRampToValueAtTime(vol*.82,t+.4);gn.gain.linearRampToValueAtTime(vol*1.15,t+D-.06);
+      gn.gain.linearRampToValueAtTime(.0001,t+D);
+      const p=AC.createStereoPanner?AC.createStereoPanner():null;if(p){p.pan.value=pan;gn.connect(p);p.connect(out)}else gn.connect(out);
+      [o,vb,gr].forEach(n=>{n.start(t);n.stop(t+D+.05)})};
+    voice(0,1,0,.34);voice(.018,1.007,-.4,.15);voice(.03,.994,.4,.15);
+    // 息の音：声と同じ「お」の響きのかすれ
+    noise(D,.07,'bandpass',1100,1500,t0,0,2);noise(.12,.1,'bandpass',900,700,t0+D-.1,0,3)},
   heal(){tone(520,1040,.22,'sine',.22);tone(780,1560,.28,'sine',.14,now(.07))},
   // WAVEクリア（約4.6秒）：衝撃音のあと、Em→C→D→E（最後は明るい長調）と和音が上がっていく。
   // 和音の切り替わりごとにティンパニ、上に鐘のメロディ（シ→ド→レ→ミ）が乗る
@@ -612,7 +642,7 @@ function resetRun(){
     hitstop:0,slowT:0,slowScale:1,ts:1,shake:0,zoom:0,aimer:null,shotGap:0,crests:[],cleanT:8,seenSub:{},soulReady:false,waveTime:0,flash:0,flashCol:'255,40,70',time:0,
     toSpawn:0,spawnT:0,breakT:0,addsT:0,banner:null,callout:null,boss:null,bossInfo:null,bossPending:0,isBossWave:false,
     phase:'fight',tutMode:false,endless:false,deathT:0,endT:0,newBest:false,tut:null,propSpot:0,rush:0,rushT:99,res:null,gim:null,intro:[],cards:null,cardSel:0,beamT:0,cause:null,
-    runSeed:1,revived:false,bonus:null,bonusFor:0,pickBonus:false,metaPaid:0,metaGain:0,pickAdUsed:false,lastPick:null,firstBlood:false,soulReady2:false});
+    runSeed:1,revived:false,bonus:null,bonusFor:0,pickBonus:false,pickAdUsed:false,lastPick:null,soulReady2:false});
   Object.assign(P,{x:W/2,y:540,vx:0,vy:0,kx:0,ky:0,lx:0,ly:0,lt:0,r:14,hp:100,hpLag:100,maxhp:100,face:-Math.PI/2,
     atk:null,stage:0,comboWin:0,recover:0,atkBuf:0,atkA:null,inv:0,blinkT:0,
     crit:false,walk:0,trail:[],ghostT:0,dead:false,guard:false,guardLock:false,guardFx:0});
@@ -620,7 +650,7 @@ function resetRun(){
   PROPS=[];SMOKES=[];WARNS=[];SHOCKS=[];SPILLS=[];for(const k in UP)delete UP[k];
   makeLayout(null);washFloor();setTheme(1);
   // 怨念の祭壇で買った永続強化（チュートリアルでは使わない）
-  P.maxhp=P.hp=P.hpLag=100+10*mlv('hp');G.soul=20*mlv('soul');
+  P.maxhp=P.hp=P.hpLag=100;G.soul=0;
 }
 // tut=true でチュートリアル（1ステージで一通りの操作を練習し、終わったらタイトルへ）
 function newGame(tut){resetRun();G.runId=Date.now();G.rankIn=-1;G.tutMode=!!tut;if(tut){P.maxhp=P.hp=P.hpLag=100;G.soul=0}G.runSeed=1+Math.floor(Math.random()*1e6);state='play';stateT=0;SFX.ui();startWave(1)}
@@ -848,7 +878,7 @@ function updateWave(dt){
       if(G.spawnT<=0&&alive<cap&&!G.tutMode){let n=Math.random()<.4?(G.wave>=6&&Math.random()<.5?3:2):1;if(waveEase()<1)n=Math.max(1,Math.min(n,Math.ceil(cap-alive)));for(let i=0;i<n;i++)queueSpawn(pickType(G.wave));G.spawnT=Math.max(.45,1-G.wave*.05)*rand(.7,1.2)*(waveEase()<1?1.15:1)}
     }
   }else if(G.phase==='break'){G.breakT-=dt;if(G.breakT<=0)openPick()}
-  else if(G.phase==='ending'){G.endT-=dt;if(G.endT<=0){state='clear';stateT=0;saveBest();grantMeta();lsSet('dg_cleared','1')}}
+  else if(G.phase==='ending'){G.endT-=dt;if(G.endT<=0){state='clear';stateT=0;saveBest();lsSet('dg_cleared','1')}}
 }
 const SEA_FOCUS=.75; // 血の海達成の前に、最後の1マスへ寄って見せる秒数
 function waveClear(){
@@ -946,7 +976,7 @@ function paint(x,y,r,amt){
     const i=cy*GC+cx;if(DONE[i])continue;const t=tileRect(i);
     if(Math.hypot(x-clamp(x,t.x,t.x+t.w),y-clamp(y,t.y,t.y+t.h))>r)continue;
     const inT=x>=t.x&&x<t.x+t.w&&y>=t.y&&y<t.y+t.h;
-    PAINT[i]+=amt*PAINT_MUL*(inT?1:.5)*(prog()>=.85?2:1)*(1+Math.min(1,G.chain/20))*PAINT_K*(G.tutMode?1:1+.06*mlv('blood'))*(1+.1*lv('paint'));if(PAINT[i]>=1)fillTile(i); // 連続撃破ほど塗りが速い（20連で最大2倍。v0.97で2.2倍から少し下げた）
+    PAINT[i]+=amt*PAINT_MUL*(inT?1:.5)*(prog()>=.85?2:1)*(1+Math.min(1,G.chain/20))*PAINT_K*(1+.1*lv('paint'));if(PAINT[i]>=1)fillTile(i); // 連続撃破ほど塗りが速い（20連で最大2倍。v0.97で2.2倍から少し下げた）
   }
 }
 function fillTile(i){
@@ -1217,8 +1247,6 @@ function killEnemy(e,ang,spd,o){
   // 連続撃破ほど血しぶきが大きくなる（25連で最大1.8倍）
   else{const cs=1+Math.min(.5,G.chain/40),pk=PAINT_K;PAINT_K=o.spin?SPIN_PAINT:1;splat(e.x,e.y,e.r*1.5*cs,ang);bloodBurst(e.x,e.y,ang,Math.round(18*cs),440*cs);PAINT_K=pk}  {
     if(!o.fall)CORPSES.push({e,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,rot:0,vr:rand(-16,16),t:0,hit:new Set(),noCrash:!!o.crash,push2:!!o.crash,pk:o.spin?SPIN_PAINT:1});
-    if(!G.firstBlood&&!G.tutMode&&!o.fall){G.firstBlood=true;slow(1.1,.18);G.zc={x:e.x,y:e.y};G.zoom=Math.max(G.zoom,.14);G.zHold=.45;addShake(22);G.flash=Math.max(G.flash,.5);G.flashCol='255,0,30';
-      callout('FIRST BLOOD','','#ff1a3c');bloodBurst(e.x,e.y,ang,46,620);splat(e.x,e.y,e.r*3.2,ang);SFX.boom()}
     G.kills++;const pts=Math.round(e.val*G.mult*(1+.25*lv('greed')));G.score+=pts;
     G.soul=Math.min(SOUL_MAX,G.soul+soulMul()*(e.type==='brute'?16:8)); // 撃破のSOUL（v0.95で6→8に少し戻した）
     SFX.kill(G.chain);G.hitstop=Math.max(G.hitstop,.06);addShake(6);
@@ -1284,15 +1312,15 @@ function breakShield(e){e.shieldUp=false;addShake(8);SFX.glass();popText(e.x,e.y
 function hurtPlayer(dmg,sx,sy){
   if(P.dead||state!=='play'||DEV.god)return; // 開発者モードの無敵
   if(P.inv>0)return;
-  dmg*=ENEMY_DMG*(1-.1*lv('armor'));
+  dmg*=ENEMY_DMG;const atk=dmg;dmg*=1-.1*lv('armor'); // atk：敵の攻撃力（鎧で減る前）
   const a=Math.atan2(P.y-sy,P.x-sx);
   // ガードは正面（向いている方向±GUARD_ARC）からの攻撃だけ防げる
   const front=Math.abs(angDiff(P.face,a+Math.PI))<guardArc();
   if(P.guard&&!front)popText(P.x,P.y-50,'背後を取られた！','#ffb44a',13,.8);
   if(P.guard&&front){
-    // ガード：ダメージを完全に防ぎ、受けるはずだったダメージのGUARD_HEAL倍だけ回復。ノックバック小、連撃は途切れない
-    const heal=dmg*GUARD_HEAL*(1+.5*lv('guardh'));P.hp=Math.min(P.maxhp,P.hp+heal);P.guardLock=true;tutComplete(4,.6);
-    G.soul=Math.min(SOUL_MAX,G.soul+soulMul()*14); // ガードでもSOULがたまる（防御する見返り）
+    // ガード：ダメージを完全に防ぎ、敵の攻撃力と同じ数値だけライフが回復し、SOULもたまる。ノックバック小、連撃は途切れない
+    const heal=atk*GUARD_HEAL*(1+.5*lv('guardh'));P.hp=Math.min(P.maxhp,P.hp+heal);P.guardLock=true;tutComplete(4,.6);
+    G.soul=Math.min(SOUL_MAX,G.soul+heal);popText(P.x+26,P.y-30,'+'+Math.round(heal),'#7fd8ff',12,.6);
     // ジャストガード：攻撃が当たる直前（JG_WIN秒以内）にガードを押していた。相手を大きくよろけさせ、次の一撃は必ずクリティカル
     const just=G.time-(P.gStart||-9)<JG_WIN;
     if(lv('counter')&&!P.crit){P.crit=.7;popText(P.x,P.y-48,'COUNTER!','#7fd8ff',15,.7)}
@@ -1353,7 +1381,7 @@ const CARDS=[
   {id:'linger', name:'途切れぬ怒り',desc:'連撃が途切れるまでの時間+30%',            max:2,col:'#ff2f5f'},
   {id:'ember',  name:'怨念の残り火',desc:'怨念解放のあと、SOULが30残る',            max:1,col:'#b8ff5a'},
   {id:'payback',name:'倍返し',      desc:'反射弾の装甲・ボスへの威力+50%',          max:2,col:'#7ff3ff'},
-  {id:'guardh', name:'守りの糧',    desc:'ガード成功時の回復量+50%',                max:2,col:'#7fd8ff'},
+  {id:'guardh', name:'守りの糧',    desc:'ガード成功時の回復とSOUL+50%',                max:2,col:'#7fd8ff'},
   {id:'gimmick',name:'仕掛け屋',    desc:'仕掛けが30%早く元に戻る',                 max:2,col:'#ffb040'},
   {id:'heavy',  name:'怪力',        desc:'敵を吹き飛ばす力+12%',                    max:2,col:'#ffb060'},
   {id:'slayer', name:'鬼殺し',      desc:'ボスへのダメージ+25%',                    max:2,col:'#ff2f5f'},
@@ -1371,7 +1399,7 @@ const CARDS=[
 const chainWin=()=>2.4*(1+.3*lv('linger'));
 const UP={};
 const lv=id=>UP[id]||0;
-const powMul=()=>(1+.175*lv('power')+.04*lv('r_grit'))*(lv('brink')&&P.hp<=P.maxhp*.3?1.4:1)*(G.tutMode?1:1+.06*mlv('blade'));
+const powMul=()=>(1+.175*lv('power')+.04*lv('r_grit'))*(lv('brink')&&P.hp<=P.maxhp*.3?1.4:1);
 const soulMul=()=>.25*(1+.28*lv('soul')); // 戦闘で溜まるSOULの倍率（基本は当初の1/4）
 const novaR=()=>180*(1+.175*lv('nova')); // 怨念解放の範囲（基本215は強すぎたので180に）
 const guardArc=()=>GUARD_ARC+.245*lv('wide');
@@ -1394,6 +1422,8 @@ function pickCard(i){
 // カード選びを終えて先へ進む。中ボスを倒した後は、次のステージの前にボーナス面を1回挟む
 function afterPick(){
   const c=G.lastPick;
+  // やり直しの2枚：1枚目のあとはもう1枚、2枚目のあとでステージを始める
+  if(G.startPicks>0){G.startPicks--;if(G.startPicks>0){openPick(true);return}state='play';stateT=0;startWave(G.wave+1);if(c)popText(P.x,P.y-50,c.name+' 獲得','#ffd54a',16,1.2);return}
   if(!G.tutMode&&bossFor(G.wave)&&G.bonusFor!==G.wave){G.bonusFor=G.wave;startBonus(bonusKind(G.wave));return}
   G.pickBonus=false;state='play';stateT=0;startWave(G.wave+1);if(c)popText(P.x,P.y-50,c.name+' 獲得','#ffd54a',16,1.2);
 }
@@ -1418,7 +1448,9 @@ function pickKey(k){
 }
 function drawPick(){
   const a=clamp(stateT/.35,0,1);dim(.82*a);g.globalAlpha=a;
-  txt(G.pickBonus?'BONUS CLEAR':'STAGE '+pad2(G.wave)+' CLEAR',W/2,82,28,'#ff2f5f','center',EN,['#000',5],true);
+  if(G.startPicks>0){txt('RETRY',W/2,92,30,'#ff2f5f','center',EN,['#000',5],true);txt('もう一度、復讐を。',W/2,128,16,'#fff','center',JP,null,false,900);
+    txt('始める前に、強化カードを2枚選ぶ（'+(3-G.startPicks)+'／2枚目）',W/2,156,12,'#ffd54a','center',JP,null,false,800)}
+  else txt(G.pickBonus?'BONUS CLEAR':'STAGE '+pad2(G.wave)+' CLEAR',W/2,82,28,'#ff2f5f','center',EN,['#000',5],true);
   const R=G.res;
   if(R&&!R.boss){
     txt('RANK '+R.rank,W/2-70,116,22,R.rank==='S'?'#ffd54a':'#fff','center',EN,['#000',4],true);
@@ -1830,7 +1862,7 @@ function useHands(){
   if(state!=='play'||P.dead||G.soul<SOUL_MAX)return;
   const tg=E.filter(e=>!e.dead&&e.state!=='enter'&&e.drag==null&&e.ashT==null&&onBloodTile(e));
   if(!tg.length){popText(P.x,P.y-62,'血の床の上に敵がいない','#c890ff',14,1);SFX.wall();return} // 空振りでは使わない
-  G.soul=0;healP(28);SFX.hands();tutComplete(8,1.4); // 2段分をすべて使う。回復は28（v0.98で19→28）
+  G.soul=0;healP(bigHeal(28,tg.length));SFX.hands();tutComplete(8,1.4); // 2段分をすべて使う。回復は基本28＋引きずり込む敵の数だけ上乗せ
   handGlow=1;handDark=1;slow(1.1,.3);addShake(20);G.flash=Math.max(G.flash,.55);G.flashCol='20,0,30';G.zoom=Math.max(G.zoom,.07);
   // 血の床のあちこちからも、獲物を探す手が何本も突き出す（飾り）
   const fl=[];for(let i=0;i<GN;i++)if(DONE[i]&&!BLOCK[i])fl.push(i);
@@ -2266,11 +2298,11 @@ const tutDetail=st=>{const T=touchMode;return({
   1:[T?'画面の左半分をドラッグすると、その方向へ走る':'WASD／矢印キーで走る',T?'右半分をタップすると攻撃。連打で4段の連撃になる':'J／左クリックで攻撃。連打で4段の連撃になる','4段目は全方向を斬る回転斬り。囲まれた時に強い','攻撃は、走っている向き（止まっていれば向いている方向）へ出る'],
   2:['敵を倒すと血が飛び散り、床のマスが赤く染まる','血は、敵が吹き飛んだ向きに広がる。死体が床を滑った跡も塗れる','連撃が続くほど、1体で塗れる量が増える','床を全部塗るとステージクリア'],
   3:['塗ったマスで輪を閉じると、中のマスが一気に血で染まる','壁や障害物も囲いの一部になる','「あと1マスで囲える」マスは光って知らせる','広く囲むほど、一気に進む'],
-  4:[(T?'右半分を長押し':'U／右クリックを押したまま')+'で、正面からの攻撃を防ぐ','防ぐと、ライフが回復し、SOULもたまる','背後や横からの攻撃は防げない','1回防ぐと解除される。続けて守るなら押し直す'],
+  4:[(T?'右半分を長押し':'U／右クリックを押したまま')+'で、正面からの攻撃を防ぐ','防ぐと、敵の攻撃力と同じだけライフが回復し、SOULも同じだけたまる','背後や横からの攻撃は防げない','1回防ぐと解除される。続けて守るなら押し直す'],
   5:['攻撃が当たる直前（約0.2秒前）にガードを押すと「ジャストガード」','相手は大きくよろけ、次の一撃は必ずクリティカル（2.5倍）','SOULも普通のガードより大きくたまる','連撃中は怯まないナイフ使いや、盾持ちの盾を崩せる'],
   6:['銃撃手の弾は、当たる直前に攻撃すると跳ね返せる（斧・ナイフ・ロケットも）','体に届く寸前で弾くと「PERFECT」。威力2倍で、SOULも大きくたまる','跳ね返した弾は、敵を貫通して飛んでいく','盾持ちの盾も、跳ね返した弾で壊せる'],
-  7:['SOULの1段目（金）が満タンになると使える大技',T?'金色に光る主人公をタップで発動':'L／Eキーで発動','周りの敵を焼き尽くし、ライフも回復する','焼いた敵は灰になるので、床は塗れない'],
-  8:['SOULをさらにためて、2段目（紫）が満タンになると使える大技',T?'紫に光る主人公をタップで発動':'L／Eキー（またはQ／K）で発動','血で塗った床の上にいる敵を、画面のどこにいても全員引きずり込む','床を塗るほど強くなる。ライフも大きく回復する'],
+  7:['SOULの1段目（金）が満タンになると使える大技',T?'金色に光る主人公をタップで発動':'L／Eキーで発動','周りの敵を焼き尽くし、ライフも回復する。巻き込んだ敵が多いほど回復も多い','焼いた敵は灰になるので、床は塗れない'],
+  8:['SOULをさらにためて、2段目（紫）が満タンになると使える大技',T?'紫に光る主人公をタップで発動':'L／Eキー（またはQ／K）で発動','血で塗った床の上にいる敵を、画面のどこにいても全員引きずり込む','床を塗るほど強くなる。ライフも大きく回復し、引きずり込んだ敵が多いほど回復も多い'],
   9:['掃除屋は、塗った血を拭き取って床を元に戻してしまう','モップ（1マスずつ）、高圧洗浄機（一直線）、漂白剤（周り）の3種類','消される前に、優先して倒そう','屋外のステージには出てこない'],
   10:['光っているマスを塗れば、ステージクリア','塗り残しが少なくなると、残りのマスが点滅する','残りのマスの近くで敵を倒して、塗りつぶそう']})[st]||[]};
 function drawTutIntro(){
@@ -2342,7 +2374,7 @@ const SCR={endless:{x:W/2,y:612,w:260,h:52},title:{x:W/2,y:682,w:260,h:44},ptitl
 const inC=(p,c,pad)=>Math.hypot(p.x-c.x,p.y-c.y)<c.r+(pad||0);
 const inR=(p,r)=>Math.abs(p.x-r.x)<r.w/2&&Math.abs(p.y-r.y)<r.h/2;
 function toLocal(ev){const r=cv.getBoundingClientRect();return{x:(ev.clientX-r.left)*W/r.width,y:(ev.clientY-r.top)*H/r.height}}
-Object.assign(SCR,{tendless:{x:W/2-66,y:628,w:124,h:38},tshop:{x:W/2+66,y:628,w:124,h:38},
+Object.assign(SCR,{tendless:{x:W/2,y:628,w:250,h:38},
   orevive:{x:W/2,y:556,w:290,h:50},oretry:{x:W/2,y:614,w:240,h:44},oshare:{x:W/2-64,y:668,w:120,h:38},otitle:{x:W/2+64,y:668,w:120,h:38},
   tquit:{x:W/2,y:548,w:240,h:40},tsback:{x:W/2,y:700,w:220,h:42},
   oad:{x:W/2,y:490,w:310,h:52},onext:{x:W/2,y:560,w:240,h:44},cshare:{x:W/2,y:552,w:200,h:40},sback:{x:W/2,y:716,w:220,h:44}});
@@ -2372,34 +2404,13 @@ function revive(){
   RINGS.push({x:P.x,y:P.y,r:10,R:190,t:0,dur:.5,col:'255,40,70',w:16});addShake(14);G.flash=.6;G.flashCol='255,30,60';
   callout('復 活','怒りは、まだ消えない','#ff2f5f');G.callout.dur=1.6;SFX.heal();
 }
-const restartRun=()=>G.endless?newEndless():newGame(G.tutMode);
+const restartRun=()=>G.tutMode?newGame(true):retryWithCards();
+// やり直し：最初から（ENDLESSならENDLESSの最初から）。始める前に強化カードを2枚選ぶ（動画でもう1枚、は出さない）
+function retryWithCards(){const en=G.endless;resetRun();G.runId=Date.now();G.rankIn=-1;G.tutMode=false;G.endless=en;G.runSeed=1+Math.floor(Math.random()*1e6);
+  G.res=null;G.wave=en?20:0;G.startPicks=2;openPick(true);G.pickAdUsed=true;SFX.ui()}
 
 /* ---------------- 怨念の祭壇（遊ぶたびに貯まるポイントで、永続の強化を買う） ----------------
    スコア200ごとに怨念1。ゲームオーバー・クリアの時に加算（復活後の分は差分だけ足す） */
-const SHOP=[{id:'hp',name:'不死の肉体',desc:'最大ライフ +10',max:5,cost:[100,200,350,550,800]},
-  {id:'soul',name:'怨念の残り火',desc:'開始時のSOUL +20',max:3,cost:[150,300,500]},
-  {id:'blood',name:'濃い血',desc:'床の塗り +6%',max:3,cost:[200,400,700]},
-  {id:'blade',name:'復讐の爪',desc:'攻撃力 +6%',max:3,cost:[200,400,700]}];
-let META={pts:0,lv:{}};try{const m=JSON.parse(lsGet('dg_meta'));if(m&&m.lv)META=m}catch(e){}
-const mlv=id=>META.lv[id]||0;
-function saveMeta(){lsSet('dg_meta',JSON.stringify(META))}
-function grantMeta(){if(G.tutMode)return;const tot=Math.floor(G.score/200),d=tot-(G.metaPaid||0);if(d>0){META.pts+=d;G.metaPaid=tot;saveMeta()}G.metaGain=tot}
-const SHOP_R=i=>({x:W/2,y:262+i*104,w:390,h:92});
-function buyShop(i){const s=SHOP[i],l=mlv(s.id);if(l>=s.max||META.pts<s.cost[l]){SFX.wall();return}META.pts-=s.cost[l];META.lv[s.id]=l+1;saveMeta();SFX.just()}
-function drawShop(){
-  g.drawImage(bgC,0,0,W,H);dim(.86);
-  txt('怨念の祭壇',W/2,110,34,'#ff2f5f','center',JP,null,false,900);
-  txt('貯めた怨念で、永遠に強くなる',W/2,140,13,'#c9cfdc','center',JP,null,false,700);
-  txt('怨念 '+META.pts,W/2,186,26,'#ffd54a','center',JP,['#000',4],false,900);
-  SHOP.forEach((s,i)=>{const r=SHOP_R(i),l=mlv(s.id),x=r.x-r.w/2,y=r.y-r.h/2,mx=l>=s.max,can=!mx&&META.pts>=s.cost[l];
-    rr(x,y,r.w,r.h,10,'rgba(20,20,30,.95)');g.strokeStyle=can?'#ff4d6d':'rgba(255,255,255,.25)';g.lineWidth=can?2.5:1.5;rrPath(x,y,r.w,r.h,10);g.stroke();
-    txt(s.name,x+18,y+34,19,can?'#ff8aa0':'#c9cfdc','left',JP,null,false,900);
-    txt(s.desc,x+18,y+66,13,'#e6e9f0','left',JP,null,false,700);
-    for(let k=0;k<s.max;k++)rr(x+r.w-24-k*16,y+16,11,11,3,k<l?'#ff2f5f':'rgba(255,255,255,.18)');
-    txt(mx?'MAX':'怨念 '+s.cost[l],x+r.w-16,y+70,15,mx?'#b8ff5a':can?'#ffd54a':'#8b93a8','right',JP,null,false,900)});
-  txt(touchMode?'項目をタップで購入':'項目をクリックで購入',W/2,670,12,'#8b93a8','center',JP,null,false,700);
-  button(SCR.sback,'タイトルへ戻る','rgba(30,32,44,.92)');
-}
 
 /* ---------------- 結果のシェア ----------------
    スマホは共有メニュー（LINE・Xなど）、PCは X の投稿画面を開く。公開したページのURLも一緒に載せる */
@@ -2420,7 +2431,6 @@ function screenAction(p,key){
   if(state==='bres'){const r=G.bres;if(r.doneT<0){r.n=r.items.length;r.tick=0}else if(r.doneT>.6)finishBonus();return}
   if(state==='pick'){if(p){const i=cardAt(p);if(i>=0)pickCard(i)}else pickCard(G.cardSel);return}
   if(state==='offer'){if(stateT<.4)return;if(p&&inR(p,SCR.oad)){rewardAd(()=>{G.pickAdUsed=true;openPick(true)});return}if(!p||inR(p,SCR.onext)){SFX.ui();afterPick()}return}
-  if(state==='shop'){if(p){for(let i=0;i<SHOP.length;i++)if(inR(p,SHOP_R(i))){buyShop(i);return}if(!inR(p,SCR.sback))return}state='title';stateT=LOGO_T+.9;SFX.ui();return}
   if(state==='tutintro'){if(stateT>.3){state='play';stateT=0;SFX.ui()}return}
   if(state==='tutend'){if(stateT>.8){state='title';stateT=0;resetRun();skipPrologue();SFX.ui()}return}
   if(state==='stintro'){if(stateT>.3){SFX.ui();stateT=0;if(++G.cardI>=G.cards.length){G.cards=null;state='play'}}return}
@@ -2432,7 +2442,7 @@ function screenAction(p,key){
   // プロローグ中のタップ（クリック・キー）は読み飛ばし：すぐロゴとボタンを出す（音の準備もこのタップで済ませる）
   if(state==='title'&&stateT<LOGO_T+.6){skipPrologue();return}
   if(state==='title'){if(!muted&&!(AC&&AC.state==='running')&&!G.titleTap){G.titleTap=1;return}
-    if(p){if(inR(p,SCR.tstart)){if(DEVSHIFT)openDev();else devHold={t:performance.now()}}else if(inR(p,SCR.ttut)){state='tutsel';stateT=0;SFX.ui()}else if(inR(p,SCR.tendless)){if(endlessOpen())newEndless();else SFX.wall()}else if(inR(p,SCR.tshop)){state='shop';stateT=0;SFX.ui()}return}
+    if(p){if(inR(p,SCR.tstart)){if(DEVSHIFT)openDev();else devHold={t:performance.now()}}else if(inR(p,SCR.ttut)){state='tutsel';stateT=0;SFX.ui()}else if(inR(p,SCR.tendless)){if(endlessOpen())newEndless();else SFX.wall()}return}
     if(key==='tut'){state='tutsel';stateT=0;SFX.ui();return}
     newGame(key==='tut');return}
   if(state==='dev'){
@@ -2442,8 +2452,6 @@ function screenAction(p,key){
     for(let n=1;n<=TUT_STEPS;n++)if(inR(p,DEV_TUT(n))){devTut(n);return}
     if(inR(p,DEV_UI.endless)){devStart(21);return}
     if(inR(p,DEV_UI.god)){DEV.god=!DEV.god;SFX.ui();return}
-    // 怨念の祭壇のリセット：誤って押さないよう、3秒以内にもう一度押した時だけ実行（買った強化と、たまった怨念をすべて0に）
-    if(inR(p,DEV_UI.meta)){if(DEV.metaAsk&&performance.now()-DEV.metaAsk<3000){META={pts:0,lv:{}};saveMeta();DEV.metaAsk=0;DEV.metaDone=performance.now();SFX.clear()}else{DEV.metaAsk=performance.now();SFX.ui()}return}
     if(inR(p,DEV_UI.close)){state='title';stateT=0;skipPrologue();SFX.ui()}return}
   if(state==='over'){if(stateT<.9)return;
     if(p){if(canRevive()&&inR(p,SCR.orevive)){rewardAd(revive);return}
@@ -2657,17 +2665,19 @@ function tryRage(){
   tutComplete(7,1);
   const R=novaR();
   // 弾き返しと同じくらいのスローで、範囲（床の赤い円）と、波が届いて敵が燃え上がっていく様子を見せる
-  G.soul=Math.max(0,G.soul-SOUL1)+(lv('ember')?30:0);SFX.rage(); // 1段分を使う（2段目まで満タンなら1段目の満タンに戻る）slow(1.1,.22);G.rageFx={t:0,dur:1.3,R};G.flash=.7;G.flashCol='255,30,60';addShake(24);G.zoom=.07;G.hitstop=Math.max(G.hitstop,.1);
-  P.inv=Math.max(P.inv,.9);healP(23); // 怨念解放の回復（v0.98で15→23）
+  G.soul=Math.max(0,G.soul-SOUL1)+(lv('ember')?30:0);SFX.rage(); // 1段分を使う（2段目まで満タンなら1段目の満タンに戻る）
+  slow(1.1,.22);G.rageFx={t:0,dur:1.3,R};G.flash=.7;G.flashCol='255,30,60';addShake(24);G.zoom=.07;G.hitstop=Math.max(G.hitstop,.1);
+  P.inv=Math.max(P.inv,.9);
   RINGS.push({x:P.x,y:P.y,r:10,R:R+15,t:0,dur:.55,col:'255,40,70',w:20});
   RINGS.push({x:P.x,y:P.y,r:10,R:R*.8,t:-.08,dur:.5,col:'255,200,210',w:7});
   RINGS.push({x:P.x,y:P.y,r:10,R:R*.55,t:-.16,dur:.45,col:'255,215,80',w:5});
-  const pc=G.cause;G.cause='rage';
+  const pc=G.cause;G.cause='rage';let hitN=0;
   // ボスにはダメージ。それ以外の敵は、波が届いた順（近い順）にその場で炎に包まれ、燃え尽きて灰になる
   for(const e of [...E]){const d=dist(P.x,P.y,e.x,e.y);if(d>=R+e.r||e.ashT!=null)continue;
+    hitN++;
     if(e.boss)hitEnemy(e,12,Math.atan2(e.y-P.y,e.x-P.x),820,{fin:true});
     else{e.ashT=e.ashMax=.08+d/R*.3+.42;e.burning=true;e.stun=9;e.vx=e.vy=0;e.state='chase';if(e===G.aimer)G.aimer=null}}
-  G.cause=pc;
+  G.cause=pc;healP(bigHeal(23,hitN)); // 怨念解放の回復：基本23＋巻き込んだ敵の数だけ上乗せ
   for(const b of B)if(!b.friendly&&dist(P.x,P.y,b.x,b.y)<R+5)reflect(b);
   // 怨念解放は床を塗らない（倒した敵も燃え尽きて灰になり、血は出ない）
   popText(W/2,AY0+70,'怨 念 解 放','#ff2f5f',30,1.3); // 主人公の周りの演出を隠さないよう、画面中央ではなく上部に出す
@@ -3078,11 +3088,11 @@ function updateBoss(e,dt,d,toP){
 // 雨：奥行きd（0=遠い 1=近い）で太さ・明るさ・速さを変えた雨筋と、床に落ちて広がる波紋
 const RAIN=[];for(let i=0;i<160;i++){const d=Math.random();RAIN.push({x:rand(-60,W+160),y:rand(0,H),d,s:650+d*600,l:12+d*26})}
 let SPL=[],splAcc=0,boltT=rand(8,16),bolt=0;
-const rainK=()=>state==='title'||state==='shop'?.4:G.tutMode||G.bonus?0:(theme.rain||0);
+const rainK=()=>state==='title'?.4:G.tutMode||G.bonus?0:(theme.rain||0);
 function updateRain(rdt){
-  const rk=rainK();rainAudio(rdt,state==='title'||state==='shop'?.6:rk); // タイトルは見た目は控えめ、音は小雨と同じくらい
+  const rk=rainK();rainAudio(rdt,state==='title'?.6:rk); // タイトルは見た目は控えめ、音は小雨と同じくらい
   for(const r of RAIN){r.y+=r.s*rdt;r.x-=r.s*.22*rdt;if(r.y>H+10){r.y=rand(-40,0);r.x=rand(-60,W+160)}}
-  if(rk>0&&state!=='title'&&state!=='shop'){splAcc+=rdt*60*rk;while(splAcc>1){splAcc--;SPL.push({x:rand(AX0+4,AX1-4),y:rand(AY0+4,AY1-4),t:0})}}
+  if(rk>0&&state!=='title'){splAcc+=rdt*60*rk;while(splAcc>1){splAcc--;SPL.push({x:rand(AX0+4,AX1-4),y:rand(AY0+4,AY1-4),t:0})}}
   for(const p of SPL)p.t+=rdt;SPL=SPL.filter(p=>p.t<.42);
   // どしゃ降りのステージだけ、ときどき遠くで稲光（青白く2回またたく）と雷鳴
   bolt=Math.max(0,bolt-rdt);
@@ -3119,7 +3129,7 @@ function update(rdt){
   if(state!=='play'&&locked())document.exitPointerLock(); // メニュー・カード選びの間はカーソルを戻す
   updateRain(rdt);
   if(state==='title'&&devHold&&performance.now()-devHold.t>900){devHold=null;openDev()}
-  if(state==='title'||state==='shop'||state==='dev'||state==='tutsel'){G.time+=rdt;return}
+  if(state==='title'||state==='dev'||state==='tutsel'){G.time+=rdt;return}
   if(state==='ad'){if(stateT>AD_T&&adCb){const f=adCb;adCb=null;f()}return}
   if(state==='bres'){updateBres(rdt);return}
   updateHands(rdt);
@@ -3135,7 +3145,7 @@ function update(rdt){
   if(state!=='play')return;
   // チュートリアルで倒れたら、ゲームオーバーにせず、その場で復活して今の手順からやり直す（成功回数はそのまま）
   if(P.dead&&G.tutMode&&G.tut){G.deathT+=rdt;if(G.deathT>1.6){Object.assign(P,{dead:false,hp:P.maxhp,inv:1.5,blinkT:0,vx:0,vy:0,kx:0,ky:0,atk:null});G.deathT=0;G.slowT=0;const r=G.tut.rep;tutSetup(G.tut.step);G.tut.rep=r;callout('再挑戦','この手順からやり直し','#ffd54a');G.callout.dur=1.5;SFX.heal()}}
-  else if(P.dead){G.deathT+=rdt;if(G.deathT>1.9){state='over';stateT=0;saveBest();grantMeta()}}
+  else if(P.dead){G.deathT+=rdt;if(G.deathT>1.9){state='over';stateT=0;saveBest()}}
   if(G.hitstop>0){G.hitstop-=rdt;return}
   if(G.slowT>0){G.slowT-=rdt;G.ts=G.slowScale}else G.ts=lerp(G.ts,1,1-Math.exp(-9*rdt));
   const dt=rdt*G.ts;G.time+=dt;
@@ -3720,7 +3730,7 @@ function drawPlayerGauges(){
 const DEV={god:false};let DEVSHIFT=false,devHold=null;
 const DEV_BTN=n=>({x:66+((n-1)%4)*106,y:150+Math.floor((n-1)/4)*62,w:96,h:52});
 const DEV_BON=k=>({x:84+k*141,y:480,w:132,h:44});
-const DEV_UI={endless:{x:W/2-80,y:548,w:150,h:44},god:{x:W/2+80,y:548,w:150,h:44},meta:{x:W/2,y:690,w:300,h:40},close:{x:W/2,y:744,w:200,h:40}};
+const DEV_UI={endless:{x:W/2-80,y:548,w:150,h:44},god:{x:W/2+80,y:548,w:150,h:44},close:{x:W/2,y:712,w:200,h:42}};
 const DEV_TUT=n=>({x:W/2+(n-5.5)*41,y:632,w:37,h:40}); // チュートリアルの手順①〜⑨
 function openDev(){devHold=null;state='dev';stateT=0;SFX.ui()}
 function devStart(n){resetRun();G.tutMode=false;G.runSeed=1+Math.floor(Math.random()*1e6);G.endless=n>20;state='play';stateT=0;SFX.ui();startWave(n)}
@@ -3757,8 +3767,6 @@ function drawDev(){
   txt('チュートリアル（手順を選ぶ）',W/2,600,12,'#8b93a8','center',JP,null,false,700);
   for(let n=1;n<=TUT_STEPS;n++){const r=DEV_TUT(n),t=tutText(n);rr(r.x-r.w/2,r.y-r.h/2,r.w,r.h,7,'rgba(20,70,90,.95)');g.strokeStyle='rgba(255,255,255,.3)';g.lineWidth=1;rrPath(r.x-r.w/2,r.y-r.h/2,r.w,r.h,7);g.stroke();
     txt(t?t[0].slice(0,1):String(n),r.x,r.y+7,18,'#7ff3ff','center',JP,null,false,900)}
-  {const ask=DEV.metaAsk&&performance.now()-DEV.metaAsk<3000,done=DEV.metaDone&&performance.now()-DEV.metaDone<2000;
-    button(DEV_UI.meta,done?'リセットしました':ask?'本当にリセット？（もう一度押す）':'怨念の祭壇をリセット（怨念 '+META.pts+'）',done?'rgba(20,110,60,.95)':ask?'rgba(170,30,40,.95)':'rgba(70,20,60,.95)')}
   button(DEV_UI.close,'閉じる','rgba(30,32,44,.95)');
 }
 function drawHUD(){
@@ -3912,7 +3920,6 @@ function drawTitle(){
     // ENDLESS：全20ステージクリアで開放（それまでは鍵付きで見せて、目標にする）
     if(endlessOpen())button(SCR.tendless,'ENDLESS','rgba(160,20,45,.95)',EN);
     else{g.globalAlpha=la*.55;button(SCR.tendless,'🔒 ENDLESS','rgba(40,40,50,.95)',EN);g.globalAlpha=la;txt('20ステージ制覇で開放',SCR.tendless.x,SCR.tendless.y+32,10,'#8b93a8','center',JP,null,false,700)}
-    button(SCR.tshop,'怨念の祭壇','rgba(70,20,60,.95)');txt('怨念 '+META.pts,SCR.tshop.x,SCR.tshop.y+32,10,'#ff8aa0','center',JP,null,false,700);
   }
   g.globalAlpha=la*.85;
   // 操作説明（15px・6行）
@@ -3930,7 +3937,7 @@ function drawTitle(){
 function dim(a,col){g.fillStyle=`rgba(${col||'4,4,8'},${a})`;g.fillRect(0,0,W,H)}
 const RULES=[['塗る','敵を倒すと床に血。床をすべて塗るとクリア'],['囲う','囲むと中が一気に染まる。光る「囲える」マスを狙え（壁際も可）'],['掃除屋','塗った血を消しに来る。最優先で倒せ'],
   ['弾き返し','敵の弾やロケットは、攻撃で跳ね返せる'],['ガード','正面を防いでライフとSOULがたまる。直前ならジャスト'],['怨念解放','SOUL1段目（金）満タンで発動。周囲の敵を灰にする'],['怨霊の手','SOUL2段目（紫）満タンで発動。血の床の上の敵を全員引きずり込む'],
-  ['仕掛け','ステージの物を殴ると発動する'],['強化カード','ステージクリアで強化を1つ選ぶ'],['ボス','近づくと掴んで投げてくる（ガード不能）']];
+  ['仕掛け','ステージの物を殴ると発動する'],['強化カード','クリアで1枚。やり直す時は2枚選んで始める'],['ボス','近づくと掴んで投げてくる（ガード不能）']];
 function drawPause(){
   dim(.82);txt('PAUSED',W/2,104,40,'#fff','center',EN,null,true);
   txt('遊び方',W/2,140,13,'#ffd54a','center',JP,null,false,900);
@@ -3955,7 +3962,7 @@ function drawOver(){
   txt('また、殺された。',W/2,250,36,'#ff2f5f','center',JP,null,false,900);
   txt('——でも、怒りは消えない。',W/2,286,15,'#c9cfdc','center',JP,null,false,700);
   drawStats(340);
-  if(G.metaGain)txt('怨念 +'+G.metaGain+'（所持 '+META.pts+'）',W/2,506,14,'#ff8aa0','center',JP,null,false,900);
+  txt('やり直すと、強化カードを2枚選んでから始められる',W/2,512,13,'#ffd54a','center',JP,['#000',3],false,900);
   if(stateT>.9){
     if(canRevive()){glow(SCR.orevive.x,SCR.orevive.y,170,'#ff2f5f',.18+Math.sin(stateT*4)*.08);button(SCR.orevive,'▶ 動画を見て復活','rgba(160,20,45,.95)')}
     button(SCR.oretry,'最初からやり直す','rgba(30,32,44,.92)');
@@ -3969,7 +3976,6 @@ function drawClear(){
   txt('鬼頭組は、一夜にして壊滅した。',W/2,232,14,'#c9cfdc','center',JP,null,false,700);
   txt('……それでも、この渇きは消えない。',W/2,256,14,'#ff4d6d','center',JP,null,false,700);
   drawStats(320);
-  if(G.metaGain)txt('怨念 +'+G.metaGain+'（所持 '+META.pts+'）',W/2,506,14,'#ff8aa0','center',JP,null,false,900);
   if(stateT>1.2){button(SCR.cshare,'結果をシェア','rgba(20,80,110,.95)');button(SCR.endless,'ENDLESS MODE ▶','rgba(160,20,45,.92)',EN);button(SCR.title,'タイトルへ','rgba(30,32,44,.92)')}
   g.globalAlpha=1;
 }
@@ -3980,7 +3986,6 @@ function draw(){
   if(state==='title'){TXT_SCALE=1;drawTitle();return}
   if(state==='dev'){TXT_SCALE=1;drawDev();return}
   if(state==='tutsel'){TXT_SCALE=1;drawTutSel();return}
-  if(state==='shop'){TXT_SCALE=1;drawShop();return}
   TXT_SCALE=1.2;
   g.save();
   const sh=G.shake;if(sh>.3)g.translate(rand(-sh,sh),rand(-sh,sh));
