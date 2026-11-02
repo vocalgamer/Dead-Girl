@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v1.67 2026-11-02';
+const VERSION='v1.68 2026-11-02';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const BIG_HEAL_PER=.15,BIG_HEAL_CAP=2; // 怨念解放・怨霊の手の回復：巻き込んだ敵1体につき基本量の15%を上乗せ（最大で基本量の2倍）
@@ -3460,8 +3460,8 @@ function bowl(e,sp){
     }
   }
 }
-// ガード押しで弾く速さ（滑る距離 ≒ GP_V÷6.5 ≒ 140）・よろける時間・体が傾く時間・同じ敵を続けて弾く間隔
-const GP_V=900,GP_STUN=.9,GP_TILT=.4,GP_CD=.3;
+// ガード押しで弾く速さ（滑る距離 ≒ GP_V÷6.5 ≒ 95）・よろける時間・体が傾く時間・同じ敵を続けて弾く間隔
+const GP_V=600,GP_STUN=.9,GP_TILT=.4,GP_CD=.3;
 // ガード押しで押せる敵：ボス・盾を構えた盾持ち・燃えている／引きずり込まれている敵・登場中の敵は押せない
 const canGPush=e=>!e.boss&&!e.dead&&!(e.type==='shield'&&e.shieldUp)&&e.ashT==null&&e.drag==null&&e.state!=='enter';
 // 押し飛ばし（ダメージなし）の玉突き：押された敵が次の敵に当たると、勢いを約6割に落として伝える。
@@ -3907,7 +3907,7 @@ function update(rdt){
         e.shoveSet=new Set([e]);e.shove=.35; // 弾かれた敵が別の敵に当たると、その敵も押し飛ばす（ダメージなし）
         if(e.state!=='chase'&&e.state!=='enter'&&e.state!=='vanish'){if(G.aimer===e)G.aimer=null;e.state='chase'}
         e.tilt=clamp(fx_,-1,1)*.38;e.tiltT=GP_TILT;e.gpT=GP_CD;
-        tone(95,48,.13,'sine',.28);noise(.07,.2,'lowpass',420,140);addShake(2);continue}
+        tone(95,45,.16,'sine',.6);tone(170,70,.06,'triangle',.3);noise(.09,.42,'lowpass',520,140);addShake(3);continue}
       // 盾を構えた盾持ちは、ガード同士でぶつかると動かない（ボスと同じく重い）
       const we=e.boss||(P.guard&&e.type==='shield'&&e.shieldUp)?.1:.75;e.x+=ux*p*we;e.y+=uy*p*we;P.x-=ux*p*(1-we);P.y-=uy*p*(1-we)}
   }
