@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v1.73 2026-11-02';
+const VERSION='v1.74 2026-11-02';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const BIG_HEAL_PER=.15,BIG_HEAL_CAP=2; // 怨念解放・怨霊の手の回復：巻き込んだ敵1体につき基本量の15%を上乗せ（最大で基本量の2倍）
@@ -4703,10 +4703,10 @@ function drawWorld(){
   // entities sorted by y
   const list=E.concat(TIRES);list.push(null);
   // 高さのある障害物も、マスの下端を足元として一緒に並べる
-  if(nBlock&&!blockFlat())for(let i=0;i<GN;i++)if(BLOCK[i]&&!VOID[i]&&!HOLE[i]){const t=tileRect(i);list.push({blk:i,y:t.y+t.h-.5})}
+  if(nBlock&&!blockFlat())for(let i=0;i<GN;i++)if(BLOCK[i]&&!VOID[i]&&!HOLE[i]){const t=tileRect(i);list.push({blkTile:i,y:t.y+t.h-.5})} // 目印の名前は敵の持ち物（盾持ちの e.blk＝防いだ回数）と重ならないものにする
   list.sort((a,b)=>(a?a.y:P.y)-(b?b.y:P.y));
   for(const e of list){
-    if(e&&e.blk!=null){drawBlockTile(e.blk);continue}
+    if(e&&e.blkTile!=null){drawBlockTile(e.blkTile);continue}
     if(e&&e.tire){drawTire(e.x,e.y,e.z,e.hd,e.lean,e.rot,e.sd,e.ph==='flat'?clamp((2.4-e.ft)/.6,0,1):1);continue}
     if(e===null){
       glow(P.x,P.y,46,'#48f1d2',.12);
