@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v1.62 2026-11-02';
+const VERSION='v1.64 2026-11-02';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const BIG_HEAL_PER=.15,BIG_HEAL_CAP=2; // 怨念解放・怨霊の手の回復：巻き込んだ敵1体につき基本量の15%を上乗せ（最大で基本量の2倍）
@@ -904,7 +904,7 @@ function makeEnemy(type,x,y){
   const T=TYPES[type],k=1+(G.wave-1)*.09;
   const e={type,x,y,vx:0,vy:0,r:T.r,hp:T.hp*k,max:T.hp*k,spd:T.spd*(1+Math.min(G.wave,15)*.015),dmg:T.dmg,val:T.val,armor:!!T.armor,
     ang:Math.atan2(P.y-y,P.x-x),aim:0,state:'enter',st:0,flash:0,stun:0,fly:0,bset:null,walk:rand(0,6),cd:rand(.8,1.8),
-    hitDone:false,v:Math.random()<.5?0:1,boss:false,dead:false,id:++uid,combo:0,shieldUp:type==='shield',special:0,vol:0,summoned:false,tx:0,ty:0,tgt:-1};
+    hitDone:false,v:Math.random()<.5?0:1,gv:Math.random()<.5?0:1,boss:false,dead:false,id:++uid,combo:0,shieldUp:type==='shield',special:0,vol:0,summoned:false,tx:0,ty:0,tgt:-1};
   E.push(e);return e;
 }
 const MASTER_NAME='大陰陽師・御影';
@@ -3543,7 +3543,8 @@ function updateEnemy(e,dt){
         e.cd-=dt;if(e.cd<=0&&los&&d<430&&!G.aimer&&G.shotGap<=0){e.state='aim';e.st=0;e.aim=toP;G.aimer=e;SFX.cock()}
       }else if(e.state==='aim'){
         if(e.st<.5)e.aim=turn(e.aim,toP,12*dt);e.ang=e.aim;
-        if(e.st>.78){fire(e.x+Math.cos(e.aim)*22,e.y+Math.sin(e.aim)*22,e.aim,360,e.dmg);G.aimer=null;G.shotGap=.5/waveEase();e.state='recover';e.st=0;e.vx-=Math.cos(e.aim)*90;e.vy-=Math.sin(e.aim)*90}
+        if(e.st>.78){const m=gunMuzzle(e),sx=e.x+Math.cos(e.aim)*22,sy=e.y+Math.sin(e.aim)*22,b=fire(sx,sy,e.aim,360,e.dmg);b.ox=m.x-sx;b.oy=m.y-sy;
+          const mf=FX[FX.length-1];if(mf&&mf.k==='f'){mf.x=m.x;mf.y=m.y}G.aimer=null;G.shotGap=.5/waveEase();e.state='recover';e.st=0;e.vx-=Math.cos(e.aim)*90;e.vy-=Math.sin(e.aim)*90}
       }else if(e.state==='recover'){if(e.st>.35){e.state='chase';e.cd=rand(1.5,2.6)+3.2*(1/waveEase()-1);if(Math.random()<.35)e.v^=1}}
       else e.state='chase';
       break;
@@ -4178,14 +4179,16 @@ function thugPick(e,S){
   const key=S.f[d+pose]?d+pose:d+'_walk';
   if(key.endsWith('_walk'))idx=Math.floor((e.walk||0)/TAU*S.f[key].length*2);
   return {key,idx,flip}}
+// 銃撃手の見た目（0=A 拳銃、1=B 散弾銃）。新しい絵がそろうまでは、絵のある方に統一する（両方そろえば出現時の抽選どおり）
+const gunV=e=>{const v=(e.gv!=null?e.gv:e.v)||0;return THS['gunner'+v]||!(THS.gunner0||THS.gunner1)?v:THS.gunner0?0:1};
 // 構えた銃の銃口の位置（狙いの赤い線はここから出す）。スプライトのコマに記録した銃口を使い、ない時は手の高さで体の少し前
 function gunMuzzle(e){
-  const tk=e.type==='gunner'?'gunner'+(e.v||0):e.type,S=THS[tk];
+  const tk=e.type==='gunner'?'gunner'+gunV(e):e.type,S=THS[tk];
   if(S&&imgOK(THI[tk])){const q=thugPick(e,S),L=S.f[q.key],r=L[((q.idx%L.length)+L.length)%L.length],k=figH(e)/S.h;
     if(r.length>7)return {x:e.x+(q.flip?-1:1)*(r[6]-r[4])*k,y:e.y+e.r-(e.hop||0)+(r[7]-r[5])*k}}
   return {x:e.x+Math.cos(e.aim)*18,y:e.y+e.r-figH(e)*.55+Math.sin(e.aim)*6}}
 function drawThugSpr(e,rot,alpha){
-  const tk=e.type==='gunner'?'gunner'+(e.v||0):e.type,S=THS[tk],im=THI[tk];if(!S||!imgOK(im))return false;
+  const tk=e.type==='gunner'?'gunner'+gunV(e):e.type,S=THS[tk],im=THI[tk];if(!S||!imgOK(im))return false;
   const corpse=rot!=null,lying=!corpse&&e.slipT>.25,dead=corpse||lying,fl=e.flash>0&&!rot;
   let key,idx=0,flip=false,lay=0;
   if(dead){key=corpse?'dead':'lie';const a=corpse?rot:e.slipRot*Math.min(1,(1.6-e.slipT)/.15);flip=a<0;if(!S.f[key]){key='down_walk';lay=a;flip=false}}
@@ -4205,7 +4208,7 @@ function drawThugSpr(e,rot,alpha){
 }
 function drawThug(e,rot,alpha){
   if(!e.ikei&&!e.master&&drawThugSpr(e,rot,alpha))return;
-  const s=e.ikei?STY.ikei:e.master?STY.master:e.type==='gunner'?STY['gunner'+e.v]:(e.sub&&e.sub!=='mop')?STY[e.sub]:STY[e.type],fl=e.flash>0&&!rot,corpse=rot!=null,lying=!corpse&&e.slipT>.25,dead=corpse||lying;
+  const s=e.ikei?STY.ikei:e.master?STY.master:e.type==='gunner'?STY['gunner'+gunV(e)]:(e.sub&&e.sub!=='mop')?STY[e.sub]:STY[e.type],fl=e.flash>0&&!rot,corpse=rot!=null,lying=!corpse&&e.slipT>.25,dead=corpse||lying;
   const C=c=>fl?'#ffffff':c,OL='rgba(10,5,7,.92)',k=figH(e)/100;
   let dir=dead?'down':dirOf(e.ang),flip=false;if(dir==='left'){dir='right';flip=true}
   const rnd=i=>{const v=Math.sin((e.id||7)*12.9898+i*78.233)*43758.5453;return v-Math.floor(v)};
@@ -4614,24 +4617,25 @@ function drawWorld(){
   }
   if(!P.dead&&state!=='title'&&G.phase!=='devour'&&(G.phase!=='sink'||(G.snT>9.8&&G.snT<12.8))){drawPlayerGauges();if(G.phase==='fight'||G.phase==='break')drawPlayerLabels()}
   drawHandArms(); // 怨霊の腕は人物の手前に重ねる
-  // bullets
-  for(const b of B){
+  // bullets（銃撃手の弾は、銃の高さに見えるよう ox,oy だけずらして描く）
+  for(const b of B){g.save();g.translate(b.ox||0,b.oy||0);drawBullet(b);g.restore()}
+  function drawBullet(b){
     if(b.friendly){
       // 跳ね返した弾：太く光る尾を引く（PERFECTは金色）
       const tr=b.trail||[],rgb=b.perfect?'255,213,74':'127,243,255';g.lineCap='round';
       for(let i=1;i<tr.length;i++){const k=i/tr.length;g.strokeStyle=`rgba(${rgb},${k*.85})`;g.lineWidth=2+k*8;g.beginPath();g.moveTo(tr[i-1].x,tr[i-1].y);g.lineTo(tr[i].x,tr[i].y);g.stroke()}
-      glow(b.x,b.y,b.big?36:26,b.perfect?'#ffcc33':'#40e0ff',.9);circ(b.x,b.y,b.big?8:5,'#fff');continue;
+      glow(b.x,b.y,b.big?36:26,b.perfect?'#ffcc33':'#40e0ff',.9);circ(b.x,b.y,b.big?8:5,'#fff');return;
     }
     if(b.rocket){const a=Math.atan2(b.vy,b.vx);g.save();g.translate(b.x,b.y);g.rotate(a);rr(-12,-4,18,8,3,'#5a6a3a');g.fillStyle='#ff4020';g.beginPath();g.moveTo(6,-4);g.lineTo(13,0);g.lineTo(6,4);g.fill();g.restore();
-      glow(b.x-Math.cos(a)*14,b.y-Math.sin(a)*14,22+Math.random()*6,'#ff8a30',.8);continue}
+      glow(b.x-Math.cos(a)*14,b.y-Math.sin(a)*14,22+Math.random()*6,'#ff8a30',.8);return}
     // 呪符：紫の光をまとった紙の札
-    if(b.orb){glow(b.x,b.y,24,'#a040ff',.85);circ(b.x,b.y,5.5,'#f0d8ff');circ(b.x,b.y,3,'#ffffff');continue}
-    if(b.ofuda){const a=Math.atan2(b.vy,b.vx);glow(b.x,b.y,16,'#b46cff',.6);g.save();g.translate(b.x,b.y);g.rotate(a+Math.sin(G.time*20)*.2);rr(-7,-3,14,6,1,'#f4efe2');g.fillStyle='#c81e1e';g.fillRect(-3,-2,6,4);g.restore();continue}
+    if(b.orb){glow(b.x,b.y,24,'#a040ff',.85);circ(b.x,b.y,5.5,'#f0d8ff');circ(b.x,b.y,3,'#ffffff');return}
+    if(b.ofuda){const a=Math.atan2(b.vy,b.vx);glow(b.x,b.y,16,'#b46cff',.6);g.save();g.translate(b.x,b.y);g.rotate(a+Math.sin(G.time*20)*.2);rr(-7,-3,14,6,1,'#f4efe2');g.fillStyle='#c81e1e';g.fillRect(-3,-2,6,4);g.restore();return}
     // 投げ斧：回りながら飛ぶ（木の柄＋鉄の刃）
-    if(b.axe){g.save();g.translate(b.x,b.y);g.rotate(G.time*14+b.y*.03);g.fillStyle='#7a4a24';g.fillRect(-11,-1.8,20,3.6);g.fillStyle='#c8ccd4';g.beginPath();g.moveTo(5,-2);g.lineTo(12,-9);g.quadraticCurveTo(15,0,12,9);g.lineTo(5,2);g.closePath();g.fill();g.restore();continue}
+    if(b.axe){g.save();g.translate(b.x,b.y);g.rotate(G.time*14+b.y*.03);g.fillStyle='#7a4a24';g.fillRect(-11,-1.8,20,3.6);g.fillStyle='#c8ccd4';g.beginPath();g.moveTo(5,-2);g.lineTo(12,-9);g.quadraticCurveTo(15,0,12,9);g.lineTo(5,2);g.closePath();g.fill();g.restore();return}
     // 投げナイフ：回りながら飛ぶ銀の刃
     if(b.knife){g.save();g.translate(b.x,b.y);g.rotate(G.time*18+b.x*.05);g.fillStyle='#e8eef5';g.beginPath();g.moveTo(-9,0);g.lineTo(3,-3);g.lineTo(10,0);g.lineTo(3,3);g.closePath();g.fill();
-      g.fillStyle='#3a2a20';g.fillRect(-12,-1.6,5,3.2);g.restore();glow(b.x,b.y,14,'#cfe6ff',.45);continue}
+      g.fillStyle='#3a2a20';g.fillRect(-12,-1.6,5,3.2);g.restore();glow(b.x,b.y,14,'#cfe6ff',.45);return}
     const col='#ffcc55';g.strokeStyle=col;g.lineWidth=3;g.lineCap='round';g.beginPath();g.moveTo(b.x-b.vx*.035,b.y-b.vy*.035);g.lineTo(b.x,b.y);g.stroke();circ(b.x,b.y,b.big?7:3,'#fff');glow(b.x,b.y,b.big?26:12,b.friendly?'#40e0ff':'#ff8a30',.6)}
   drawSlash();
   // fx
