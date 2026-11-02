@@ -26,7 +26,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v1.20 2026-11-02';
+const VERSION='v1.23 2026-11-02';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const BIG_HEAL_PER=.15,BIG_HEAL_CAP=2; // 怨念解放・怨霊の手の回復：巻き込んだ敵1体につき基本量の15%を上乗せ（最大で基本量の2倍）
@@ -368,7 +368,14 @@ function noise(dur,vol,ft,f0,f1,at,out,q){
 const sfxStamp={};
 function can(k,gap){const n=performance.now();if(sfxStamp[k]&&n-sfxStamp[k]<gap)return false;sfxStamp[k]=n;return true}
 const SFX={
-  swing(st){if(!can('sw',35))return;if(st===3){noise(.3,.4,'bandpass',500,2600,0,0,1.2);tone(90,50,.25,'sawtooth',.08)}else noise(.13,.24,'bandpass',2600,700,0,0,1.5)},
+  swing(st){if(!can('sw',35))return;if(st===3)SFX.spin();else noise(.13,.24,'bandpass',2600,700,0,0,1.5)},
+  // 4段目の回転斬り「ズバァァン」：踏み込みの低い衝撃 → 体の周りを左から右へ回る風切り → 爪が鳴る金属の響き → 抜けていく風
+  spin(){const t=now(),bus=echoBus(),dst=distBus();
+    tone(120,45,.22,'sine',.7,t);tone(80,40,.12,'triangle',.2,t,dst);
+    if(AC.createStereoPanner){const pn=AC.createStereoPanner();pn.pan.setValueAtTime(-.8,t);pn.pan.linearRampToValueAtTime(.8,t+.32);pn.connect(sfxG);
+      noise(.34,.5,'bandpass',420,3400,t+.02,pn,2.2);noise(.3,.28,'bandpass',900,5200,t+.06,pn,3)}else noise(.34,.5,'bandpass',420,3400,t+.02,0,2.2);
+    for(const [fq,v,d] of [[2350,.06,.5],[3520,.045,.42],[5270,.03,.32]])tone(fq,fq*.94,d,'sine',v,t+.16,bus);
+    noise(.5,.14,'highpass',3000,7000,t+.2,0,.7)},
   hit(big){if(!can('hit',28))return;const hp_=Math.min(G.chain,60)*3;tone((big?170:200)+hp_,42,big?.24:.13,'sine',big?1:.7);noise(.05,big?.5:.35,'highpass',2600);if(big)noise(.2,.45,'lowpass',2200,250)},
   kill(c){if(!can('kill',30))return;tone(120,32,.32,'triangle',.7);noise(.24,.5,'lowpass',2800,300);noise(.08,.3,'bandpass',900,0,0,0,3);tone(500+Math.min(c,60)*18,0,.06,'square',.05)},
   dash(){noise(.18,.28,'highpass',1000,5200);tone(300,1100,.12,'sine',.07)}, // 突進ボスの溜め音
@@ -629,9 +636,34 @@ function endStep(s,t){
   if(st===0||st===8)piano(r,t,.06);
 }
 // 今の場面で流す曲：タイトル／通常ステージ／ボス戦（中ボス共通）／ラスボス／ボス撃破後／ボーナス面／エンディング
-/* 異形・鬼頭との最終決戦（120BPM）：ラスボスの荘厳な和音と鐘に、速い四つ打ちと低く唸るベースを重ねて切迫させる */
-function ikeiStep(s,t){finalStep(s,t);const st=s%16,r=F_ROOT[Math.floor(s/16)%4];if(st%4===0)kick(t);if(st===4||st===12)snare(t);if(st%2===0)bass(r/2,t);if(st%8===6)tone(r*8,r*7.5,.15,'sawtooth',.025,t,musG)}
-const TRACKS={ikei:{bpm:120,step:ikeiStep},title:{bpm:70,step:titleStep},stage:{bpm:146,step:playStep},boss:{bpm:168,step:bossStep},final:{bpm:100,step:finalStep},bonus:{bpm:150,step:bonusStep},win:{bpm:112,step:winStep},end:{bpm:66,step:endStep}};
+/* 異形・鬼頭との最終決戦（84BPM）：都節音階（D・E♭・G・A・B♭）の、暗く雅で荘厳な和の曲。
+   篠笛の旋律（息の音・ビブラート・下からしゃくり上げる装飾）、和太鼓、箏の分散和音、笙のような持続音、拍子木。広い堂内のような長い残響 */
+function mrev(){if(AC._mrev)return AC._mrev;const i=AC.createGain(),d=AC.createDelay(1),fb=AC.createGain(),lp=AC.createBiquadFilter(),w=AC.createGain();
+  d.delayTime.value=.29;fb.gain.value=.42;lp.type='lowpass';lp.frequency.value=2600;w.gain.value=.5;i.connect(d);d.connect(lp);lp.connect(fb);fb.connect(d);lp.connect(w);w.connect(musG);return AC._mrev=i}
+function fue(f,t,dur){
+  const o=AC.createOscillator(),lf=AC.createOscillator(),lg=AC.createGain(),gn=AC.createGain();o.type='sine';
+  o.frequency.setValueAtTime(f*.94,t);o.frequency.exponentialRampToValueAtTime(f,t+.09); // 下からしゃくり上げる
+  lf.frequency.value=5.4;lg.gain.setValueAtTime(0,t);lg.gain.linearRampToValueAtTime(f*.012,t+dur*.6);lf.connect(lg);lg.connect(o.frequency);
+  gn.gain.setValueAtTime(.0001,t);gn.gain.exponentialRampToValueAtTime(.075,t+.06);gn.gain.setValueAtTime(.075,t+dur*.75);gn.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  o.connect(gn);gn.connect(musG);gn.connect(mrev());o.start(t);lf.start(t);o.stop(t+dur+.05);lf.stop(t+dur+.05);
+  tone(f*2,f*2,dur*.8,'sine',.008,t,musG); // 篠笛の倍音
+  noise(dur,.022,'bandpass',f*1.02,f,t,mrev(),9);noise(.08,.03,'bandpass',f*1.5,f,t,musG,4)} // 息の音
+function taiko(t,v){tone(72,44,.7,'sine',v,t,musG);noise(.09,v*.35,'lowpass',380,120,t,musG);noise(.04,v*.18,'bandpass',900,600,t,musG,2);tone(72,44,.7,'sine',v*.25,t,mrev())}
+function koto(f,t){const o=AC.createOscillator(),o2=AC.createOscillator(),lp=AC.createBiquadFilter(),gn=AC.createGain();o.type='triangle';o2.type='sawtooth';o.frequency.value=f;o2.frequency.value=f*1.003;
+  lp.type='lowpass';lp.frequency.setValueAtTime(3200,t);lp.frequency.exponentialRampToValueAtTime(700,t+.6);gn.gain.setValueAtTime(.06,t);gn.gain.exponentialRampToValueAtTime(.0001,t+1.1);
+  o.connect(lp);o2.connect(lp);lp.connect(gn);gn.connect(musG);gn.connect(mrev());o.start(t);o2.start(t);o.stop(t+1.15);o2.stop(t+1.15)}
+const J_MEL={0:[880,6],6:[932.33,2],8:[880,4],12:[783.99,4],16:[622.25,8],24:[587.33,8],32:[783.99,6],38:[880,2],40:[932.33,4],44:[880,2],46:[783.99,2],48:[1174.66,10],58:[932.33,2],60:[880,4]};
+const J_KOTO=[[293.66,440,587.33,622.25],[392,466.16,587.33,783.99],[311.13,392,466.16,622.25],[293.66,440,622.25,587.33]];
+const J_DRONE=[[146.83,220],[146.83,196],[155.56,233.08],[155.56,220]];
+function ikeiStep(s,t){
+  const bar=Math.floor(s/16)%4,st=s%16,spb=60/84/4;
+  if(st===0)for(const fq of J_DRONE[bar]){pad(fq,t,spb*16+.4,.04,musG);pad(fq*2,t,spb*16+.4,.018,musG)} // 笙のような持続音（最後の2小節はE♭で不穏に）
+  if(st===0||st===8)taiko(t,st?.6:.85);if(st===6||st===11)taiko(t,.45);if(bar===3&&st>=12)taiko(t,.4+(st-12)*.12); // 和太鼓（最後の小節は連打で頭へ）
+  if(st===0||st===3||st===6||st===10){const k=J_KOTO[bar][[0,1,2,3][[0,3,6,10].indexOf(st)]];koto(k,t)} // 箏
+  const m=J_MEL[s];if(m)fue(m[0],t,m[1]*spb*1.05); // 篠笛
+  if(s===63){noise(.03,.35,'bandpass',2600,2400,t,musG,6);noise(.03,.3,'bandpass',2600,2400,t+.09,musG,6)} // 拍子木
+}
+const TRACKS={ikei:{bpm:84,step:ikeiStep},title:{bpm:70,step:titleStep},stage:{bpm:146,step:playStep},boss:{bpm:168,step:bossStep},final:{bpm:100,step:finalStep},bonus:{bpm:150,step:bonusStep},win:{bpm:112,step:winStep},end:{bpm:66,step:endStep}};
 const musTrack=()=>state==='title'?'title':state==='epilogue'||state==='clear'?'end':G.bonus?'bonus':G.bossWon?'win':G.phase==='rebirth'?'title':G.isBossWave?(bossFor(G.wave)==='kito'?(G.boss&&G.boss.ikei?'ikei':'final'):'boss'):'stage';
 function toggleMute(){muted=!muted;try{localStorage.setItem('nb_mute',muted?'1':'0')}catch(e){}if(master)master.gain.value=muted?0:.85}
 
@@ -1336,6 +1368,9 @@ function killEnemy(e,ang,spd,o){
   if(o.fall){for(let i=0;i<8;i++){const a=rand(0,TAU),v=rand(30,120),l=rand(.3,.6);fx({k:'smoke',x:e.x,y:e.y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:l,max:l,sz:rand(8,14)})}}
   // 連続撃破ほど血しぶきが大きくなる（25連で最大1.8倍）
   else{const cs=1+Math.min(.5,G.chain/40),pk=PAINT_K;PAINT_K=o.spin?SPIN_PAINT:1;splat(e.x,e.y,e.r*1.5*cs,ang,o.sink||o.crush);bloodBurst(e.x,e.y,ang,Math.round(18*cs),440*cs,o.sink||o.crush);PAINT_K=pk;
+    if(!o.sink&&!o.crush)for(const c of CAPPV){if(DONE[c.i])continue;const t=tileRect(c.i),tx=t.x+t.w/2,ty=t.y+t.h/2;if(dist(e.x,e.y,tx,ty)>TS*1.5)continue;
+      const a=Math.atan2(ty-e.y,tx-e.x),dd=dist(e.x,e.y,tx,ty);for(let k=0;k<10;k++){const s2=dd*rand(5,7.5),l=rand(.2,.3);fx({k:'b',x:e.x,y:e.y,vx:Math.cos(a+rand(-.15,.15))*s2,vy:Math.sin(a+rand(-.15,.15))*s2,life:l,max:l,sz:rand(2,4),np:true,col:'#c8001e'})}
+      fillTile(c.i);popText(tx,ty-6,'閉じた！','#ff8aa0',15,.8);break}
     if(o.crush){const i=tileAt(e.x,e.y);if(i>=0){if(!BLOCK[i]&&!DONE[i])fillTile(i);const t=tileRect(i),dx=e.x-(t.x+t.w/2),dy=e.y-(t.y+t.h/2),cx=i%GC,cy=(i/GC)|0;
       const nx=Math.abs(dx)>=Math.abs(dy)?cx+Math.sign(dx||1):cx,ny=Math.abs(dx)>=Math.abs(dy)?cy:cy+Math.sign(dy||1),j=ny*GC+nx;
       if(nx>=0&&ny>=0&&nx<GC&&ny<GR&&!BLOCK[j]&&!DONE[j])fillTile(j)}}}  {
@@ -2619,7 +2654,7 @@ function drawTutPanel(){
 const tutDetail=st=>{const T=touchMode;return({
   1:[T?'画面の左半分をドラッグすると、その方向へ走る':'WASD／矢印キーで走る',T?'右半分をタップすると攻撃。連打で4段の連撃になる':'J／左クリックで攻撃。連打で4段の連撃になる','4段目は全方向を斬る回転斬り。囲まれた時に強い','攻撃は、走っている向き（止まっていれば向いている方向）へ出る'],
   2:['敵を倒すと血が飛び散り、床のマスが赤く染まる','血は、敵が吹き飛んだ向きに広がる。死体が床を滑った跡も塗れる','連撃が続くほど、1体で塗れる量が増える','床を全部塗るとステージクリア'],
-  3:['塗ったマスで輪を閉じると、中のマスが一気に血で染まる','壁や障害物も囲いの一部になる','「あと1マスで囲える」マスは光って知らせる','広く囲むほど、一気に進む'],
+  3:['塗ったマスで輪を閉じると、中のマスが一気に血で染まる','壁や障害物も囲いの一部になる','「あと1マスで囲える」マスは光って知らせる','光るマスの近くで敵を倒すと、血が流れ込んでそのマスが埋まる','広く囲むほど、一気に進む'],
   4:[(T?'右半分を長押し':'U／右クリックを押したまま')+'で、正面からの攻撃を防ぐ','防ぐと、敵の攻撃力と同じだけライフが回復し、SOULも同じだけたまる','盾は今向いている方向に出る（向きは移動で変える）。背後や横からの攻撃は防げない','1回防ぐと解除される。続けて守るなら押し直す'],
   5:['攻撃が当たる直前（約0.2秒前）にガードを押すと「ジャストガード」','相手は大きくよろけ、次の一撃は必ずクリティカル（2.5倍）','SOULも普通のガードより大きくたまる','連撃中は怯まないナイフ使いや、盾持ちの盾を崩せる'],
   6:['銃撃手の弾は、当たる直前に攻撃すると跳ね返せる（斧・ナイフ・ロケットも）','体に届く寸前で弾くと「PERFECT」。威力2倍で、SOULも大きくたまる','跳ね返した弾は、敵を貫通して飛んでいく','盾持ちの盾も、跳ね返した弾で壊せる'],
@@ -4523,7 +4558,7 @@ function drawTitle(){
   g.globalAlpha=1;
 }
 function dim(a,col){g.fillStyle=`rgba(${col||'4,4,8'},${a})`;g.fillRect(0,0,W,H)}
-const RULES=[['塗る','敵を倒すと床に血。床をすべて塗るとクリア'],['囲う','囲むと中が一気に染まる。光る「囲える」マスを狙え（壁際も可）'],['掃除屋','塗った血を消しに来る。最優先で倒せ'],
+const RULES=[['塗る','敵を倒すと床に血。床をすべて塗るとクリア'],['囲う','囲むと中が一気に染まる。光る「囲える」マスの近くで倒せば埋まる'],['掃除屋','塗った血を消しに来る。最優先で倒せ'],
   ['弾き返し','敵の弾やロケットは、攻撃で跳ね返せる'],['ガード','正面を防いでライフとSOULがたまる。直前ならジャスト'],['怨念解放','SOUL1段目（金）満タンで発動。周囲の敵を灰にする'],['怨霊の手','SOUL2段目（紫）満タンで発動。血の床の上の敵を全員引きずり込む'],
   ['仕掛け','ステージの物を殴ると発動する'],['強化カード','クリアで1枚。やり直す時は2枚選んで始める'],['ボス','近づくと掴んで投げてくる（ガード不能）']];
 function drawPause(){
