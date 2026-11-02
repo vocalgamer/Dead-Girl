@@ -26,7 +26,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v1.19 2026-11-02';
+const VERSION='v1.20 2026-11-02';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const BIG_HEAL_PER=.15,BIG_HEAL_CAP=2; // 怨念解放・怨霊の手の回復：巻き込んだ敵1体につき基本量の15%を上乗せ（最大で基本量の2倍）
@@ -370,14 +370,7 @@ function can(k,gap){const n=performance.now();if(sfxStamp[k]&&n-sfxStamp[k]<gap)
 const SFX={
   swing(st){if(!can('sw',35))return;if(st===3){noise(.3,.4,'bandpass',500,2600,0,0,1.2);tone(90,50,.25,'sawtooth',.08)}else noise(.13,.24,'bandpass',2600,700,0,0,1.5)},
   hit(big){if(!can('hit',28))return;const hp_=Math.min(G.chain,60)*3;tone((big?170:200)+hp_,42,big?.24:.13,'sine',big?1:.7);noise(.05,big?.5:.35,'highpass',2600);if(big)noise(.2,.45,'lowpass',2200,250)},
-  // 撃破音：4つの音を重ねて「ドッ・ザシュッ・ブシャッ・キン」と鳴らす
-  kill(c){if(!can('kill',30))return;const t=now(),bus=echoBus(),dst=distBus(),n=Math.min(c||0,40);
-    tone(150,38,.28,'sine',.9,t);tone(95,30,.2,'triangle',.22,t,dst); // ①芯：歪ませた低い「ドッ」（胸に来る衝撃）
-    noise(.07,.55,'bandpass',3200,1400,t,0,1.2); // ②肉を断つ「ザシュッ」
-    noise(.22,.42,'bandpass',2200,280,t+.015,0,2.2); // ③血が飛び散る「ブシャッ」（湿った音が高→低へ落ちる）
-    // ④ご褒美の「キン」：連撃が2つ増えるごとに音階（ペンタトニック）を1段ずつ上がる。最大2オクターブ上まで
-    const sc=[0,2,4,7,9],st=Math.floor(n/2),semi=Math.min(24,sc[st%5]+12*Math.floor(st/5)),fq=660*Math.pow(2,semi/12);
-    tone(fq,fq,.16,'triangle',.11,t+.03,bus);tone(fq*1.5,fq*1.5,.12,'sine',.06,t+.05,bus)},
+  kill(c){if(!can('kill',30))return;tone(120,32,.32,'triangle',.7);noise(.24,.5,'lowpass',2800,300);noise(.08,.3,'bandpass',900,0,0,0,3);tone(500+Math.min(c,60)*18,0,.06,'square',.05)},
   dash(){noise(.18,.28,'highpass',1000,5200);tone(300,1100,.12,'sine',.07)}, // 突進ボスの溜め音
   // 銃声：「ばきゅーーん！」。
   // 「ば」＝歪ませた鋭い破裂と胸に来る衝撃。「きゅ」＝一瞬で跳ね上がる甲高い音。「ーーん」＝弾がうなりを上げて遠ざかる音が、震えながら長く下がっていく。
@@ -1320,7 +1313,7 @@ function hitEnemy(e,dmg,ang,kb,o){
   SFX.hit(big);
   // 倒した敵の死体が滑る速さ×KO_K（v1.10で1段階下げた）。普通の攻撃で約1.5マス（基準）、4段目は基準より遠い約2マス、
   // クリティカル・反射弾・爆発は約3マス。怪力のカードは普通の攻撃と4段目の距離を伸ばすが、クリティカルの距離を上限にする
-  if(e.hp<=0)killEnemy(e,ang,o.sink?0:(o.fin&&!o.spin?720:Math.min(720,(o.spin?480:360)*(1+.08*lv('heavy'))))*KO_K,o);
+  if(e.hp<=0)killEnemy(e,ang,o.sink||o.crush?0:(o.fin&&!o.spin?720:Math.min(720,(o.spin?480:360)*(1+.08*lv('heavy'))))*KO_K,o);
 }
 const KO_K=.59; // 吹き飛ぶ距離の倍率（v1.04で、普通の攻撃で倒した時が約3.4マス→約2マスになるよう全体を縮めた）
 function killEnemy(e,ang,spd,o){
@@ -1342,7 +1335,10 @@ function killEnemy(e,ang,spd,o){
   if(e.shiki){paperBurst(e.x,e.y,ang,16);SFX.swing(0);if(G.bonus&&!G.bonus.end)G.bonus.kills++;return}
   if(o.fall){for(let i=0;i<8;i++){const a=rand(0,TAU),v=rand(30,120),l=rand(.3,.6);fx({k:'smoke',x:e.x,y:e.y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:l,max:l,sz:rand(8,14)})}}
   // 連続撃破ほど血しぶきが大きくなる（25連で最大1.8倍）
-  else{const cs=1+Math.min(.5,G.chain/40),pk=PAINT_K;PAINT_K=o.spin?SPIN_PAINT:1;splat(e.x,e.y,e.r*1.5*cs,ang,o.sink);bloodBurst(e.x,e.y,ang,Math.round(18*cs),440*cs,o.sink);PAINT_K=pk}  {
+  else{const cs=1+Math.min(.5,G.chain/40),pk=PAINT_K;PAINT_K=o.spin?SPIN_PAINT:1;splat(e.x,e.y,e.r*1.5*cs,ang,o.sink||o.crush);bloodBurst(e.x,e.y,ang,Math.round(18*cs),440*cs,o.sink||o.crush);PAINT_K=pk;
+    if(o.crush){const i=tileAt(e.x,e.y);if(i>=0){if(!BLOCK[i]&&!DONE[i])fillTile(i);const t=tileRect(i),dx=e.x-(t.x+t.w/2),dy=e.y-(t.y+t.h/2),cx=i%GC,cy=(i/GC)|0;
+      const nx=Math.abs(dx)>=Math.abs(dy)?cx+Math.sign(dx||1):cx,ny=Math.abs(dx)>=Math.abs(dy)?cy:cy+Math.sign(dy||1),j=ny*GC+nx;
+      if(nx>=0&&ny>=0&&nx<GC&&ny<GR&&!BLOCK[j]&&!DONE[j])fillTile(j)}}}  {
     if(!o.fall)CORPSES.push({e,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,rot:0,vr:rand(-16,16),t:0,hit:new Set(),noCrash:!!o.crash,push2:!!o.crash,pk:o.spin?SPIN_PAINT:1});
     G.kills++;const pts=Math.round(e.val*G.mult*(1+.25*lv('greed')));G.score+=pts;
     G.soul=Math.min(SOUL_MAX,G.soul+soulMul()*(e.type==='brute'?16:8)); // 撃破のSOUL（v0.95で6→8に少し戻した）
@@ -1406,7 +1402,7 @@ function justGuard(foe,a){
 // 盾持ちの盾が壊れる（反射弾・爆発・仕掛け・ジャストガード）
 function breakShield(e){e.shieldUp=false;addShake(8);SFX.glass();popText(e.x,figTop(e)-8,'盾破壊！','#ffd54a',16,.9);
   for(let i=0;i<10;i++){const a=rand(0,TAU),v=rand(80,240),l=rand(.3,.6);fx({k:'s',x:e.x+Math.cos(e.ang)*14,y:e.y+Math.sin(e.ang)*14,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:l,max:l})}}
-function hurtPlayer(dmg,sx,sy){
+function hurtPlayer(dmg,sx,sy,ho){
   if(P.dead||state!=='play'||DEV.god)return; // 開発者モードの無敵
   if(P.inv>0)return;
   dmg*=ENEMY_DMG;const atk=dmg;dmg*=1-.1*lv('armor'); // atk：敵の攻撃力（鎧で減る前）
@@ -1414,7 +1410,7 @@ function hurtPlayer(dmg,sx,sy){
   // ガードは正面（向いている方向±GUARD_ARC）からの攻撃だけ防げる
   const front=Math.abs(angDiff(P.face,a+Math.PI))<guardArc();
   if(P.guard&&!front)popText(P.x,P.y-50,'背後を取られた！','#ffb44a',13,.8);
-  if(P.guard&&front){
+  if(P.guard&&front&&!(ho&&ho.noGuard)){
     // ガード：ダメージを完全に防ぎ、敵の攻撃力と同じ数値だけライフが回復し、SOULもたまる。ノックバック小、連撃は途切れない
     const heal=atk*GUARD_HEAL*(1+.5*lv('guardh'));P.hp=Math.min(P.maxhp,P.hp+heal);P.guardLock=true;tutComplete(4,.6);
     G.soul=Math.min(SOUL_MAX,G.soul+heal);popText(P.x+26,P.y-30,'+'+Math.round(heal),'#7fd8ff',12,.6);
@@ -1841,8 +1837,8 @@ function updateGimmicks(dt){
       fx({k:'dustc',x:bx,y:by,vx:Math.cos(an)*v,vy:Math.sin(an)*v-20,life:l,max:l,sz:rand(7,13)})}
     for(let i=0;i<10;i++){const an=rand(0,TAU),v=rand(120,260),l=rand(.35,.6);fx({k:'chip',x:w.x+rand(-30,30),y:w.y+rand(-8,8),vx:Math.cos(an)*v,vy:Math.sin(an)*v-80,life:l,max:l,sz:rand(1.5,3)})}
     RINGS.push({x:w.x,y:w.y,r:10,R:w.r*1.4,t:0,dur:.3,col:'210,210,220',w:8});
-    for(const e of [...E])if(dist(w.x,w.y,e.x,e.y)<w.r+e.r*.6)gimHit('beam',e,e.armor?8:99,Math.atan2(e.y-w.y,e.x-w.x),200,{fin:true});
-    if(!P.dead&&dist(w.x,w.y,P.x,P.y)<w.r+P.r*.4)hurtPlayer(20,w.x,w.y-1)}}
+    for(const e of [...E])if(dist(w.x,w.y,e.x,e.y)<w.r+e.r*.6)gimHit('beam',e,e.armor?8:99,Math.atan2(e.y-w.y,e.x-w.x),200,{fin:true,crush:true});
+    if(!P.dead&&dist(w.x,w.y,P.x,P.y)<w.r+P.r*.4)hurtPlayer(40,w.x,w.y-1,{noGuard:true})}} // 数百kgの鉄骨は盾では受け止められない
   WARNS=WARNS.filter(w=>w.t<w.dur+1.2);
   // 衝撃波（強化カード）：広がる輪に触れた敵を吹き飛ばし、敵弾を弾き返す
   for(const sh of SHOCKS){sh.r+=560*dt;if(sh.vis)continue;
