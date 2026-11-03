@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v1.76 2026-11-03';
+const VERSION='v1.77 2026-11-03';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 // ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
 const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
@@ -3998,6 +3998,8 @@ function update(rdt){
       // 盾を構えた盾持ちは、ガード同士でぶつかると動かない（ボスと同じく重い）
       const we=e.boss||(P.guard&&e.type==='shield'&&e.shieldUp)?.1:.75;e.x+=ux*p*we;e.y+=uy*p*we;P.x-=ux*p*(1-we);P.y-=uy*p*(1-we)}
   }
+  // 押し合いで主人公が壁の外や障害物の中へ押し込まれないよう、押し合いの後にもう一度戻す（ボスに押された時など）
+  if(!P.dead){P.x=clamp(P.x,AX0+P.r,AX1-P.r);P.y=clamp(P.y,AY0+P.r,AY1-P.r);blockPush(P)}
   // corpses (bowling)
   for(const c of CORPSES){
     c.t+=dt;const e=c.e;e.x+=c.vx*dt;e.y+=c.vy*dt;const f=Math.exp(-3*dt);c.vx*=f;c.vy*=f; // 死体は遠くまで滑る
