@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v1.95 2026-11-05';
+const VERSION='v1.96 2026-11-05';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 // ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
 const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
@@ -2843,12 +2843,74 @@ function sinkFx(e){
 // 沈み終わった後の床には、つやの残る濃い血だまりを描き残す（絵だけ。塗りは囲いで済んでいる）
 // 飲み込み切る瞬間の「ごっくん」：低く詰まった「ご」→ 喉が鳴る「っくん」（同時に何体沈んでも重なりすぎないよう間隔を空ける）
 function gulpSfx(){if(!can('gulp',90))return;tone(150,55,.16,'sine',.3);noise(.12,.16,'lowpass',520,120);tone(270,92,.13,'sine',.24,now(.14));tone(118,68,.1,'triangle',.12,now(.16));noise(.06,.08,'lowpass',300,90,now(.17))}
-function sinkStamp(s){decG.fillStyle=BLC(55,8,.6);decG.beginPath();decG.ellipse(s.x,s.y,s.R*1.0,s.R*.42,0,0,TAU);decG.fill();
-  decG.fillStyle=BLC(130,22,.25);decG.beginPath();decG.ellipse(s.x-s.R*.28,s.y-s.R*.12,s.R*.38,s.R*.13,0,0,TAU);decG.fill()}
+function sinkStamp(s){const ry=s.Ry||s.R*.42,k=ry/s.R;decG.fillStyle=BLC(55,8,s.lie?.42:.6);decG.beginPath();decG.ellipse(s.x,s.y,s.R*1.0,ry,0,0,TAU);decG.fill();
+  decG.fillStyle=BLC(130,22,s.lie?.18:.25);decG.beginPath();decG.ellipse(s.x-s.R*.28,s.y-ry*.29,s.R*.38,Math.max(.5,s.R*.38*k*.8),0,0,TAU);decG.fill()}
+/* v1.96 倒れた死体が血だまりに飲み込まれる：
+   体の下に血だまりが広がり、血が体の外側（手足の先）から内側へ這い上がるように覆っていき、最後に「とぷん」と閉じる。
+   死体の絵は沈み始めに一度だけ別のキャンバスへ描いておき、毎フレームはそれを使う（重さ対策） */
+const LIE_T=.85,LIE_MAX=14;
+const LIEW=document.createElement('canvas'),liew=LIEW.getContext('2d');LIEW.width=LIEW.height=8;
+function plopSfx(){if(!can('plop',70))return;tone(210,80,.11,'sine',.1);noise(.07,.05,'lowpass',420,110);tone(330,150,.05,'sine',.04,now(.06))}
+function lieFx(c){
+  try{
+    const e=c.e,sc=clamp(cv.width/W||1,1,2.5),B=Math.ceil(figH(e)*1.7+40),px=Math.ceil(B*sc);
+    const bc=document.createElement('canvas');bc.width=bc.height=px;const bg=bc.getContext('2d');bg.setTransform(sc,0,0,sc,0,0);
+    const og=g;g=bg;try{drawThug({...e,x:B/2,y:B/2,flash:0},c.rot+.001,.9)}finally{g=og}
+    // 体の範囲を測る（透明でない画素の外接四角形。粗く3画素おき）
+    const d=bg.getImageData(0,0,px,px).data;let x0=px,y0=px,x1=-1,y1=-1;
+    for(let y=0;y<px;y+=3)for(let x=0;x<px;x+=3)if(d[(y*px+x)*4+3]>40){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}
+    if(x1<0)return false;
+    const ox=e.x-B/2,oy=e.y-B/2,bw=(x1-x0+3)/sc,bh=(y1-y0+3)/sc,cx=ox+(x0+x1)/2/sc,cy=oy+(y0+y1)/2/sc;
+    if(LIEW.width<px){LIEW.width=LIEW.height=px}
+    SINKS.push({lie:1,e,img:bc,px,sc,ox,oy,bw,bh,x:cx,y:cy,t:0,dur:LIE_T,R:Math.max(14,bw*.56+6),Ry:Math.max(9,bh*.56+4),sd:Math.random()*99});
+    return true
+  }catch(err){return false}
+}
+function drawLie(s){
+  const t=s.t,p=clamp(t/s.dur,0,1),open=clamp(t/.15,0,1),fade=t>s.dur?1-clamp((t-s.dur)/.5,0,1):1;
+  const wob=Math.sin(t*17+s.sd)*(1-p),R=s.R*(.3+.7*open)*(1+.04*wob),Ry=s.Ry*(.3+.7*open)*(1-.04*wob),q=Ry/R;
+  g.save();g.globalAlpha=fade;
+  // 血だまり：倒れた体より一回り大きく、中ほどは赤黒く、縁は暗く外へ溶ける
+  g.save();g.translate(s.x,s.y);g.scale(1,q);
+  const gr=g.createRadialGradient(-R*.2,-R*.35,R*.08,0,0,R*1.12);gr.addColorStop(0,BLC(100,15,.92));gr.addColorStop(.5,BLC(66,8,.9));gr.addColorStop(.85,BLC(34,4,.82));gr.addColorStop(1,BLC(30,4,0));
+  g.fillStyle=gr;g.beginPath();g.arc(0,0,R*1.12,0,TAU);g.fill();g.restore();
+  if(t<s.dur){
+    // 体：血が外側から内側へ這い上がって覆っていく（細い手足の先から沈んで見える）。少しずつ縮み、わずかに下がる
+    const cov=Math.pow(p,1.2),w=liew,px=s.px,cxp=(s.x-s.ox)*s.sc,cyp=(s.y-s.oy)*s.sc,Rp=Math.hypot(s.bw,s.bh)*.55*s.sc;
+    w.setTransform(1,0,0,1,0,0);w.globalCompositeOperation='source-over';w.globalAlpha=1;w.clearRect(0,0,px,px);w.drawImage(s.img,0,0);
+    w.globalCompositeOperation='source-atop';
+    const rin=Math.max(0,Rp*(1.05-1.1*cov)),edge=Math.max(1,Rp*.28);
+    const cg=w.createRadialGradient(cxp,cyp,rin,cxp,cyp,rin+edge);cg.addColorStop(0,BLC(110,16,0));cg.addColorStop(.5,BLC(105,14,.75));cg.addColorStop(1,BLC(70,8,.97));
+    w.fillStyle=cg;w.fillRect(0,0,px,px);
+    w.fillStyle=`rgba(25,0,4,${(.3*p).toFixed(3)})`;w.fillRect(0,0,px,px);
+    // 濡れたつや：血に覆われた側の縁に細い照り返し
+    w.globalCompositeOperation='source-over';
+    const k=1-.12*p,jx=Math.sin(t*31+s.sd)*1.6*Math.max(0,1-p/.4),dy=2.5*p,ba=p>.82?1-(p-.82)/.18:1;
+    g.globalAlpha=fade*clamp(ba,0,1);
+    g.save();g.translate(s.x+jx,s.y+dy);g.scale(k,k);g.drawImage(LIEW,0,0,px,px,s.ox-s.x,s.oy-s.y,px/s.sc,px/s.sc);g.restore();
+    g.globalAlpha=fade;
+    // 体の縁に寄せてくる血の波（血面が体を舐めるように揺れる）
+    const lw=Math.max(.05,R*(.95-.5*cov)),lh=Math.max(.05,lw*q);
+    g.strokeStyle=BLC(150,26,.35*(1-p));g.lineWidth=2;g.beginPath();ellS(s.x,s.y+1,lw,lh,0,Math.PI*.05,Math.PI*.95);g.stroke();
+  }
+  // 泡：体の沈んだあたりから浮かんではじける
+  for(let k=0;k<5;k++){const t0=.12+k*.13+((s.sd*7+k*3)%1)*.06,lt=t-t0;if(lt<0||lt>.32)continue;const u=lt/.32,a=s.sd*3+k*2.4,rr=R*(.15+((k*37)%55)/100),bx=s.x+Math.cos(a)*rr,by=s.y+Math.sin(a)*rr*q,br=(1.3+(k%3)*.8)*(u<.8?u/.8:1);
+    if(u<.85){g.fillStyle=BLC(70,8,.9);g.beginPath();g.arc(bx,by,br,0,TAU);g.fill();g.fillStyle='rgba(255,230,230,.32)';g.beginPath();g.arc(bx-br*.35,by-br*.35,br*.35,0,TAU);g.fill()}
+    else{g.strokeStyle=BLC(150,26,.55);g.lineWidth=1;g.beginPath();ellS(bx,by,br*1.8,br*.8,0,0,TAU);g.stroke()}}
+  // 飲み込み切った瞬間：血面が小さく盛り上がって閉じる
+  const gt=t-s.dur*.86;
+  if(gt>0&&gt<.35){const u=gt/.35;g.fillStyle=BLC(140,24,.8*(1-u));g.beginPath();ellS(s.x,s.y-4*Math.sin(u*Math.PI),R*.28*(1-u*.5),R*.28*q+3*Math.sin(u*Math.PI),0,0,TAU);g.fill()}
+  // 波紋
+  for(let k=0;k<2;k++){const rt=t-(s.dur*.86+k*.14);if(rt<0||rt>.6)continue;const u=rt/.6,rr=R*(.25+u*.95);
+    g.strokeStyle=BLC(160,30,.5*(1-u));g.lineWidth=1.8*(1-u)+.5;g.beginPath();ellS(s.x,s.y,rr,rr*q,0,0,TAU);g.stroke()}
+  // つやの照り返し
+  g.fillStyle=`rgba(255,240,240,${(.09+.04*wob).toFixed(3)})`;g.beginPath();ellS(s.x-R*.3,s.y-Ry*.38,R*.3,Ry*.2,-.15,0,TAU);g.fill();
+  g.restore();
+}
 // v1.95：半径が0以下にならない楕円（負の半径を渡すとブラウザがエラーを出し、ゲームが固まる）
 const ellS=(x,y,rx,ry,rot,a0,a1)=>g.ellipse(x,y,Math.max(.05,rx),Math.max(.05,ry),rot,a0,a1);
 function drawSinks(){
-  for(const s of SINKS){
+  for(const s of SINKS){if(s.lie){drawLie(s);continue}
     const t=s.t,p=clamp(t/s.dur,0,1),open=clamp(t/.18,0,1),fade=t>s.dur?1-clamp((t-s.dur)/.5,0,1):1,e=s.e;
     // 血面は粘りながら揺れる（はじめ大きく、飲み込むほど落ち着く）
     const wob=Math.sin(t*19+s.sd)*(1-p),R=s.R*(.35+.65*open)*(1+.05*wob),Ry=R*.42*(1-.06*wob);
@@ -4259,7 +4321,7 @@ function update(rdt){
   // 押し合いで主人公が壁の外や障害物の中へ押し込まれないよう、押し合いの後にもう一度戻す（ボスに押された時など）
   if(!P.dead){P.x=clamp(P.x,AX0+P.r,AX1-P.r);P.y=clamp(P.y,AY0+P.r,AY1-P.r);blockPush(P)}
   // corpses (bowling)
-  for(const s of SINKS){s.t+=dt;if(!s.gulp&&s.t>=s.dur*.86){s.gulp=1;gulpSfx()}}SINKS=SINKS.filter(s=>{if(s.t<s.dur+.5)return true;sinkStamp(s);return false});
+  for(const s of SINKS){s.t+=dt;if(!s.gulp&&s.t>=s.dur*.86){s.gulp=1;if(s.lie)plopSfx();else gulpSfx()}}SINKS=SINKS.filter(s=>{if(s.t<s.dur+.5)return true;sinkStamp(s);return false});
   for(const c of CORPSES){
     c.t+=dt;const e=c.e;e.x+=c.vx*dt;e.y+=c.vy*dt;const f=Math.exp(-3*dt);c.vx*=f;c.vy*=f; // 死体は遠くまで滑る
     const sp=Math.hypot(c.vx,c.vy);c.rot+=c.vr*dt*Math.min(1,sp/300);
@@ -4286,7 +4348,9 @@ function update(rdt){
       c.lx=e.x;c.ly=e.y;c.sm=(c.sm||0)+sp*dt;if(c.sm>9&&!c.slumped){c.sm=0;const pk=PAINT_K;PAINT_K=c.pk||1;paint(e.x,e.y,e.r*.75,.42);PAINT_K=pk}}else c.lx=null;
     if(sp<40&&!c.landed){c.landed=true;splat(e.x,e.y,e.r,c.slumped?inA+Math.PI:Math.atan2(c.vy,c.vx),c.slumped)} // 壁際で崩れた死体の血だまりは絵だけ（塗りは激突の血しぶきで済んでいる）
   }
-  CORPSES=CORPSES.filter(c=>c.t<1.2);
+  // v1.96：滑り終えた死体は、薄れて消える代わりに、その場の血だまりへ飲み込まれる（同時に沈む数が多すぎる時だけ、従来どおり薄れて消える）
+  CORPSES=CORPSES.filter(c=>{if(c.t<1.2)return true;if(c.t>=99)return false;if(c.fade)return c.t<1.6;
+    if(SINKS.reduce((n,q)=>n+(q.lie?1:0),0)>=LIE_MAX||!lieFx(c)){c.fade=1;return true}return false});
   for(const fl of FALLERS)fl.t+=dt;FALLERS=FALLERS.filter(fl=>fl.t<1.7);
   // bullets
   for(const b of B){
@@ -5066,7 +5130,7 @@ function drawWorld(){
   drawGimmicks();drawHands();drawMk();
   for(const m of MARKS){const p=1-m.t/.7;g.strokeStyle=`rgba(255,40,70,${.4+p*.6})`;g.lineWidth=2;g.beginPath();g.arc(m.x,m.y,16-p*6,0,TAU);g.stroke();glow(m.x,m.y,30,'#ff2040',.3+p*.4)}
   for(const e of E)drawTele(e);
-  for(const c of CORPSES){const a=c.t>.8?1-(c.t-.8)/.4:1;drawThug(c.e,c.rot+.001,clamp(a,0,1)*.9)}
+  for(const c of CORPSES){const a=c.fade?1-(c.t-1.2)/.4:1;drawThug(c.e,c.rot+.001,clamp(a,0,1)*.9)}
   drawSinks();
   for(const t of P.trail){drawGirl(t.x,t.y,t.face,(t.t/.22)*(t.red?.35:.45),t.red?'red':'cyan')}
   for(const f of FX)if(f.k==='ghost'){g.globalAlpha=f.life/f.max*.4;g.fillStyle='#ffffff';g.beginPath();g.arc(f.x,f.y,f.e.r,0,TAU);g.fill();g.globalAlpha=1}
