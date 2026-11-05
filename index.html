@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v1.82 2026-11-05';
+const VERSION='v1.83 2026-11-05';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 // ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
 const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
@@ -1188,6 +1188,8 @@ const FXK=1.25;
 const SOUL1=100,SOUL_MAX=200;
 function addShake(v){G.shake=Math.max(G.shake,v*FXK)}
 function slow(d,s){G.slowT=Math.max(G.slowT,d);G.slowScale=s}
+// v1.83：描画の中で生む粒は、ゲームが進んだ時だけ生む（止まった画面で溜まって白い塊になっていた）
+let FXSTEP=0,auraStep=-1;
 function fx(o){if(FX.length>=900)return;FX.push(o);if(Math.random()<FXK-1&&o.vx!=null)FX.push({...o,vx:o.vx*rand(.8,1.2),vy:o.vy*rand(.8,1.2)})} // 粒は約1.25倍に増やす
 // 血しぶき：吹き飛んだ向きの前方の扇形に飛ぶ（以前は2割が全方向に飛び、後ろ側の床も少しずつ塗っていた）。np：主人公の血など、床の塗りに数えない
 // 塗りの倍率（4段目の回転斬りで当てた・倒した敵の血は45%。全方向に飛ぶ技なので、狙って塗る1〜3段目より控えめに）
@@ -2469,14 +2471,15 @@ function drawHands(){
     g.save();g.globalAlpha=fade;
     // 足元に開く黒い沼（縁が紫に揺らめき、土くれと血が跳ねる）
     const pr=(24*grow+6)*R;drawRift(h.x,h.y+4,pr,h.seed,h.t,fade);
-    if(h.t<.25&&Math.random()<.5)fx({k:'b',x:h.x+rand(-pr,pr),y:h.y+4,vx:rand(-60,60),vy:rand(-160,-60),life:.35,max:.35,sz:rand(1.5,3),col:pick(['#2a1a10','#3a0a0c','#1a1208'])});
+    const live=h.fxs!==FXSTEP;h.fxs=FXSTEP;
+    if(live&&h.t<.25&&Math.random()<.5)fx({k:'b',x:h.x+rand(-pr,pr),y:h.y+4,vx:rand(-60,60),vy:rand(-160,-60),life:.35,max:.35,sz:rand(1.5,3),col:pick(['#2a1a10','#3a0a0c','#1a1208'])});
     if(!h.deco){glow(h.x,h.y,46,'#5a20b0',.4*fade);
       // 沼の中で、沈んだ亡者たちの青白い指先がうごめく
       if(h.t>.1){g.globalAlpha=fade*.7;for(let k=0;k<5;k++){const ax=h.x+Math.cos(k*1.3+h.seed)*12,ay=h.y+5+Math.sin(k*1.7+h.seed)*3,ln=2+Math.abs(Math.sin(h.t*9+k))*3;
         g.strokeStyle='#120a18';g.lineWidth=1.4;g.lineCap='round';g.beginPath();g.moveTo(ax,ay);g.lineTo(ax+Math.sin(h.t*7+k),ay-ln);g.stroke()}g.globalAlpha=fade}}
     // 飾りの手（獲物のいない血の床）：沼から真上へ伸び、宙をかきむしる。腕は人物と一緒に後で描く（drawHandArms）
     // 立ちのぼる瘴気
-    if(Math.random()<.3)fx({k:'powder',x:h.x+rand(-12,12),y:h.y,vx:rand(-10,10),vy:rand(-70,-30),life:.6,max:.6,sz:rand(2,4),col:'#5a3a70'});
+    if(live&&Math.random()<.3)fx({k:'powder',x:h.x+rand(-12,12),y:h.y,vx:rand(-10,10),vy:rand(-70,-30),life:.6,max:.6,sz:rand(2,4),col:'#5a3a70'});
     g.restore()}
 }
 // 怨霊の腕：人物より後（手前）に描く。獲物の手は沼の縁の左右・手前から伸びて、体（腰・胸・肩）をつかむ
@@ -4183,7 +4186,8 @@ function update(rdt){
     }
   }
   B=B.filter(b=>b.life>0&&b.x>-30&&b.x<W+30&&b.y>AY0-30&&b.y<H+30);
-  // fx
+  // fx（FXSTEP：粒が実際に進んだ回数。描画の中で粒を生む所は、これが進んだ時だけ生む）
+  if(dt>0)FXSTEP++;
   for(const f of FX){
     f.life-=dt;f.x+=f.vx*dt||0;f.y+=f.vy*dt||0;
     if(f.k==='dustc'||f.k==='wmist'){const k=Math.exp(-3.2*dt);f.vx*=k;f.vy=f.vy*k-8*dt}else if(f.k==='chip')f.vy+=600*dt;
@@ -4321,7 +4325,9 @@ function drawGoldAura(x,y,pur){
   }
   g.restore();
   glow(x,cy,pur?80:70,pur?'#a050ff':'#ffcc33',.3+Math.sin(t*8)*.07);
-  if(pur){if(Math.random()<.4)fx({k:'powder',x:x+rand(-16,16),y:y+rand(-6,14),vx:rand(-12,12),vy:rand(-150,-90),life:.5,max:.5,sz:rand(2,4),col:'#c890ff'})}
+  const live=auraStep!==FXSTEP;auraStep=FXSTEP;
+  if(!live){}
+  else if(pur){if(Math.random()<.4)fx({k:'powder',x:x+rand(-16,16),y:y+rand(-6,14),vx:rand(-12,12),vy:rand(-150,-90),life:.5,max:.5,sz:rand(2,4),col:'#c890ff'})}
   else if(Math.random()<.4)fx({k:'gold',x:x+rand(-16,16),y:y+rand(-6,14),vx:rand(-12,12),vy:rand(-150,-90),life:.5,max:.5,sz:rand(4,8)});
   if(Math.random()<.04){g.strokeStyle='rgba(255,240,170,.7)';g.lineWidth=1.6;g.beginPath();let px=x+rand(-18,18),py=cy+rand(-34,0);g.moveTo(px,py);
     for(let i=0;i<4;i++){px+=rand(-9,9);py+=rand(6,12);g.lineTo(px,py)}g.stroke()}
