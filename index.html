@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v1.96 2026-11-05';
+const VERSION='v1.97 2026-11-05';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 // ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
 const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
@@ -374,9 +374,18 @@ const sfxStamp={};
 function can(k,gap){const n=performance.now();if(sfxStamp[k]&&n-sfxStamp[k]<gap)return false;sfxStamp[k]=n;return true}
 const SFX={
   swing(st){if(!can('sw',35))return;if(st===3)SFX.spin();else noise(.13,.24,'bandpass',2600,700,0,0,1.5)},
-  // 4段目の回転斬り「ザシュッ！」：刃が肉を断つ鋭い破裂（高い帯域が一瞬で落ちる）と、短く抜ける「シュッ」。芯に軽い衝撃
-  // 4撃目の回転斬り（v1.92で作り直し）：「パッ」と鋭い立ち上がり → 周りを薙ぐ「ヒュオン」（上がって下がる風切り）→ 刃が鳴る「シャキーン」の余韻、振り抜きの重い「ドッ」
-  spin(){const t=now();noise(.02,.5,'highpass',5200,0,t);noise(.13,.55,'bandpass',700,4200,t+.005,0,2.2);noise(.2,.45,'bandpass',4200,1100,t+.12,0,1.8);tone(118,46,.2,'sine',.42,t+.02);noise(.12,.22,'lowpass',900,180,t+.02);tone(2380,2330,.42,'triangle',.07,t+.07);tone(3570,3500,.32,'sine',.05,t+.075);tone(4760,4700,.22,'sine',.035,t+.08);noise(.22,.12,'highpass',6500,9000,t+.1,0,.6)},
+  // 4撃目の回転斬り（v1.97で作り直し）：刀が「シャキーン！」と鳴る
+  //  ・「シャッ」：刃が空気と鞘をこする鋭い擦れ（高い帯域が上へ走る）
+  //  ・「キ」：刃先が光る一瞬の金属音
+  //  ・「ーーン」：金属特有の、倍音が整数倍でない長い余韻。わずかに周波数のずれた2本を重ねて「うなり」で揺らす
+  //  ・下に軽い風切りと、振り抜きの小さな「ドッ」
+  spin(){const t=now();
+    noise(.11,.42,'bandpass',2600,9000,t,0,3);noise(.16,.18,'highpass',7000,11000,t+.03,0,.7);
+    noise(.16,.22,'bandpass',900,2600,t,0,1.4);tone(110,50,.16,'sine',.3,t);
+    tone(5600,5200,.05,'square',.05,t+.06);noise(.03,.3,'highpass',6000,0,t+.06);
+    const f=2650;tone(f,f*.997,1.8,'sine',.16,t+.065);tone(f+7,(f+7)*.997,1.65,'sine',.13,t+.065);
+    tone(f*1.51,f*1.51*.997,1.1,'sine',.06,t+.065);tone(f*1.51+5,f*1.51*.997+5,1.0,'sine',.05,t+.065);
+    tone(f*2.76,f*2.76*.997,.45,'sine',.04,t+.065);tone(f*.5,f*.5,.5,'triangle',.035,t+.065)},
   hit(big){if(!can('hit',28))return;const hp_=Math.min(G.chain,60)*3;tone((big?170:200)+hp_,42,big?.24:.13,'sine',big?1:.7);noise(.05,big?.5:.35,'highpass',2600);if(big)noise(.2,.45,'lowpass',2200,250)},
   kill(c){if(!can('kill',30))return;tone(120,32,.32,'triangle',.7);noise(.24,.5,'lowpass',2800,300);noise(.08,.3,'bandpass',900,0,0,0,3);tone(500+Math.min(c,60)*18,0,.06,'square',.05)},
   dash(){noise(.18,.28,'highpass',1000,5200);tone(300,1100,.12,'sine',.07)}, // 突進ボスの溜め音
@@ -4211,9 +4220,9 @@ function updateRain(rdt){
   for(const r of RAIN){r.y+=r.s*rdt;r.x-=r.s*.22*rdt;if(r.y>H+10){r.y=rand(-40,0);r.x=rand(-60,W+160)}}
   if(rk>0&&state!=='title'){splAcc+=rdt*60*rk;while(splAcc>1){splAcc--;SPL.push({x:rand(AX0+4,AX1-4),y:rand(AY0+4,AY1-4),t:0})}}
   for(const p of SPL)p.t+=rdt;SPL=SPL.filter(p=>p.t<.42);
-  // どしゃ降りのステージだけ、ときどき遠くで稲光（青白く2回またたく）と雷鳴
+  // どしゃ降りのステージだけ、ときどき稲光（青白く3回またたく）と、近くに落ちたような「バリッ」からの大きな雷鳴（v1.97）
   bolt=Math.max(0,bolt-rdt);
-  if(rk>=1&&state==='play'){boltT-=rdt;if(boltT<=0){boltT=rand(14,26);bolt=.5;noise(2.2,.3,'lowpass',380,50,now(.35));tone(55,32,1.8,'sine',.25,now(.35))}}
+  if(rk>=1&&state==='play'){boltT-=rdt;if(boltT<=0){boltT=rand(14,26);bolt=.62;noise(.06,.55,'highpass',2500,0,now(.12));noise(.35,.6,'bandpass',2200,350,now(.14),0,.7);noise(2.9,.85,'lowpass',620,45,now(.18));tone(62,30,2.4,'sine',.6,now(.16));noise(1.8,.5,'lowpass',300,55,now(.95));addShake(5)}}
 }
 /* 雨音：「サー」という2層のノイズ（高いシャー＋低いザー）を鳴らし続け、数秒ごとに強弱の目標を変えてゆっくり追う（風で雨脚が揺れる感じ）。
    さらに、ときどき近くで粒が当たる「パラッ」を不規則に重ねる。雨の降らないステージでは音量0 */
@@ -5463,9 +5472,9 @@ function drawControls(){
 function drawOverlays(){
 
   drawHandDark();
-  // 雨のステージは全体を少し青く湿らせる。稲光は青白く2回またたく
+  // 雨のステージは全体を少し青く湿らせる。稲光は青白く3回またたいて尾を引く（v1.97で明るく）
   {const rk=rainK();if(rk>0&&state!=='title'){g.fillStyle=`rgba(40,60,110,${.07*rk})`;g.fillRect(0,0,W,H)}
-   if(bolt>0){const a=bolt>.38?.22:bolt>.3?0:bolt>.18?.3*(bolt-.18)/.12:0;if(a>0){g.fillStyle=`rgba(200,215,255,${a})`;g.fillRect(0,0,W,H)}}}
+   if(bolt>0){const a=bolt>.56?.5:bolt>.5?.06:bolt>.45?.38:bolt>.4?0:bolt>.36?.55:bolt>.0?.42*bolt/.36:0;if(a>0){g.fillStyle=`rgba(205,220,255,${a.toFixed(3)})`;g.fillRect(0,0,W,H)}}}
   // 怨念解放の間は、画面の縁を赤黒く沈めて主人公の周りに目を向けさせる
   if(G.rageFx){const a=(1-G.rageFx.t/G.rageFx.dur)*.45,vg=g.createRadialGradient(vx(P.x),vy(P.y),G.rageFx.R*VS*.9,vx(P.x),vy(P.y),H*.9);vg.addColorStop(0,'rgba(40,0,8,0)');vg.addColorStop(1,`rgba(40,0,8,${a})`);g.fillStyle=vg;g.fillRect(0,0,W,H)}
   // 塗るほど照明が赤く染まる（進み具合を数字でなく雰囲気で感じさせる）
