@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v1.94 2026-11-05';
+const VERSION='v1.95 2026-11-05';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 // ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
 const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
@@ -2845,6 +2845,8 @@ function sinkFx(e){
 function gulpSfx(){if(!can('gulp',90))return;tone(150,55,.16,'sine',.3);noise(.12,.16,'lowpass',520,120);tone(270,92,.13,'sine',.24,now(.14));tone(118,68,.1,'triangle',.12,now(.16));noise(.06,.08,'lowpass',300,90,now(.17))}
 function sinkStamp(s){decG.fillStyle=BLC(55,8,.6);decG.beginPath();decG.ellipse(s.x,s.y,s.R*1.0,s.R*.42,0,0,TAU);decG.fill();
   decG.fillStyle=BLC(130,22,.25);decG.beginPath();decG.ellipse(s.x-s.R*.28,s.y-s.R*.12,s.R*.38,s.R*.13,0,0,TAU);decG.fill()}
+// v1.95：半径が0以下にならない楕円（負の半径を渡すとブラウザがエラーを出し、ゲームが固まる）
+const ellS=(x,y,rx,ry,rot,a0,a1)=>g.ellipse(x,y,Math.max(.05,rx),Math.max(.05,ry),rot,a0,a1);
 function drawSinks(){
   for(const s of SINKS){
     const t=s.t,p=clamp(t/s.dur,0,1),open=clamp(t/.18,0,1),fade=t>s.dur?1-clamp((t-s.dur)/.5,0,1):1,e=s.e;
@@ -2853,7 +2855,7 @@ function drawSinks(){
     g.save();g.globalAlpha=fade;
     // 血だまり：中ほどは赤黒く、縁ほど暗く沈み、外側へ薄く溶ける
     const gr=g.createRadialGradient(s.x-R*.2,s.y-Ry*.35,R*.08,s.x,s.y,R*1.1);gr.addColorStop(0,BLC(125,20,.97));gr.addColorStop(.55,BLC(80,10,.96));gr.addColorStop(.85,BLC(40,5,.9));gr.addColorStop(1,BLC(30,4,0));
-    g.fillStyle=gr;g.beginPath();g.ellipse(s.x,s.y,R*1.1,Ry*1.1,0,0,TAU);g.fill();
+    g.fillStyle=gr;g.beginPath();ellS(s.x,s.y,R*1.1,Ry*1.1,0,0,TAU);g.fill();
     if(t<s.dur){
       // 沈み方：最初の3割はもがきながら少しずつ、その後は一気に引きずり込まれる
       const dep=s.H*(p<.35?.22*(p/.35):Math.min(1.15,.22+.93*Math.pow((p-.35)/.55,1.6))),jx=Math.sin(t*27)*2.6*(1-p)*(p<.6?1:.4);
@@ -2863,22 +2865,22 @@ function drawSinks(){
       // 体にまとわりつく血の縁（体の太さに合わせて盛り上がり、沈むほど細く閉じていく）
       const cw=e.r*(1.3-.5*p)*(p>.92?(1-(p-.92)/.08):1),ch=cw*.42,lift=3*(1-p)+Math.sin(t*14+s.sd)*1.2;
       if(cw>0){const cg=g.createLinearGradient(0,s.y-ch-lift,0,s.y+ch);cg.addColorStop(0,BLC(150,26,.95));cg.addColorStop(.45,BLC(95,12,.98));cg.addColorStop(1,BLC(50,6,.98));
-        g.fillStyle=cg;g.beginPath();g.ellipse(s.x+jx*.6,s.y-lift*.5,cw,ch+lift*.4,0,0,TAU);g.fill();
-        g.strokeStyle='rgba(255,235,235,.22)';g.lineWidth=1;g.beginPath();g.ellipse(s.x+jx*.6,s.y-lift*.5,cw*.82,ch*.7,0,Math.PI*1.08,Math.PI*1.92);g.stroke()}}
+        g.fillStyle=cg;g.beginPath();ellS(s.x+jx*.6,s.y-lift*.5,cw,ch+lift*.4,0,0,TAU);g.fill();
+        g.strokeStyle='rgba(255,235,235,.22)';g.lineWidth=1;g.beginPath();ellS(s.x+jx*.6,s.y-lift*.5,cw*.82,ch*.7,0,Math.PI*1.08,Math.PI*1.92);g.stroke()}}
     // 泡：底から浮いてきて、ふくらんではじける
     for(let k=0;k<7;k++){const t0=.22+k*.13+((s.sd*7+k*3)%1)*.08,lt=t-t0;if(lt<0||lt>.38)continue;const q=lt/.38,a=s.sd*3+k*2.4,rr=R*(.2+((k*37)%60)/100),bx=s.x+Math.cos(a)*rr,by=s.y+Math.sin(a)*rr*.42,br=(1.5+(k%3))*(q<.8?q/.8:1);
       if(q<.85){g.fillStyle=BLC(70,8,.9);g.beginPath();g.arc(bx,by,br,0,TAU);g.fill();g.fillStyle='rgba(255,230,230,.35)';g.beginPath();g.arc(bx-br*.35,by-br*.35,br*.35,0,TAU);g.fill()}
-      else{g.strokeStyle=BLC(150,26,.6);g.lineWidth=1;g.beginPath();g.ellipse(bx,by,br*1.8,br*.8,0,0,TAU);g.stroke()}}
+      else{g.strokeStyle=BLC(150,26,.6);g.lineWidth=1;g.beginPath();ellS(bx,by,br*1.8,br*.8,0,0,TAU);g.stroke()}}
     // 飲み込み切った瞬間：血面が「とぷん」と盛り上がって閉じ、粘った小さな粒が跳ねて落ちる
     const gt=t-s.dur*.86;
-    if(gt>0&&gt<.4){const q=gt/.4;g.fillStyle=BLC(140,24,.85*(1-q));g.beginPath();g.ellipse(s.x,s.y-6*Math.sin(q*Math.PI),R*.32*(1-q*.5),Ry*.5+5*Math.sin(q*Math.PI),0,0,TAU);g.fill();
+    if(gt>0&&gt<.4){const q=gt/.4;g.fillStyle=BLC(140,24,.85*(1-q));g.beginPath();ellS(s.x,s.y-6*Math.sin(q*Math.PI),R*.32*(1-q*.5),Ry*.5+5*Math.sin(q*Math.PI),0,0,TAU);g.fill();
       for(let k=0;k<6;k++){const a=k/6*TAU+s.sd,d2=R*.25+gt*55,h=34*gt-85*gt*gt;if(h<0)continue;g.fillStyle=BLC(120,18,.9);g.beginPath();g.arc(s.x+Math.cos(a)*d2,s.y+Math.sin(a)*d2*.42-h,1.8,0,TAU);g.fill()}}
     // 波紋：閉じた後、粘りのある輪がゆっくり広がる
     for(let k=0;k<3;k++){const rt=t-(s.dur*.86+k*.13);if(rt<0||rt>.75)continue;const q=rt/.75,rr=R*(.25+q*1.05);
-      g.strokeStyle=BLC(160,30,.55*(1-q));g.lineWidth=2*(1-q)+.6;g.beginPath();g.ellipse(s.x,s.y,rr,rr*.42,0,0,TAU);g.stroke();
-      g.strokeStyle=`rgba(255,235,235,${.12*(1-q)})`;g.lineWidth=1;g.beginPath();g.ellipse(s.x,s.y-1,rr*.97,rr*.4,0,Math.PI*1.1,Math.PI*1.9);g.stroke()}
+      g.strokeStyle=BLC(160,30,.55*(1-q));g.lineWidth=2*(1-q)+.6;g.beginPath();ellS(s.x,s.y,rr,rr*.42,0,0,TAU);g.stroke();
+      g.strokeStyle=`rgba(255,235,235,${.12*(1-q)})`;g.lineWidth=1;g.beginPath();ellS(s.x,s.y-1,rr*.97,rr*.4,0,Math.PI*1.1,Math.PI*1.9);g.stroke()}
     // つやの照り返し（左上から光）
-    g.fillStyle=`rgba(255,240,240,${(.1+.04*wob)})`;g.beginPath();g.ellipse(s.x-R*.32,s.y-Ry*.38,R*.32,Ry*.2,-.15,0,TAU);g.fill();
+    g.fillStyle=`rgba(255,240,240,${(.1+.04*wob)})`;g.beginPath();ellS(s.x-R*.32,s.y-Ry*.38,R*.32,Ry*.2,-.15,0,TAU);g.fill();
     g.restore();
   }
 }
@@ -5684,10 +5686,13 @@ function draw(){
   if(state==='pause')drawPause();else if(state==='over')drawOver();else if(state==='clear')drawClear();else if(state==='pick')drawPick();else if(state==='offer')drawOffer();else if(state==='tutmenu')drawTutMenu();else if(state==='tutintro')drawTutIntro();else if(state==='stintro')drawStIntro();else if(state==='tutend')drawTutEnd();else if(state==='ad')drawAd();else if(state==='bres')drawBres();
 }
 function loop(ts){
+  requestAnimationFrame(loop); // v1.95：先に次のフレームを予約する（途中でエラーが出ても、ゲーム全体が固まらないように）
   const rdt=Math.min(.05,(ts-last)/1000||0);last=ts;
+  try{
   pollPad();if(!portalBusy)update(rdt);draw();portalTick();
-  requestAnimationFrame(loop);
+  }catch(err){LOOP_ERR++;if(LOOP_ERR<=5)console.error('Dead Girl: フレームでエラー',err)} // そのフレームだけ飛ばす（原因は開発者ツールに出す）
 }
+let LOOP_ERR=0;
 resetRun();resize();requestAnimationFrame(loop);portalInit();
 // 読み込み時点で音の準備を試す。ブラウザが許可していれば（再訪問時のPCなど）、操作なしでロゴと同時にBGMが鳴る
 // iPhoneは操作前に作ると音が出なくなることがあるため、従来どおり最初のタップで準備する
