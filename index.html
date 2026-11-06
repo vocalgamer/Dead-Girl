@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v2.23 2026-11-06';
+const VERSION='v2.26 2026-11-06';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 // ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
 const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
@@ -1136,12 +1136,13 @@ function skipEnding(){G.skipHold=0;G.endSkip=false;saveBest();lsSet('dg_cleared'
   if(G.musFin&&AC){const t=AC.currentTime;musG.gain.cancelScheduledValues(t);musG.gain.setValueAtTime(.3,t+.05)}G.musFin=null;state='clear';stateT=0;SFX.ui()}
 function drawSkipHint(){
   const H=state==='epilogue'?800:766; // プレイ画面では下端の操作説明の上に出す
-  if(state==='play'&&G.phase==='rebirth'&&G.rebSkip){g.globalAlpha=.55+Math.sin(G.time*4)*.25;txt(touchMode?'タップでスキップ':'クリック／Enterでスキップ',W-12,H-14,12,'#e6e9f0','right',JP,['#000',3],false,800);g.globalAlpha=1}
+  if(state==='play'&&G.phase==='rebirth'&&G.rebSkip){const k=clamp((G.skipHold||0)/1,0,1);g.globalAlpha=.7;txt(touchMode?'長押しでスキップ':'クリック／Enter長押しでスキップ',W-12,H-14,12,'#e6e9f0','right',JP,['#000',3],false,800);
+    if(k>0){rr(W-152,H-10,140,4,2,'rgba(255,255,255,.2)');rr(W-152,H-10,140*k,4,2,'#ffffff')}g.globalAlpha=1} // v2.26：エンディングと同じく長押し（ゲージつき）
   if(endSkipOn()){const k=clamp((G.skipHold||0)/1,0,1);g.globalAlpha=.7;txt(touchMode?'長押しでスキップ':'クリック／Enter長押しでスキップ',W-12,H-14,12,'#e6e9f0','right',JP,['#000',3],false,800);
     if(k>0){rr(W-152,H-10,140,4,2,'rgba(255,255,255,.2)');rr(W-152,H-10,140*k,4,2,'#ffffff')}g.globalAlpha=1}}
 /* v2.20 15面：異形・霧島の誕生（約12秒）。御影が初めて名を明かして現れ、白鷺の会社が片付けた霧島の骸を式神に運ばせ、異形として蘇らせる。
    去り際、主人公を見て「妙な匂い」「我が門の術ではない」とだけ漏らす（主人公も誰かの術で蘇ったことを、定かではない形でにおわせる） */
-function startKReb(){G.rebK='kiri';G.rebSkip=lsGet('dg_kreb')==='1'||lsGet('dg_cleared')==='1';G.rebAt=performance.now();G.phase='rebirth';G.rebT=0;G.master=null;G.kCorpse=null;
+function startKReb(){G.rebK='kiri';G.skipArm=false;G.skipHold=0;G.rebSkip=lsGet('dg_kreb')==='1'||lsGet('dg_cleared')==='1';G.rebAt=performance.now();G.phase='rebirth';G.rebT=0;G.master=null;G.kCorpse=null;
   const sx=P.x<AXM?1:-1;G.reb={x:clamp(AXM+sx*60,AX0+90,AX1-90),y:clamp(AYM-60,AY0+120,AY1-120)}}
 function updateKReb(dt){
   const t0=G.rebT;if(!G.csWait)G.rebT+=dt;const t=G.rebT,R=G.reb,hit=k=>t0<k&&t>=k;P.inv=Math.max(P.inv,.5);
@@ -1613,6 +1614,32 @@ function blockFront(st,x,y,w,h,hs){
   else if(st==='shelf'){const cs=['#c9d6e2','#e4d6c8','#d2e2cf','#e6e6ea'];for(let k=0;k<4;k++){g.fillStyle=cs[(k+Math.floor(hs*4))%4];g.fillRect(x+3+k*10.5,y+4,9,h-8)}}
   g.strokeStyle='rgba(0,0,0,.5)';g.lineWidth=1;g.strokeRect(x+.5,y+.5,w-1,h-1);
 }
+/* v2.25 屋上庭園の植え込み：木の植木箱（板の継ぎ目・角の金具・内側にのぞく土）に、刈り込んだツツジ。
+   小さな葉を重ねて茂みの質感を出し（左上から光）、マスごとにピンク・白・赤の花を散らす。形はマスごとに決まった乱数なので毎フレーム同じ */
+function drawPlanterTop(x,y,w,h,hs){
+  const rnd=k=>{const v=Math.sin(hs*9301+k*49.297)*43758.5453;return v-Math.floor(v)};
+  // 植木箱の縁（板）と土
+  g.fillStyle='#7a5532';g.fillRect(x,y,w,h);
+  g.fillStyle='rgba(255,220,170,.18)';g.fillRect(x,y,w,2);g.fillRect(x,y,2,h);g.fillStyle='rgba(0,0,0,.25)';g.fillRect(x,y+h-2,w,2);g.fillRect(x+w-2,y,2,h);
+  g.fillStyle='rgba(0,0,0,.28)';for(const k of [.33,.66]){g.fillRect(x+w*k,y,1,4);g.fillRect(x+w*k,y+h-4,1,4);g.fillRect(x,y+h*k,4,1);g.fillRect(x+w-4,y+h*k,4,1)} // 板の継ぎ目
+  for(const [a,b] of [[1,1],[w-4,1],[1,h-4],[w-4,h-4]]){g.fillStyle='#2a2c30';g.fillRect(x+a,y+b,3,3)} // 角の金具
+  g.fillStyle='#2b1d12';g.fillRect(x+4,y+4,w-8,h-8);
+  g.fillStyle='rgba(90,60,35,.6)';for(let k=0;k<10;k++)g.fillRect(x+5+rnd(k)*(w-11),y+5+rnd(k+20)*(h-11),2,1.5); // 土の粒
+  // 茂みの影（土の上）
+  g.fillStyle='rgba(0,0,0,.35)';g.beginPath();g.ellipse(x+w/2+2,y+h/2+3,w*.38,h*.36,0,0,TAU);g.fill();
+  // 茂み：暗い下地→中間の葉→明るい葉先（左上が明るい）
+  const cx=x+w/2,cy=y+h/2,R0=Math.min(w,h)*.4;
+  g.fillStyle='#1d3a18';g.beginPath();for(let k=0;k<14;k++){const a=k/14*TAU,r=R0*(.86+rnd(k+40)*.18);k?g.lineTo(cx+Math.cos(a)*r,cy+Math.sin(a)*r):g.moveTo(cx+Math.cos(a)*r,cy+Math.sin(a)*r)}g.closePath();g.fill();
+  const leaf=(lx,ly,col,s)=>{g.fillStyle=col;g.beginPath();g.ellipse(lx,ly,2.6*s,1.5*s,rnd(lx*7+ly)*TAU,0,TAU);g.fill()};
+  for(let k=0;k<46;k++){const a=rnd(k+60)*TAU,r=Math.sqrt(rnd(k+110))*R0*.92,lx=cx+Math.cos(a)*r,ly=cy+Math.sin(a)*r,lit=(-(lx-cx)-(ly-cy))/R0; // 左上ほど明るい
+    leaf(lx,ly,lit>.35?'#5f9a3c':lit>-.2?'#3f7a2c':'#2c5a22',1)}
+  for(let k=0;k<12;k++){const a=rnd(k+200)*TAU,r=Math.sqrt(rnd(k+230))*R0*.7,lx=cx-3+Math.cos(a)*r,ly=cy-3+Math.sin(a)*r;leaf(lx,ly,'#7cb850',.8)} // 葉先の光
+  // ツツジの花（5弁の小さな花。マスごとに色を変える）
+  const fc=hs<.4?['#f06aa8','#ff9ccc']:hs<.75?['#f4f2f0','#ffffff']:['#d8283c','#ff5a6a'];
+  for(let k=0;k<7;k++){const a=rnd(k+300)*TAU,r=Math.sqrt(rnd(k+330))*R0*.85,fx_=cx+Math.cos(a)*r,fy=cy+Math.sin(a)*r;
+    g.fillStyle=fc[0];for(let p=0;p<5;p++){const pa=p/5*TAU+rnd(k+360);g.beginPath();g.arc(fx_+Math.cos(pa)*1.6,fy+Math.sin(pa)*1.6,1.3,0,TAU);g.fill()}
+    g.fillStyle=fc[1];g.beginPath();g.arc(fx_-.5,fy-.5,.9,0,TAU);g.fill();g.fillStyle='#e8c040';g.fillRect(fx_-.4,fy-.4,.8,.8)}
+}
 function blockTop(st,x,y,w,h,hs,i){
   const R=(a,b,c,d,col)=>{g.fillStyle=col;g.fillRect(a,b,c,d)};
   switch(st){
@@ -1632,7 +1659,7 @@ function blockTop(st,x,y,w,h,hs,i){
     case 'hvac':{R(x,y,w,h,'#bfc3c8');circ(x+w/2,y+h/2,16,'#30343a');g.strokeStyle='#8a8f96';g.lineWidth=1;g.beginPath();for(let k=0;k<6;k++){const a=k/6*TAU+hs*3;g.moveTo(x+w/2,y+h/2);g.lineTo(x+w/2+Math.cos(a)*14,y+h/2+Math.sin(a)*14)}g.stroke();g.beginPath();g.arc(x+w/2,y+h/2,16,0,TAU);g.stroke();break}
     case 'trash':{if(hs<.5){R(x,y,w,h,hs<.25?'#c9a227':'#b02a26');g.fillStyle='rgba(0,0,0,.35)';for(let a=x+6;a<x+w;a+=8)for(let b=y+6;b<y+h;b+=8)g.fillRect(a,b,4,4)}
       else{R(x,y,w,h,'rgba(0,0,0,0)');for(const [a,b,r] of [[.3,.35,12],[.7,.4,13],[.45,.7,14],[.75,.75,10]]){circ(x+w*a,y+h*b,r,'#1a1d24');circ(x+w*a-3,y+h*b-4,r*.35,'rgba(255,255,255,.12)')}}break}
-    case 'planter':{R(x,y,w,h,'#6a4a2c');R(x+4,y+4,w-8,h-8,'#2a1e14');for(const [a,b,r] of [[.35,.4,11],[.65,.45,12],[.5,.7,10]]){circ(x+w*a,y+h*b,r,'#2f5a24');circ(x+w*a-3,y+h*b-3,r*.5,'#4a7a34')}break}
+    case 'planter':{drawPlanterTop(x,y,w,h,hs);break}
     default:{const gr=g.createLinearGradient(x,y,x,y+h);gr.addColorStop(0,'#3a3d48');gr.addColorStop(1,'#1c1d24');R(x,y,w,h,gr)}
   }
   g.strokeStyle='rgba(0,0,0,.45)';g.lineWidth=1;g.strokeRect(x+.5,y+.5,w-1,h-1);
@@ -1914,7 +1941,7 @@ function bossDown(e,ang){
   PWARN.length=0;G.banner={top:BOSSES[e.bk].name,main:'撃 破',sub:'+'+pts,t:0,dur:2.8,col:'#ff2f5f'};
   const reborn=e.type==='kito'&&!G.endless&&!e.ikei;
   if(!reborn&&!e.ikei)G.bossWon=true;
-  if(reborn){G.rebK=null;G.rebSkip=lsGet('dg_ikei')==='1'||lsGet('dg_cleared')==='1';G.rebAt=performance.now();G.phase='rebirth';G.rebT=0;G.rebE=e;G.reb={x:clamp(e.x+Math.cos(ang)*60,AXM-100,AXM+100),y:clamp(e.y+Math.sin(ang)*60,AYM-70,AYM+90)};G.master=null;
+  if(reborn){G.rebK=null;G.skipArm=false;G.skipHold=0;G.rebSkip=lsGet('dg_ikei')==='1'||lsGet('dg_cleared')==='1';G.rebAt=performance.now();G.phase='rebirth';G.rebT=0;G.rebE=e;G.reb={x:clamp(e.x+Math.cos(ang)*60,AXM-100,AXM+100),y:clamp(e.y+Math.sin(ang)*60,AYM-70,AYM+90)};G.master=null;
     {const c=CORPSES.find(q=>q.e===e);if(c){c.t=-99;c.vx=(G.reb.x-e.x)*3;c.vy=(G.reb.y-e.y)*3;c.vr=4;c.noCrash=true;c.push2=false}}} // 骸は儀式の場所（中央付近）まで転がり、儀式まで残る
   else if(e.ikei&&!G.endless){G.endSkip=lsGet('dg_cleared')==='1';G.skipHold=0;G.skipArm=false;G.master=null;G.phase='devour';G.devT=0;CORPSES=CORPSES.filter(c=>c.e!==e);
     const x=clamp(e.x,AXM-90,AXM+90),y=clamp(e.y,AYM-60,AYM+80);
@@ -3585,7 +3612,7 @@ function shareResult(){
   try{window.open('https://twitter.com/intent/tweet?text='+encodeURIComponent(t+(url?' '+url:'')),'_blank')}catch(e){}
 }
 // a: 攻撃する向き（タッチでタップした方向）。省略時は移動入力／今の向き
-function pressAttack(a){if(state==='play'&&G.phase==='rebirth'&&G.rebSkip&&performance.now()-G.rebAt>800){skipRebirth();return}P.atkBuf=.25;P.atkA=a==null?null:a}
+function pressAttack(a){if(state==='play'&&G.phase==='rebirth')return; /* v2.26：異形化の場面は攻撃1回では飛ばさない（連打で知らないうちに飛ばされていた）。1秒長押しで飛ばす */P.atkBuf=.25;P.atkA=a==null?null:a}
 function screenAction(p,key){
   if(state==='ad'||portalBusy)return;
   // エンディング：タップで次の場面へ（最後の場面なら結果画面へ）
@@ -3662,7 +3689,7 @@ cv.addEventListener('pointerdown',ev=>{
   if(state!=='play'){PDOWN.add(ev.pointerId);DEVSHIFT=ev.shiftKey;screenAction(p);if(ev.pointerType==='mouse')wantLock();return}
   // マウス固定中はカーソル位置が止まっているので、上部のボタンは押せない（クリックはすべて攻撃・ガード）
   PDOWN.add(ev.pointerId);
-  if(G.phase==='rebirth'&&G.rebSkip&&performance.now()-G.rebAt>800){skipRebirth();return}
+  if(G.phase==='rebirth')return; // 異形化の場面：タップ・クリックでは飛ばさない（長押しは update で数える）
   if(!locked()){
     if(inC(p,UI.pause,6)){pauseGame('btn');return}
     if(inC(p,UI.mute,6)){toggleMute();return}
@@ -3780,7 +3807,7 @@ addEventListener('keydown',ev=>{
     return;
   }
   if(k==='p'||k==='escape'){pauseGame('key');return}
-  if(G.phase==='rebirth'&&G.rebSkip&&G.rebT>1&&['enter',' ','j','z'].includes(k)){skipRebirth();return}
+  if(G.phase==='rebirth'&&['enter',' ','j','z'].includes(k))return; // 異形化の場面：キー1回では飛ばさない（長押しは update で数える）
   if(k==='m')toggleMute();
   if(K_ATK.includes(k))pressAttack();
   if(K_RAGE.includes(k))rageDown();
@@ -3964,7 +3991,33 @@ const MAX_MELEE=3;
 const waveEase=()=>G.tutMode?1:G.wave===1?.75:G.wave===2?.8:G.wave===3?.88:1;
 function meleeBusy(){let n=0;for(const o of E)if((o.type==='grunt'||o.type==='runner'||o.type==='shield'||o.type==='slasher')&&(o.state==='windup'||o.state==='strike'))n++;return n}
 // 進む向きの先（体の少し前）がふさがったマス・穴なら、左右に角度を変えて通れる向きを探す。前に避けた側を優先して、行ったり来たりしない（v1.80）
-function steer(e,a){if(!nBlock)return a;const pr=e.r+18,free=b=>{const i=tileAt(e.x+Math.cos(b)*pr,e.y+Math.sin(b)*pr);return !(i>=0&&BLOCK[i])};
+/* v2.24 回り込み：主人公のいるマスから、障害物・床の穴を避けた「主人公までの道のり（マス数）」を全マスに付ける（1フレームに1回）。
+   主人公へ向かう敵は、主人公が障害物に隠れて見通せない時だけ、この道のりに沿って回り込む（見通せる一番先のマスを目指すので滑らか） */
+let FLOW=null,flowT=-1;
+const walkTile=i=>i>=0&&!BLOCK[i]&&!VOID[i]&&!HOLE[i];
+function flowMap(){if(FLOW&&flowT===G.time)return FLOW;flowT=G.time;
+  if(!FLOW||FLOW.length!==GN)FLOW=new Int16Array(GN);FLOW.fill(-1);const s=tileAt(P.x,P.y);if(s<0)return FLOW;
+  const q=[s];FLOW[s]=0;for(let h=0;h<q.length;h++){const j=q[h],x=j%GC,y=(j/GC)|0;
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=GC||ny>=GR)continue;const k=ny*GC+nx;if(FLOW[k]<0&&walkTile(k)){FLOW[k]=FLOW[j]+1;q.push(k)}}}
+  return FLOW}
+// 2点の間を、幅 r の体で障害物に触れずに通れるか
+function losClear(x0,y0,x1,y1,r){const d=Math.hypot(x1-x0,y1-y0),n=Math.ceil(d/(TS/4)),ux=(x1-x0)/(d||1),uy=(y1-y0)/(d||1),px=-uy,py=ux;
+  for(let k=1;k<=n;k++){const t=k/n,x=x0+(x1-x0)*t,y=y0+(y1-y0)*t;for(const o of [-r,0,r]){const i=tileAt(x+px*o,y+py*o);if(i>=0&&BLOCK[i])return false}}return true}
+// 道のりに沿って、見通せる一番先のマス（最大5歩先）の中心へ向かう角度
+function pathDir(e){const F=flowMap(),i=tileAt(e.x,e.y);if(i<0||F[i]<=0)return null;
+  let cur=i;const steps=[];
+  for(let n=0;n<5;n++){const x=cur%GC,y=(cur/GC)|0;let best=-1,bv=F[cur];
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]){const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=GC||ny>=GR)continue;const k=ny*GC+nx;
+      if(F[k]<0||!walkTile(k))continue;if(dx&&dy&&(!walkTile(y*GC+nx)||!walkTile(ny*GC+x)))continue; // 斜めは角を削らない
+      const v=F[k]+(dx&&dy?.5:0);if(v<bv-.01){bv=v;best=k}}
+    if(best<0)break;steps.push(best);cur=best;if(F[cur]===0)break}
+  if(!steps.length)return null;let tgt=steps[0];
+  for(const k of steps){const t=tileRect(k);if(losClear(e.x,e.y,t.x+t.w/2,t.y+t.h/2,e.r*.8))tgt=k;else break}
+  const t=tileRect(tgt);return Math.atan2(t.y+t.h/2-e.y,t.x+t.w/2-e.x)}
+function steer(e,a){if(!nBlock)return a;
+  // 主人公の方へ向かっているのに、間に障害物がある時は、道のりに沿って回り込む
+  {const toP=Math.atan2(P.y-e.y,P.x-e.x);if(Math.abs(angDiff(a,toP))<.8&&!losClear(e.x,e.y,P.x,P.y,e.r*.8)){const pd=pathDir(e);if(pd!=null)a=pd}}
+  const pr=e.r+18,free=b=>{const i=tileAt(e.x+Math.cos(b)*pr,e.y+Math.sin(b)*pr);return !(i>=0&&BLOCK[i])};
   if(free(a)){if(e.avT>0)e.avT-=1/60;return a}const sd=e.avSide||(Math.random()<.5?1:-1);
   for(const k of [.45,.9,1.35,1.8,2.3])for(const d of [sd,-sd])if(free(a+d*k)){e.avSide=d;e.avT=.6;return a+d*k}return a}
 function mv(e,a,s,dt){a=steer(e,a);if(e.boss&&e.onBlood)s*=.75; // 血溜まりの上のボスは足を取られて遅い
@@ -4442,6 +4495,8 @@ function update(rdt){
   if(state==='title'||state==='dev'||state==='tutsel'){G.time+=rdt;return}
   if(state==='ad'){if(stateT>AD_T&&adCb){const f=adCb;adCb=null;f()}return}
   if(endSkipOn()){const h=skipHeld();if(!h)G.skipArm=true;if(h&&G.skipArm)G.skipHold=(G.skipHold||0)+rdt;else G.skipHold=0;if(G.skipHold>=1){skipEnding();return}}
+  // v2.26：異形化の場面（鬼頭・霧島）も、一度離してから1秒長押しした時だけ飛ばす（見たことがある時だけ）
+  if(state==='play'&&G.phase==='rebirth'&&G.rebSkip){const h=skipHeld();if(!h)G.skipArm=true;if(h&&G.skipArm)G.skipHold=(G.skipHold||0)+rdt;else G.skipHold=0;if(G.skipHold>=1){G.skipHold=0;skipRebirth()}}
   if(state==='epilogue'){G.time+=rdt;
     if(stateT>EPI_END){
       // 曲を最後まで聴かせる：終止の和音が鳴り終わるまで「THE END」のまま待つ（音が出ていない時はすぐ結果画面へ）
