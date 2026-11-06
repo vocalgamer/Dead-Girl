@@ -1011,8 +1011,22 @@ function updateDevour(dt){
   if(hit(12.4))bell(220,now(),.05);
   if(t>15.2){G.mRem=M?{...M}:null;G.dv=null;G.phase='sink';G.snT=0;G.snX=P.x;G.snY=P.y;G.sink=0;
     // 最期の場所：御影の亡骸のすぐ下（重ならないように）。血の海の上
-    G.snX0=P.x;G.snY0=P.y;G.snTX=M?clamp(M.x,AX0+40,AX1-40):P.x;G.snTY=M?clamp(M.y+66,AY0+60,AY1-50):P.y}
+    G.snX0=P.x;G.snY0=P.y;{const sp=sinkSpot(M);G.snTX=sp.x;G.snTY=sp.y}}
 }
+/* v2.18：主人公の最期の場所。御影の亡骸のすぐ下を第一候補に、近い順に探す。
+   主人公の体と怨霊の手が出る範囲（左右80・上100・下60px）に障害物・穴がなく、御影の亡骸・ほかの死体・敵と重ならず、
+   今いる場所から歩いて行く道に障害物がない所で止まる（障害物の手前に描いて隠すのではなく、避けた場所に立つ） */
+function sinkSpot(M){
+  const bx=M?M.x:P.x,by=M?M.y+66:P.y,bad=(x,y)=>{const i=tileAt(x,y);return i<0||BLOCK[i]||VOID[i]||HOLE[i]};
+  const clear=(x,y)=>{for(let dx=-80;dx<=80;dx+=20)for(let dy=-100;dy<=60;dy+=20)if(bad(x+dx,y+dy))return false;return true};
+  const free=(x,y)=>{if(M&&Math.abs(x-M.x)<75&&Math.abs(y-M.y)<55)return false;
+    for(const c of CORPSES)if(dist(x,y,c.e.x,c.e.y)<60)return false;for(const e of E)if(dist(x,y,e.x,e.y)<60)return false;return true};
+  const path=(x,y)=>{for(let k=1;k<=12;k++){const px=lerp(P.x,x,k/12),py=lerp(P.y,y,k/12);if(nearBlock(px,py,18))return false}return true};
+  const C=[];for(const r of [0,30,60,90,120,160,200,250,300])for(let k=0;k<(r?16:1);k++){const a=k/16*TAU,x=clamp(bx+Math.cos(a)*r,AX0+80,AX1-80),y=clamp(by+Math.sin(a)*r,AY0+100,AY1-60);C.push({x,y,d:dist(x,y,bx,by)})}
+  C.sort((a,b)=>a.d-b.d);
+  for(const q of C)if(clear(q.x,q.y)&&free(q.x,q.y)&&path(q.x,q.y))return q;
+  for(const q of C)if(clear(q.x,q.y)&&free(q.x,q.y))return q;   // 道が見つからなければ、場所の条件だけで
+  return {x:clamp(bx,AX0+40,AX1-40),y:clamp(by,AY0+60,AY1-50)}}
 // 主人公の最期（約19秒）：床が一面の血の海になり、主人公は少しずつ言葉をこぼす。怨霊の手が抱きとめるように静かに伸び、
 // 主人公は白く薄れながら血の海へ沈んでいく。魂のかけらのような光が立ちのぼり、最後に一つの光が水面から昇って消える。白く、そして暗く
 let SOULS=[];
@@ -1021,7 +1035,7 @@ function updateSink(dt){
   // 最初の1.6秒：御影の亡骸の下へ歩いていく
   if(G.snTX!=null&&t<1.7){const p=clamp(t/1.6,0,1),e2=p*p*(3-2*p),nx=lerp(G.snX0,G.snTX,e2),ny=lerp(G.snY0,G.snTY,e2),mvx=(nx-G.snX)/Math.max(dt,1e-3),mvy=(ny-G.snY)/Math.max(dt,1e-3);
     G.snX=nx;G.snY=ny;P.x=nx;P.y=ny;if(Math.hypot(mvx,mvy)>8){P.face=Math.atan2(mvy,mvx);P.walk+=Math.hypot(mvx,mvy)*dt*.09}P.vx=mvx;P.vy=mvy;P.kx=P.ky=0;P.atk=null;P.guard=false;P.inv=9}
-  else{P.x=G.snX;P.y=G.snY;P.vx=P.vy=P.kx=P.ky=0;P.atk=null;P.guard=false;P.inv=9;if(t<2.2&&G.mRem)P.face=-Math.PI/2}
+  else{P.x=G.snX;P.y=G.snY;P.vx=P.vy=P.kx=P.ky=0;P.atk=null;P.guard=false;P.inv=9;if(t<2.2&&G.mRem)P.face=Math.atan2(G.mRem.y-P.y,G.mRem.x-P.x)} /* v2.18：障害物を避けて斜めに立った時も、御影の亡骸の方を向く */
   const say=txt=>csSay(txt,P);
   if(hit(1))say('……終わった。',1.8);
   if(hit(3.1))say('あれから、ずっと痛かった……');
@@ -1056,7 +1070,7 @@ function updateSink(dt){
   for(const p of SOULS){p.t+=dt;p.x+=(p.vx+Math.sin(p.t*2+p.sz)*6)*dt;p.y+=p.vy*dt}SOULS=SOULS.filter(p=>p.t<p.life);
   if(t>22.2){state='epilogue';stateT=0;saveBest();lsSet('dg_cleared','1');G.phase='done';G.sink=0;G.orb=null;SOULS=[];G.handsFx=null}
 }
-// 主人公（ふだんは drawWorld の y順の並びの中で描く。エンディングの最期の場面では drawSink から一番上に描く）
+// 主人公（drawWorld の y順の並びの中で描く）
 function drawPlayerEnt(){
   glow(P.x,P.y,46,'#48f1d2',.12);
   if(P.guard&&!P.dead)drawShield(P.x,P.y,P.face,guardArc(),P.guardFx,P.gT||0,'back');
@@ -1075,12 +1089,9 @@ function drawPlayerEnt(){
 }
 function drawSink(){
   if(G.phase!=='sink')return;const t=G.snT,a=Math.min(1,t/3);
-  if(G.mRem){const m=G.mRem;drawThug({...m},-1.5*m.sd,1)} // 喰われた御影の亡骸（血の海に沈んでいく）
   // 一面の血の海：暗い赤に、ゆっくり動くつやと、波紋
   g.fillStyle=BLC(70,10,.78*a);g.fillRect(AX0,AY0,AX1-AX0,AY1-AY0);
-  g.globalAlpha=a*.35;for(let k=0;k<7;k++){const x=AX0+((k*97+t*10)%(AX1-AX0)),y=AY0+((k*173+t*6)%(AY1-AY0));g.fillStyle=GORE?'rgba(255,120,130,.5)':'rgba(200,160,255,.5)';g.beginPath();g.ellipse(x,y,30,4,0,0,TAU);g.fill()}g.globalAlpha=1;
-  drawPlayerEnt(); // v2.18：主人公は障害物・御影の亡骸・血の海より手前に（大事な最期の場面で隠れないように）
-  // 沈みながら白く薄れていく主人公の上の光
+  g.globalAlpha=a*.35;for(let k=0;k<7;k++){const x=AX0+((k*97+t*10)%(AX1-AX0)),y=AY0+((k*173+t*6)%(AY1-AY0));g.fillStyle=GORE?'rgba(255,120,130,.5)':'rgba(200,160,255,.5)';g.beginPath();g.ellipse(x,y,30,4,0,0,TAU);g.fill()}g.globalAlpha=1;  // 沈みながら白く薄れていく主人公の上の光
   if(G.sink>0)glow(P.x,P.y-20+G.sink*30,70,'#fff6ec',.35*G.sink*(1-Math.max(0,G.sink-.85)/.15));
   for(const p of SOULS){const f=1-p.t/p.life,fa=Math.min(1,p.t*3)*f;glow(p.x,p.y,p.sz*7,'#ffe8d0',.55*fa);circ(p.x,p.y,p.sz*.6,`rgba(255,250,240,${fa})`)}
   if(G.orb){const o=G.orb,q=o.t,y=o.y-q*42-q*q*6,al=Math.min(1,q*2)*Math.max(0,1-(q-2.2)/1.3);glow(o.x+Math.sin(q*1.5)*6,y,26+q*4,'#fff4e0',.7*al);circ(o.x+Math.sin(q*1.5)*6,y,3,`rgba(255,255,250,${al})`)}
@@ -5265,6 +5276,7 @@ function drawWorld(){
   for(const m of MARKS){const p=1-m.t/.7;g.strokeStyle=`rgba(255,40,70,${.4+p*.6})`;g.lineWidth=2;g.beginPath();g.arc(m.x,m.y,16-p*6,0,TAU);g.stroke();glow(m.x,m.y,30,'#ff2040',.3+p*.4)}
   for(const e of E)drawTele(e);
   for(const c of CORPSES){const a=c.fade?1-(c.t-1.2)/.4:1;drawThug(c.e,c.rot+.001,clamp(a,0,1)*.9)}
+  if(G.phase==='sink'&&G.mRem){const m=G.mRem;drawThug({...m},-1.5*m.sd,1)} // 喰われた御影の亡骸（v2.18：床の死体として人物より奥に描く。駆け寄った主人公に重ならない）
   drawSinks();
   for(const t of P.trail){drawGirl(t.x,t.y,t.face,(t.t/.22)*(t.red?.35:.45),t.red?'red':'cyan')}
   for(const f of FX)if(f.k==='ghost'){g.globalAlpha=f.life/f.max*.4;g.fillStyle='#ffffff';g.beginPath();g.arc(f.x,f.y,f.e.r,0,TAU);g.fill();g.globalAlpha=1}
@@ -5276,8 +5288,7 @@ function drawWorld(){
   for(const e of list){
     if(e&&e.blkTile!=null){drawBlockTile(e.blkTile);continue}
     if(e&&e.tire){drawTire(e.x,e.y,e.z,e.hd,e.lean,e.rot,e.sd,e.ph==='flat'?clamp((2.4-e.ft)/.6,0,1):1);continue}
-    if(e===null){if(G.phase==='sink')continue; /* v2.18：エンディング（主人公の最期）では、血の海と御影の亡骸のあとに drawSink の中で一番上に描く */
-      drawPlayerEnt()}else{
+    if(e===null){drawPlayerEnt()}else{
       if(e.boss)glow(e.x,e.y,e.r*2.6,e.type==='kito'?'#8a3cff':e.type==='shirasagi'?'#40c8ff':'#ff3355',.18);
       if(e.boss&&e.onBlood)glow(e.x,e.y+e.r*.6,e.r*2,'#ff1030',.35+Math.sin(G.time*10)*.1);
       if(e.drag!=null){const k=clamp(e.drag/HAND_T,0,1),jt=(1-k)*2.5;g.save();g.globalAlpha=1-k*.85;g.translate(e.x+rand(-jt,jt),e.y+k*10);g.scale(1-k*.35,1-k*.55);g.translate(-e.x,-e.y);}
