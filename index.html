@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v2.45 2026-11-07';
+const VERSION='v2.46 2026-11-07';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 // ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
 const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
@@ -115,7 +115,7 @@ const THEMES=[
   {name:'組長の間',         base:'#2a2618',grid:'220,190,120',refl:['255,220,150','255,90,90'],hi:'230,215,180',floor:'tatami',edgeWood:true,blk:'wpillar'}
 ];
 // ステージ番号 → 場所（THEMESの番号）。21以降（ENDLESS）は1〜20を繰り返す
-const THEME_ORDER=[0,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19];
+const THEME_ORDER=[0,0,1,2,3,4,5,6,7,8,14,10,11,12,13,9,15,16,17,18,19]; // v2.46：10面＝リネン室（白鷺の部屋）、15面＝畳の大広間（入れ替え）
 const themeFor=n=>THEMES[THEME_ORDER[((Math.max(1,n)-1)%20)+1]];
 // チュートリアル専用の床（訓練場）
 const TUT_THEME={name:'訓練場',base:'#11161d',grid:'140,170,200',refl:['90,200,255','120,255,200'],hi:'190,220,245',tube:['#4fd8ff','#7fffc8','#4fd8ff'],mark:'練習'};
@@ -1164,7 +1164,7 @@ function startKReb(){G.rebK='kiri';G.skipArm=false;G.skipHold=0;G.rebSkip=lsGet(
   const sx=P.x<AXM?1:-1;G.reb={x:clamp(AXM+sx*60,AX0+90,AX1-90),y:clamp(AYM-60,AY0+120,AY1-120)}}
 function updateKReb(dt){
   const t0=G.rebT;if(!G.csWait)G.rebT+=dt;const t=G.rebT,R=G.reb,hit=k=>t0<k&&t>=k;P.inv=Math.max(P.inv,.5);
-  const fo=()=>G.master.fo=G.master.fo||{x:G.master.x,y:G.master.y+20,r:14};
+  const fo=()=>G.master.fo=G.master.fo||{x:G.master.x,y:G.master.y,r:15}; /* v2.46：実際に描く御影と同じ位置・大きさ（以前は y+20・r14 で、吹き出しが顔に重なった） */
   if(hit(.8)){const sx=R.x<AXM?1:-1;G.master={x:clamp(R.x+sx*130,AX0+50,AX1-50),y:clamp(R.y-30,AY0+110,AY1-80),t:0};masterEntrance(G.master.x,G.master.y)}
   if(hit(2))G.banner={top:'???',main:MASTER_NAME,sub:'鬼頭組を裏で操る男',t:0,dur:2.6,col:'#b46cff'};
   if(G.master)G.master.t+=dt;
@@ -1191,7 +1191,7 @@ function updateRebirth(dt){
   if(hit(2.2)){G.master={x:clamp(R.x+(R.x<AXM?140:-140),AX0+50,AX1-50),y:clamp(R.y+90,AY0+230,AY1-80),t:0};masterEntrance(G.master.x,G.master.y)}
   if(hit(3.4)){G.banner={top:'— 再 び —',main:MASTER_NAME,sub:'鬼頭組を裏で操っていた男',t:0,dur:2.6,col:'#b46cff'};SFX.alarm()} // v2.20：名は15面で明かしているので「再び」
   if(G.master)G.master.t+=dt;
-  if(hit(6.1))csSay('……鬼頭。人の身では、ここまでか。',G.master.fo=G.master.fo||{x:G.master.x,y:G.master.y+20,r:14});
+  if(hit(6.1))csSay('……鬼頭。人の身では、ここまでか。',G.master.fo=G.master.fo||{x:G.master.x,y:G.master.y,r:15});
   if(hit(6.5))csSay('ならば、その骸に——異形の力をくれてやろう。',G.master.fo);
   if(t>6.5&&t<7.6&&Math.random()<dt*6){addShake(4);tone(rand(60,90),40,.4,'sawtooth',.06)}
   if(hit(7.6)){CORPSES=CORPSES.filter(c=>c.e!==G.rebE);G.flash=1;G.flashCol='190,110,255';addShake(30);G.hitstop=.2;SFX.boom();SFX.hands();
@@ -1949,13 +1949,14 @@ function hurtPlayer(dmg,sx,sy,ho){
   if(P.hp<=0)die(a);
 }
 function die(a){P.hp=0;P.dead=true;P.guard=false;G.deathT=0;slow(2,.25);P.atk=null;bloodBurst(P.x,P.y,a,40,500,true);splat(P.x,P.y,26,a,true);SFX.death();G.flash=.7}
+const BOSS_BOUNCE_V=560,BOSS_BOUNCE_G=1800,BOSS_BOUNCE_K=.5; // v2.46：撃破されたボスの跳ね方（最初の高さ約87px、はね返りは速さ半分×2回）
 function bossDown(e,ang){
   G.boss=null;G.kills++;const pts=Math.round(e.val*G.mult*(1+.25*lv('greed')));G.score+=pts;
   slow(1.7,.15);addShake(28);G.flash=.9;G.flashCol='255,255,255';G.hitstop=.18;G.zoom=.08;
   for(let i=0;i<4;i++)bloodBurst(e.x,e.y,rand(0,TAU),30,600);
   splat(e.x,e.y,50,ang);SFX.boom();SFX.kill(99);
   RINGS.push({x:e.x,y:e.y,r:10,R:260,t:0,dur:.6,col:'255,60,90',w:16});
-  CORPSES.push({e,vx:Math.cos(ang)*520,vy:Math.sin(ang)*520,rot:0,vr:rand(-8,8),t:-.8,hit:new Set()});
+  CORPSES.push({e,vx:Math.cos(ang)*520,vy:Math.sin(ang)*520,rot:0,vr:rand(-8,8),t:-.8,hit:new Set(),bz:0,bv:BOSS_BOUNCE_V,bn:0});e.cz=0;e.bnc=true; /* v2.46：大きく跳ねて2回バウンド */
   for(const o of [...E])killEnemy(o,Math.atan2(o.y-e.y,o.x-e.x),760,{});
   MARKS.length=0;B.length=0;
   PWARN.length=0;G.banner={top:BOSSES[e.bk].name,main:'撃 破',sub:'+'+pts,t:0,dur:2.8,col:'#ff2f5f'};
@@ -4627,6 +4628,10 @@ function update(rdt){
   for(const s of SINKS){s.t+=dt;if(!s.gulp&&s.t>=s.dur*.86){s.gulp=1;if(s.lie)plopSfx();else gulpSfx()}}SINKS=SINKS.filter(s=>{if(s.t<s.dur+.5)return true;sinkStamp(s);return false});
   for(const c of CORPSES){
     c.t+=dt;const e=c.e;e.cT=c.t;e.x+=c.vx*dt;e.y+=c.vy*dt;const f=Math.exp(-3*dt);c.vx*=f;c.vy*=f; // 死体は遠くまで滑る
+    if(c.bv!=null&&e.bnc){c.bz+=c.bv*dt;c.bv-=BOSS_BOUNCE_G*dt; /* v2.46：ボスの撃破時のバウンド。着地のたびに床が揺れ、2回跳ねたら死体の絵に */
+      if(c.bz<=0){c.bz=0;addShake(10-c.bn*3);SFX.wall();splat(e.x,e.y+e.r*.4,18-c.bn*4,rand(0,TAU),true);
+        if(c.bn<2){c.bn++;c.bv=-c.bv*BOSS_BOUNCE_K;if(c.bv<120)c.bv=120}else{c.bv=null;e.bnc=false}}
+      e.cz=c.bz}
     const sp=Math.hypot(c.vx,c.vy);c.rot+=c.vr*dt*Math.min(1,sp/300);
     // ビリヤード：滑る死体が敵に当たると吹き飛ばす。勢いがあれば雑魚は一撃で倒れる
     // 当たるのは最初の1体だけ。ぶつけられた敵（とその死体）はさらに次へは連鎖しない（雑魚の群れで床が一気に塗られすぎるのを防ぐ）
@@ -5137,7 +5142,7 @@ function drawThugSpr(e,rot,alpha){
   const tk=e.master?'master':e.ikeiK?'kirishimaI':e.type==='gunner'?'gunner'+gunV(e):e.type, /* v2.36：異形・霧島は専用の絵（kirishimaI）がなければ従来の描き方 */S=THS[tk],im=THI[tk];if(!S||!imgOK(im))return false;
   const corpse=rot!=null,lying=!corpse&&e.slipT>.25,dead=corpse||lying,fl=e.flash>0&&!rot;
   let key,idx=0,flip=false,lay=0,tilt=0;
-  if(dead){key=e.lieK&&S.f[e.lieK]?e.lieK:corpse?(S.f.fall&&e.cT<0?'fall':'dead'):'lie'; /* v2.17：ボスの撃破直後（死体が飛ばされている間）は膝をつく絵があれば使う */const a=corpse?rot:e.slipRot*Math.min(1,(1.6-e.slipT)/.15);flip=a<0;if(!S.f[key]){key='down_walk';lay=(Math.sin(a*3)>=0?1:-1)*Math.PI/2+Math.sin(a)*.3;flip=false} /* v2.37：倒れた絵のない種類は、立ち姿の絵を必ず横に寝かせる（回転のまま描くと、止まった角度によっては立って見えた） */}
+  if(dead){key=e.lieK&&S.f[e.lieK]?e.lieK:corpse?(e.bnc&&(S.f.lie||S.f.fall)?(S.f.lie?'lie':'fall'):S.f.fall&&e.cT<0?'fall':'dead'):'lie'; /* v2.17：ボスの撃破直後（死体が飛ばされている間）は膝をつく絵があれば使う */const a=corpse?rot:e.slipRot*Math.min(1,(1.6-e.slipT)/.15);flip=a<0;if(!S.f[key]){key='down_walk';lay=(Math.sin(a*3)>=0?1:-1)*Math.PI/2+Math.sin(a)*.3;flip=false} /* v2.37：倒れた絵のない種類は、立ち姿の絵を必ず横に寝かせる（回転のまま描くと、止まった角度によっては立って見えた） */}
   else{const q=thugPick(e,S);key=q.key;idx=q.idx;flip=q.flip;tilt=q.tilt||0}
   const L=S.f[key],r=L[((idx%L.length)+L.length)%L.length],k=figH(e)/S.h;
   if(!dead){shadow(e.x,e.y+e.r*.62,e.r*1.05);glow(e.x,e.y+e.r-figH(e)*.5,figH(e)*.62,'#a8bcdc',.16)}
@@ -5146,8 +5151,8 @@ function drawThugSpr(e,rot,alpha){
   if(fl){thg.globalCompositeOperation='source-over';thg.clearRect(0,0,256,256);thg.drawImage(im,r[0],r[1],r[2],r[3],0,0,r[2],r[3]);
     thg.globalCompositeOperation='source-atop';thg.fillStyle='#ffffff';thg.fillRect(0,0,r[2],r[3]);src=THT;sx=0;sy=0}
   g.save();g.globalAlpha=alpha==null?1:alpha;
-  if(lay){g.translate(e.x,e.y);g.rotate(lay);g.drawImage(src,sx,sy,r[2],r[3],-r[2]*k/2,-r[3]*k/2,r[2]*k,r[3]*k)}
-  else{if(dead)g.translate(e.x,e.y+e.r*.3);else{g.translate(e.x,e.y+e.r-(e.hop||0));if(e.tiltT>0)g.rotate(e.tilt*Math.sin(Math.PI*Math.min(1,e.tiltT/GP_TILT)))}
+  if(lay){if(e.cz>0)shadow(e.x,e.y+e.r*.5,e.r*1.1);g.translate(e.x,e.y-(e.cz||0));g.rotate(lay);g.drawImage(src,sx,sy,r[2],r[3],-r[2]*k/2,-r[3]*k/2,r[2]*k,r[3]*k)}
+  else{if(dead){if(e.cz>0)shadow(e.x,e.y+e.r*.5,e.r*1.1*Math.max(.5,1-e.cz/200));g.translate(e.x,e.y+e.r*.3-(e.cz||0))}else{g.translate(e.x,e.y+e.r-(e.hop||0));if(e.tiltT>0)g.rotate(e.tilt*Math.sin(Math.PI*Math.min(1,e.tiltT/GP_TILT)))}
     if(!dead&&tilt){const H=figH(e);g.translate(0,-H*.5);g.rotate(tilt);g.translate(0,H*.5)}
     if(flip)g.scale(-1,1);
     if(OLX&&!dead)olSpr(tk,r,-r[4]*k,-r[5]*k,r[2]*k,r[3]*k,alpha==null?1:alpha);
@@ -5163,7 +5168,7 @@ function drawThug(e,rot,alpha){
   const rnd=i=>{const v=Math.sin((e.id||7)*12.9898+i*78.233)*43758.5453;return v-Math.floor(v)};
   if(!dead){shadow(e.x,e.y+e.r*.62,e.r*1.05);if(!e.master)glow(e.x,e.y+e.r-figH(e)*.5,figH(e)*.62,'#a8bcdc',.16)} // 背後のうっすらした光で、暗い床から輪郭を浮かせる
   g.save();g.globalAlpha=alpha==null?1:alpha;
-  if(dead){g.translate(e.x,e.y);g.rotate(corpse?rot:e.slipRot*Math.min(1,(1.6-e.slipT)/.15));g.scale(k,k);g.translate(0,50)}else{g.translate(e.x,e.y+e.r-(e.hop||0));if(e.tiltT>0)g.rotate(e.tilt*Math.sin(Math.PI*Math.min(1,e.tiltT/GP_TILT)));g.scale(k,k)}
+  if(dead){if(e.cz>0)shadow(e.x,e.y+e.r*.5,e.r*1.1);g.translate(e.x,e.y-(e.cz||0));g.rotate(corpse?rot:e.slipRot*Math.min(1,(1.6-e.slipT)/.15));g.scale(k,k);g.translate(0,50)}else{g.translate(e.x,e.y+e.r-(e.hop||0));if(e.tiltT>0)g.rotate(e.tilt*Math.sin(Math.PI*Math.min(1,e.tiltT/GP_TILT)));g.scale(k,k)}
   if(flip)g.scale(-1,1);
   g.lineJoin='round';g.lineCap='round';
   // 塗り：左上を明るく、右下を暗く
@@ -5630,7 +5635,8 @@ function drawSpeech(t){
       // 文字は実際に描く大きさ（TXT_SCALE込み）で測る。床の幅に収まらなければ改行し、吹き出しを行数に合わせて広げる
       const fs=t.size*TXT_SCALE,maxW=AX1-AX0-36;g.font='700 '+fs+'px '+JP;
       const tt=tr(t.txt),lines=g.measureText(tt).width>maxW-24?wrapJP(tt,t.size,maxW-24):[tt],lw=Math.max(...lines.map(l=>g.measureText(l).width));
-      const w=lw+26,lh=fs+5,h=lines.length*lh+12,x=clamp(t.x,AX0+w/2+4,AX1-w/2-4),bot=Math.max(t.y+6,AY0+56+h),top=bot-h;
+      const w=lw+26,lh=fs+5,h=lines.length*lh+12,x=clamp(t.x,AX0+w/2+4,AX1-w/2-4);let bot=Math.max(t.y+6,AY0+56+h),top=bot-h;
+      if(t.follow&&bot>figTop(t.follow)+4){top=t.follow.y+(t.follow.r||14)+10;bot=top+h} /* v2.46：上の端で押し下げられて顔に重なる時は、足元の下へ */
       g.fillStyle='rgba(10,10,14,.88)';g.strokeStyle='rgba(255,60,90,.85)';g.lineWidth=1.5;
       // しっぽ：話している人の方へ向ける
       if(t.follow){const tx=clamp(t.follow.x,x-w/2+12,x+w/2-12),ty=figTop(t.follow)-2;if(ty>bot+2&&ty-bot<70){g.beginPath();g.moveTo(tx-7,bot-1);g.lineTo(t.follow.x,ty);g.lineTo(tx+7,bot-1);g.closePath();g.fill();g.stroke()}}
