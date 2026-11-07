@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v2.64 2026-11-07';
+const VERSION='v2.65 2026-11-07';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 // ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
 const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
@@ -482,7 +482,7 @@ const SFX={
   wall(){if(!can('wall',40))return;tone(70,40,.2,'sine',.8);noise(.12,.5,'lowpass',900)},
   ui(){tone(660,990,.08,'triangle',.12)},
   powerup(){noise(.7,.35,'bandpass',300,3000,0,0,1.4);tone(180,1200,.6,'sawtooth',.06);tone(523.25,523.25,.9,'sine',.12,now(.45));tone(783.99,783.99,.9,'sine',.1,now(.5));tone(1046.5,1046.5,1.1,'sine',.09,now(.55))},
-  crackle(){if(!can('ck',300))return;noise(.06,.09,'highpass',5000);tone(1800,900,.05,'square',.02)},
+  crackle(){if(!can('ck',300)||CS_PH.has(G.phase))return;noise(.06,.09,'highpass',5000)}, /* v2.65：1800→900Hzの矩形波の「チュン」が雀の声に聞こえたので、ノイズの「パチッ」だけにした。演出中は鳴らさない */
   glass(){noise(.25,.5,'highpass',3500,7000);tone(2400,1400,.12,'triangle',.08);tone(3100,2100,.1,'triangle',.06,now(.04))},
   // SOULがたまった時：「グググググッ！」。力が体に満ちていくように、低い唸りの脈が速く高く詰まっていき、最後に「ッ」と弾ける。2段目は1段低く重く
   soulUp(deep){if(!AC)return;const t=now(),b=deep?.8:1,N=6;let tt=t;
@@ -1154,6 +1154,7 @@ function devKPose(D,t){const sd=D.m?D.m.sd:(D.sd||1);
 function drawDevK(D,t){const S=devKSpr(),q=devKPose(D,t);if(q.al<=0)return;const r=S.f[q.key][0],k=150/S.h;
   g.save();g.globalAlpha=q.al;g.translate(q.x,q.y);if(q.sd<0)g.scale(-1,1);g.drawImage(THI.kitoI,r[0],r[1],r[2],r[3],-r[4]*k,-r[5]*k,r[2]*k,r[3]*k);g.restore();g.globalAlpha=1}
 function devEye(D,t){const S=devKSpr(),q=devKPose(D,t),r=S.f.e0[0],k=150/S.h;return {x:q.x+q.sd*(DEV_EYE[0]*r[2]-r[4])*k,y:q.y+(DEV_EYE[1]*r[3]-r[5])*k}}
+const MK_IN=.6; // 御影が現れる時、縦長に伸びた姿から元の姿に戻るまでの秒数（結末・異形化の場面）
 function drawDevour(){
   const D=G.dv;if(!D)return;const K=D.k,M=D.m,t=G.devT;
   {const c=D.ch==null?0:D.ch,e=D.ch==null?0:clamp((c-(CH_T-.9))/.6,0,1)*(t<10.2?1:Math.max(0,1-(t-10.2)/1.2)); /* v2.45：詠唱の終わり際、倒れた鬼頭の目に赤い光が戻る */
@@ -1167,7 +1168,7 @@ function drawDevour(){
       // 鬼頭の腕が御影を掴む（5.2秒以降）
       if(t>5.2&&!devKSpr()){const ax=K.x+M.sd*52,ay=K.y-14;g.strokeStyle='#120a14';g.lineWidth=9;g.lineCap='round';g.beginPath();g.moveTo(ax,ay);g.quadraticCurveTo((ax+M.x)/2,ay-28,M.x,M.y-26);g.stroke();
         g.strokeStyle='#5a3a4a';g.lineWidth=5;g.stroke()}
-      const x=M.x,y=M.y,ea=Math.min(1,(t-(M.born||0))/1.2);
+      const x=M.x,y=M.y,ea=Math.min(1,(t-(M.born||0))/MK_IN); /* v2.65：縦長から戻るまで 1.2→0.6秒（ユーザー：長くて不自然） */
       g.save();g.translate(x,y+15);g.scale(lerp(.15,1,ea),lerp(1.8,1,ea));g.translate(-x,-y-15);drawThug({...M},null,ea);g.restore();
       txt(MASTER_NAME,M.x,M.y+34,11,'#d8a8ff','center',JP,['#000',3],false,900)}}
   // 鬼頭：上体を起こして御影へ覆いかぶさる。噛むたびに頭が沈む（御影より手前に描いて、体の半分を隠す）
@@ -1275,7 +1276,7 @@ function drawRebirth(){
   // v2.20：式神が運んできた霧島の骸（儀式の間は小刻みに震える）
   if(G.rebK==='kiri'&&G.kCorpse&&R){const a=Math.min(1,G.kCorpse.t/.6),jt=t>6.5?rand(-1.5,1.5):0;
     drawThug({type:'kirishima',x:R.x+jt,y:R.y,r:20,ang:0,walk:0,state:'chase',st:0,flash:0,id:55,cdx:1},1.5,a)}
-  const m=G.master;if(m){const a=Math.min(1,m.t/1.2);glow(m.x,m.y-20,70+(1-a)*60,'#b46cff',.25+(1-a)*.4);
+  const m=G.master;if(m){const a=Math.min(1,m.t/MK_IN);glow(m.x,m.y-20,70+(1-a)*60,'#b46cff',.25+(1-a)*.4);
     g.save();g.translate(m.x,m.y+15);g.scale(lerp(.15,1,a),lerp(1.8,1,a));g.translate(-m.x,-m.y-15);
     drawThug({type:'onmyo',master:true,x:m.x,y:m.y,r:15,ang:Math.PI/2,walk:0,state:G.phase==='rebirth'&&t>6.5&&t<7.6?'windup':'chase',st:0,flash:0,id:99},null,a);g.restore();
     if(G.rebK!=='kiri'||t>=2)txt(MASTER_NAME,m.x,m.y+34,11,'#d8a8ff','center',JP,['#000',3],false,900)} // 名前は足元（頭の上は台詞の吹き出しの場所）。15面では名乗るまで出さない
