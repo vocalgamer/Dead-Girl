@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v2.73 2026-11-08';
+const VERSION='v2.75 2026-11-08';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 // ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
 const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
@@ -919,8 +919,8 @@ function pickType(n){
   if(n>=9)pool.push(['slasher',1.5+(n-9)*.2]);
   let r=Math.random()*pool.reduce((s,p)=>s+p[1],0),t='grunt';
   for(const p of pool){r-=p[1];if(r<=0){t=p[0];break}}
-  // v2.71 厨房：出てくる数はそのままで、遠くから撃つ敵の6割・ほかの敵の2割を料理人に置き換える（全体の約35%）
-  if(themeFor(n).name==='厨房'&&(t==='shield'||Math.random()<(['gunner','rifle','sniper','bazooka'].includes(t)?.6:.2)))t='cook'; // v2.72：厨房に盾持ちは出さない（料理人に置き換える）
+  // v2.71 厨房：（v2.74：ステージ番号ではなく今の部屋で判断。15面のボス戦の手下は pickType(14) で選ぶので、畳の大広間に料理人が出ていた）出てくる数はそのままで、遠くから撃つ敵の6割・ほかの敵の2割を料理人に置き換える（全体の約35%）
+  if(theme.name==='厨房'&&(t==='shield'||Math.random()<(['gunner','rifle','sniper','bazooka'].includes(t)?.6:.2)))t='cook'; // v2.72：厨房に盾持ちは出さない（料理人に置き換える）
   return t;
 }
 const CLEANER_INFO={mop:['掃除屋 出現','血を拭き取られる前に始末しろ！'],washer:['高圧洗浄機 出現','射線上の血を一気に洗い流す——撃たれる前に潰せ'],bleach:['漂白剤 出現','周りの血を一気に洗い流す——撒かれる前に潰せ']};
@@ -932,7 +932,7 @@ const fightN=()=>{let n=0;for(const e of E)if(!e.dead&&e.type!=='cleaner')n++;fo
 const RIFLE_N=3,RIFLE_GAP=.2; // 小銃兵の連射：3発・0.2秒おき（弾き返しのスローと合わせて、1発ずつ返せる間隔）
 // v1.85：画面に同時にいる敵（出現予告を含む）の総数の上限。式神・御影の呼び出しが上乗せされて30体を超え、見づらく重くなっていた
 // 掃除屋とボスの呼び出しは上限の対象外（塗りを消しに来る役・ボス戦の流れを止めないため）
-const LIVE_CAP=22,KITCHEN_CAP=.65; // KITCHEN_CAP：厨房（14面）の1つの群れ・同時に出る数の倍率（v2.72）
+const LIVE_CAP=22,LATE_CAP=.6,BOSS_ADDS_K=1.2,BOSS_ADDS_MAX=6; // LATE_CAP：11〜19面の1つの群れ・同時に出る数の倍率（v2.75）。BOSS_ADDS_K／MAX：ボス戦の手下の出る速さの倍率と同時の上限（v2.75：2割増し）
 const liveN=()=>{let n=MARKS.length;for(const e of E)if(!e.dead)n++;return n};
 const capRoom=()=>Math.max(0,LIVE_CAP-liveN());
 // 波の群れの大きさ：同時に出る上限の約1.2倍（序盤）〜1.45倍（終盤）。凪がある分、群れを大きくして倒せる総数を保つ
@@ -1318,7 +1318,7 @@ function updateWave(dt){
     for(const it of G.intro){it.t-=dt;if(it.t<=0&&!it.shown){it.shown=true;callout(it.txt,it.sub,it.col);G.callout.dur=it.dur||2.2}}    if(G.bossPending>0){G.bossPending-=dt;if(G.bossPending<=0)spawnBoss(G.bossInfo.kind)}
     const alive=E.length+MARKS.length;
     if(G.isBossWave){
-      if(G.boss){G.addsT-=dt;if(G.addsT<=0&&alive<5){G.addsT=rand(3,4.5);queueSpawn(pickType(Math.max(4,G.wave-1)))}}
+      if(G.boss){G.addsT-=dt;if(G.addsT<=0&&alive<BOSS_ADDS_MAX){G.addsT=rand(3,4.5)/BOSS_ADDS_K;queueSpawn(pickType(Math.max(4,G.wave-1)))}} // v2.75：ボス戦の手下を2割増し（間隔 1/1.2・同時の上限 5→6）
     }else{
       // 通常ウェーブ：画面が血で埋まるまで敵が湧き続ける（クリア判定は fillTile 内）
       G.waveTime+=dt;
@@ -1350,7 +1350,7 @@ function updateWave(dt){
       mkTick(dt);
       G.spawnT-=dt;let cap=G.wave<=3&&!G.endless?[0,3.5,4.5,5.5][G.wave]*(.45+.55*Math.min(1,G.waveTime/45)):Math.min(5+Math.ceil(G.wave*.7),11)*waveEase(); // 1〜3面は少なめ（1群れ 約4・5・6体）。v2.05：最初の45秒は、さらに半分ほどから少しずつ増える
       if(G.s1&&G.s1.ph===2)cap=Math.min(cap,3.6); // v2.06：1面の終盤（銃撃手2人）は、ほかの敵を少なめに
-      if(theme.name==='厨房')cap*=KITCHEN_CAP; // v2.72：厨房は狭い調理台の間で戦うので、同時に出る敵（1つの群れ）を少なめに（ユーザー：敵が多すぎる）
+      if(!G.endless&&G.wave>=11&&G.wave<=19)cap*=LATE_CAP; // v2.75：11〜19面は同時に出る敵（1つの群れ）を60%に（ユーザー：床を狙って塗れないほど多い）。v2.72の厨房だけの65%はこれに統合
       // 敵の出方は「波」と「凪」のくり返し（v1.70）。
       // 波：ひとつの方向から群れ（cap体）が一気に押し寄せる（まとめて薙ぎ払う爽快さ）。群れを出し切り、残りが2体以下になるか PACE_WAVE 秒たつと凪へ。
       // 凪：最大 PACE_LULL 秒、新しい敵を出さない。目の前に残った敵を押して運び、囲って沈める時間（全滅させたら PACE_EMPTY 秒、残り1体なら PACE_ONE 秒で次の波）
@@ -4235,7 +4235,7 @@ function updatePlayer(dt){
   }
   // 連撃は1回押すごとに1段ずつ（押しっぱなしでは続かない）
   if(!P.atk&&!P.guard&&P.recover<=0&&P.atkBuf>0&&!P.drink&&!P.mouth)startAttack(ix,iy);
-  P.x=clamp(P.x,AX0+P.r,AX1-P.r);P.y=clamp(P.y,AY0+P.r,AY1-P.r);blockPush(P);
+  P.x=clamp(P.x,AX0+P.r,AX1-P.r);P.y=clamp(P.y,AY0+P.r,AY1-P.r);blockPush(P);P.x=clamp(P.x,AX0+P.r,AX1-P.r);P.y=clamp(P.y,AY0+P.r,AY1-P.r); /* v2.74：壁際の障害物から押し出されて床の外へ出ないよう、押し出した後も床の中に収める */
   // 血の上に立っている間はライフが回復（v1.80）：毎秒 BLOOD_REGEN。攻撃を受けてから1.5秒は止まる
   P.regen=0;
   if(!P.dead&&G.phase==='fight'&&P.hp<P.maxhp&&G.time-(P.lastHurt==null?-9:P.lastHurt)>1.5){const ti=tileAt(P.x,P.y);
@@ -4837,7 +4837,7 @@ function update(rdt){
       const we=e.boss||(P.guard&&e.type==='shield'&&e.shieldUp)?.1:.75;e.x+=ux*p*we;e.y+=uy*p*we;P.x-=ux*p*(1-we);P.y-=uy*p*(1-we)}
   }
   // 押し合いで主人公が壁の外や障害物の中へ押し込まれないよう、押し合いの後にもう一度戻す（ボスに押された時など）
-  if(!P.dead){P.x=clamp(P.x,AX0+P.r,AX1-P.r);P.y=clamp(P.y,AY0+P.r,AY1-P.r);blockPush(P)}
+  if(!P.dead){P.x=clamp(P.x,AX0+P.r,AX1-P.r);P.y=clamp(P.y,AY0+P.r,AY1-P.r);blockPush(P);P.x=clamp(P.x,AX0+P.r,AX1-P.r);P.y=clamp(P.y,AY0+P.r,AY1-P.r)}
   // corpses (bowling)
   for(const s of SINKS){s.t+=dt;if(!s.gulp&&s.t>=s.dur*.86){s.gulp=1;if(s.lie)plopSfx();else gulpSfx()}}SINKS=SINKS.filter(s=>{if(s.t<s.dur+.5)return true;sinkStamp(s);return false});
   for(const c of CORPSES){
