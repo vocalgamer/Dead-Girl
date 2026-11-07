@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v2.65 2026-11-07';
+const VERSION='v2.67 2026-11-08';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 // ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
 const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
@@ -2996,6 +2996,12 @@ function drawSmokes(){
 const AXM=(AX0+AX1)/2,AYM=(AY0+AY1)/2;
 const newPetal=gust=>{const top=!gust&&Math.random()<.45;return{k:'petal',x:top?rand(AX0,AX1):AX0-10,y:top?AY0-8:rand(AY0,AY1-150),vx:gust?rand(170,260):rand(40,90),vy:gust?rand(-10,25):rand(18,40),
   rot:rand(0,TAU),vr:rand(-4,4),f:rand(0,TAU),fs:rand(4,9),sz:rand(3.8,6),t:0,life:gust?6:10,land:rand(AY0+80,AY1-20),col:pick(['#f8cad8','#f2b4c8','#fde4ec','#f6bed0'])}};
+/* v2.66 季節（遊んでいる端末の今日の月）：春3〜5月・夏6〜8月・秋9〜11月・冬12〜2月。
+   庭のステージ（中庭・屋上庭園）で舞うもの：春＝桜の花びら、夏＝蛍、秋＝モミジ、冬＝雪。夏と冬は雨を止める（蛍は雨の夜には飛ばず、雪と雨は同時に降らない） */
+const season=()=>{const m=new Date().getMonth()+1;return m>=3&&m<=5?'spring':m>=6&&m<=8?'summer':m>=9&&m<=11?'autumn':'winter'};
+const SEASON_PARTS={spring:'petal',summer:'firefly',autumn:'leaf',winter:'snow'};
+const partsOf=a=>a.parts==='season'?SEASON_PARTS[season()]:a.parts;
+const seasonNoRain=()=>{const a=AMB[theme.name];return !!a&&a.parts==='season'&&(season()==='summer'||season()==='winter')};
 const lampsAt=(col,cols,rows)=>{const o=[];for(let r=0;r<rows;r++)for(let c=0;c<cols;c++)o.push({x:AX0+(AX1-AX0)*(c+.5)/cols,y:AY0+(AY1-AY0)*(r+.5)/rows,r:150,col,k:'lamp'});return o};
 const AMB={
   '雨の路地裏':{lights:[{x:AX0+6,y:AY0+210,r:170,col:'#ff3aa0',k:'neon'},{x:AX1-6,y:AY0+520,r:150,col:'#3ad8ff',k:'neon'}]}, // 雑居ビルのネオン看板が濡れた路面に映る
@@ -3005,7 +3011,7 @@ const AMB={
   '1F ロビー':{lights:[{x:AXM,y:AY0+230,r:230,col:'#ffd8a0',k:'steady'}]}, // 吹き抜けのシャンデリア
   '搬入口・倉庫':{shafts:'#fff0c8',parts:'dust'}, // 高窓から差す光の筋と、舞うほこり
   'ボイラー室':{dark:.12,glow:'#ff5a20',steam:[{x:AX0+30,y:AY0+180},{x:AX1-30,y:AY0+460}]}, // 配管から噴く蒸気、炉の赤い照り返し
-  '中庭':{parts:'leaf',kakon:true}, // 舞い落ちる紅葉と、ししおどし
+  '中庭':{parts:'season',kakon:true}, // 季節のもの（春 桜・夏 蛍・秋 モミジ・冬 雪）と、ししおどし
   '事務所フロア':{lights:lampsAt('#e8f4ff',2,3),flick:true}, // 天井の蛍光灯がときどきまたたく
   '畳の大広間':{lights:[{x:AX0+40,y:AY0+120,r:150,col:'#ffb860',k:'candle'},{x:AX1-40,y:AY0+120,r:150,col:'#ffb860',k:'candle'},{x:AX0+40,y:AY1-120,r:150,col:'#ffb860',k:'candle'},{x:AX1-40,y:AY1-120,r:150,col:'#ffb860',k:'candle'}]}, // 四隅の行灯
   '賭場':{dark:.1,lights:[{x:AXM-90,y:AY0+250,r:140,col:'#ffd890',k:'sway'},{x:AXM+90,y:AY0+500,r:140,col:'#ffd890',k:'sway'}],parts:'smoke'}, // 吊り下げ灯の揺れる明かりと、紫煙
@@ -3014,7 +3020,7 @@ const AMB={
   '厨房':{steam:[{x:AXM-80,y:AY0+120},{x:AXM+80,y:AY0+120}],lights:[{x:AXM,y:AY0+140,r:200,col:'#ffcf90',k:'steady'}]}, // コンロの湯気
   'リネン室':{parts:'lint'}, // 舞う糸くず
   '道場':{shafts:'#bcd4ff',parts:'incense'}, // 障子越しの月明かりと、線香の煙
-  '屋上庭園':{parts:'petal'}, // 風に舞う花びら
+  '屋上庭園':{parts:'season'}, // 季節のもの（春は突風で舞う桜の花びら）
   '屋上':{sweep:'heli',parts:'wind'}, // ヘリの探照灯と、吹き抜ける風
   '組長室前の廊下':{lights:[{x:AX0+10,y:AY0+180,r:120,col:'#ffb060',k:'candle'},{x:AX1-10,y:AY0+380,r:120,col:'#ffb060',k:'candle'},{x:AX0+10,y:AY0+580,r:120,col:'#ffb060',k:'candle'}]}, // 壁の灯籠
   '組長の間':{dark:.1,glow:'#a0102a'} // 赤黒い気配
@@ -3025,10 +3031,14 @@ function resetAmbient(){AMBP=[];AMBS={kakon:rand(4,8),car:rand(2,5),flk:rand(3,7
 function updateAmbient(dt){
   const a=ambOf();if(!a)return;const S=AMBS;
   // 舞うもの
-  const spawn={leaf:2.2,petal:7,dust:3,dustfall:3,smoke:1.6,incense:1.4,lint:2,wind:6}[a.parts]||0;
-  if(spawn&&Math.random()<spawn*dt&&AMBP.length<(a.parts==='petal'?110:60)){const k=a.parts;
+  const pk=partsOf(a),spawn={leaf:2.2,petal:7,firefly:2.4,snow:10,dust:3,dustfall:3,smoke:1.6,incense:1.4,lint:2,wind:6}[pk]||0;
+  if(spawn&&Math.random()<spawn*dt&&AMBP.length<({petal:110,snow:160,firefly:34}[pk]||60)){const k=pk;
     if(k==='leaf')AMBP.push({k,x:rand(AX0,AX1),y:AY0-10,vx:rand(-12,12),vy:rand(22,38),rot:rand(0,TAU),vr:rand(-3,3),t:0,life:rand(14,18),land:rand(AY0+80,AY1-20),col:pick(['#b8281a','#d2481c','#e08a20','#9a1c14'])});
     else if(k==='petal')AMBP.push(newPetal(false));
+    // 蛍：庭の低いところをゆっくり漂い、数秒ごとにふわっと光っては消える（黄緑の光）
+    else if(k==='firefly')AMBP.push({k,x:rand(AX0+20,AX1-20),y:rand(AY0+80,AY1-40),vx:rand(-8,8),vy:rand(-6,4),ph:rand(0,TAU),fp:rand(.28,.45),t:0,life:rand(9,15)});
+    // 雪：ゆらゆら揺れながら落ち、床に着くと少しして溶ける（始まってすぐは画面の途中からも降らせる）
+    else if(k==='snow'){const pre=AMBP.length<70;AMBP.push({k,x:rand(AX0-20,AX1+20),y:pre?rand(AY0,AY1-120):AY0-8,vx:rand(-10,10),vy:rand(26,46),sz:rand(1.1,2.6),ph:rand(0,TAU),t:0,life:rand(16,22),land:rand(AY0+60,AY1-10)})}
     else if(k==='dust'||k==='lint')AMBP.push({k,x:rand(AX0,AX1),y:rand(AY0,AY1),vx:rand(-6,6),vy:rand(-6,4),t:0,life:rand(4,7)});
     else if(k==='dustfall')AMBP.push({k,x:rand(AX0,AX1),y:rand(AY0,AY1-200),vx:rand(-3,3),vy:rand(30,50),t:0,life:rand(2,3.5)});
     else if(k==='smoke'||k==='incense'){const src=k==='incense'?{x:AX0+40,y:AY1-60}:{x:rand(AX0+60,AX1-60),y:rand(AY0+100,AY1-100)};AMBP.push({k,x:src.x+rand(-4,4),y:src.y,vx:rand(-4,4),vy:rand(-18,-10),t:0,life:rand(5,8)})}
@@ -3040,7 +3050,7 @@ function updateAmbient(dt){
   // 天井からの水滴：床に小さな波紋
   if(a.drip){S.drip-=dt;if(S.drip<=0){S.drip=rand(1.5,3.5);const x=rand(AX0+20,AX1-20),y=rand(AY0+40,AY1-20);AMBP.push({k:'ripple',x,y,t:0,life:1.1});tone(1900,900,.07,'sine',.035)}}
   // ししおどし：竹が石を打つ「カコーン」
-  if(a.parts==='petal'){S.gust=(S.gust==null?rand(4,7):S.gust)-dt;if(S.gust<=0){S.gust=rand(8,12);for(let i=0;i<28;i++)AMBP.push(newPetal(true));noise(1.8,.07,'bandpass',600,1400)}} // 突風で花びらが一斉に舞う
+  if(pk==='petal'){S.gust=(S.gust==null?rand(4,7):S.gust)-dt;if(S.gust<=0){S.gust=rand(8,12);for(let i=0;i<28;i++)AMBP.push(newPetal(true));noise(1.8,.07,'bandpass',600,1400)}} // 突風で花びらが一斉に舞う
   if(a.kakon){S.kakon-=dt;if(S.kakon<=0){S.kakon=rand(9,14);tone(520,470,.12,'triangle',.12);tone(780,700,.08,'square',.025);tone(470,440,.25,'triangle',.05,now(.16))}}
   // 蛍光灯：ときどき1本がまたたいて「チチッ」と鳴る
   if(a.flick){S.flk-=dt;if(S.flk<=0){S.flk=rand(4,9);S.flkI=Math.floor(Math.random()*a.lights.length);S.flkT=.6;tone(120,120,.05,'square',.03);tone(120,120,.04,'square',.025,now(.18))}if(S.flkT>0)S.flkT-=dt}
@@ -3054,6 +3064,8 @@ function updateAmbient(dt){
   for(const p of AMBP){p.t+=dt;
     if(p.k==='leaf'){if(p.y<p.land){p.x+=(p.vx+Math.sin(p.t*1.6+p.rot)*18)*dt;p.y+=p.vy*dt;p.rot+=p.vr*dt}}
     else if(p.k==='spark'){p.vy+=420*dt;p.x+=p.vx*dt;p.y+=p.vy*dt}
+    else if(p.k==='firefly'){p.x+=(p.vx+Math.sin(p.t*.7+p.ph)*14)*dt;p.y+=(p.vy+Math.cos(p.t*.5+p.ph*1.3)*10)*dt}
+    else if(p.k==='snow'){if(!p.landed){p.x+=(p.vx+Math.sin(p.t*1.3+p.ph)*12)*dt;p.y+=p.vy*dt;if(p.y>=p.land){p.landed=true;p.life=p.t+2.5}}}
     else if(p.k==='petal'){if(!p.landed){p.x+=(p.vx+Math.sin(p.t*2+p.rot)*26)*dt;p.y+=(p.vy+Math.sin(p.t*3.1+p.rot)*16)*dt;p.rot+=p.vr*dt;p.f+=p.fs*dt;p.vx=lerp(p.vx,60,1-Math.exp(-.4*dt));
       if(p.y>=p.land&&p.t>1.2){p.landed=true;p.life=p.t+3.5}}}
     else if(p.x!=null&&p.vx!=null){p.x+=p.vx*dt;p.y+=p.vy*dt}}
@@ -3087,6 +3099,8 @@ function drawAmbient(){
       const gr=g.createLinearGradient(-z,0,z,0);gr.addColorStop(0,'#fff4f8');gr.addColorStop(1,p.col);g.fillStyle=gr;
       g.beginPath();g.moveTo(-z,0);g.quadraticCurveTo(-z*.4,-z*1.05,z*.75,-z*.45);g.lineTo(z*.42,0);g.lineTo(z*.75,z*.45);g.quadraticCurveTo(-z*.4,z*1.05,-z,0);g.fill();
       g.strokeStyle='rgba(220,120,150,.45)';g.lineWidth=.5;g.beginPath();g.moveTo(-z*.8,0);g.lineTo(z*.3,0);g.stroke();g.restore()}
+    else if(p.k==='firefly'){const I=Math.pow(Math.max(0,Math.sin(p.t*TAU*p.fp+p.ph)),3)*fa;if(I>.02){g.globalAlpha=1;glow(p.x,p.y,16,'#c8ff5a',.55*I);g.globalAlpha=I;circ(p.x,p.y,1.5,'#f2ffb0')}else{g.globalAlpha=fa*.5;circ(p.x,p.y,1,'#2a3020')}}
+    else if(p.k==='snow'){const m=p.landed?Math.max(0,(p.life-p.t)/2.5):1;g.globalAlpha=fa*m*.28;circ(p.x,p.y,p.sz*2.1,'#ffffff');g.globalAlpha=fa*m*.9;circ(p.x,p.y,p.sz,'#ffffff')}
     else if(p.k==='dust'||p.k==='lint'){g.globalAlpha=fa*(.35+Math.sin(p.t*3+p.x)*.15);circ(p.x,p.y,p.k==='lint'?1.4:1.1,'#fff6e0')}
     else if(p.k==='dustfall'){g.globalAlpha=fa*.45;circ(p.x,p.y,1.3,'#c8c0b4')}
     else if(p.k==='smoke'||p.k==='incense'){g.globalAlpha=fa*(p.k==='incense'?.12:.08);circ(p.x+Math.sin(p.t*1.2+p.y*.02)*6,p.y,4+p.t*3.4,'#d8d8dc')}
@@ -4441,7 +4455,10 @@ function updateEnemy(e,dt){
         for(let i=0;i<GN;i++){if(!DONE[i]||BLOCK[i]||taken.has(i)||i===e.avoid)continue;const t=tileRect(i),cx=t.x+t.w/2,cy=t.y+t.h/2,s=dist(cx,cy,P.x,P.y)-dist(cx,cy,e.x,e.y)*.6+rand(0,40);if(s>bs){bs=s;best=i}}
         e.tgt=best;e.bestD=1e9;e.stuckT=0;if(best<0)e.avoid=null;
       }
-      if(e.tgt<0){e.ang=turn(e.ang,toP,6*dt);if(d<220)mv(e,toP+Math.PI,e.spd*.4,dt);break}
+      if(e.tgt<0){if(d<220){e.ang=turn(e.ang,toP,6*dt);mv(e,toP+Math.PI,e.spd*.4,dt);break}
+        /* v2.67：拭く血がまだない時は、主人公から離れた所を、血を探すようにゆっくり見回る（以前はその場で立ち尽くし、固まって見えた） */
+        e.wT=(e.wT||0)-dt;if(e.wT<=0||e.wx==null||dist(e.x,e.y,e.wx,e.wy)<12){e.wT=rand(2.5,4);for(let k=0;k<8;k++){const x=rand(AX0+40,AX1-40),y=rand(AY0+60,AY1-40);if(!nearBlock(x,y,16)&&dist(x,y,P.x,P.y)>240){e.wx=x;e.wy=y;break}}}
+        if(e.wx!=null){const a=Math.atan2(e.wy-e.y,e.wx-e.x);e.ang=turn(e.ang,a,5*dt);mv(e,a,e.spd*.35,dt)}break}
       const t=tileRect(e.tgt),tx=t.x+t.w/2,ty=t.y+t.h/2,a=Math.atan2(ty-e.y,tx-e.x),td=dist(e.x,e.y,tx,ty);
       e.ang=turn(e.ang,a,10*dt);
       // 停止検知：1秒間目標に近づけなければ、そのタイルを諦めて別のタイルへ
@@ -4650,7 +4667,7 @@ function updateBoss(e,dt,d,toP){
 // 雨：奥行きd（0=遠い 1=近い）で太さ・明るさ・速さを変えた雨筋と、床に落ちて広がる波紋
 const RAIN=[];for(let i=0;i<160;i++){const d=Math.random();RAIN.push({x:rand(-60,W+160),y:rand(0,H),d,s:650+d*600,l:12+d*26})}
 let SPL=[],splAcc=0,boltT=rand(8,16),bolt=0;
-const rainK=()=>state==='title'?.4:G.tutMode||G.bonus?0:(theme.rain||0);
+const rainK=()=>state==='title'?.4:G.tutMode||G.bonus||seasonNoRain()?0:(theme.rain||0); // v2.66：庭のステージは夏（蛍）と冬（雪）は雨なし
 function updateRain(rdt){
   const rk=rainK();rainAudio(rdt,state==='title'?.6:rk); // タイトルは見た目は控えめ、音は小雨と同じくらい
   for(const r of RAIN){r.y+=r.s*rdt;r.x-=r.s*.22*rdt;if(r.y>H+10){r.y=rand(-40,0);r.x=rand(-60,W+160)}}
