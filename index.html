@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v2.72 2026-11-08';
+const VERSION='v2.73 2026-11-08';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 // ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
 const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
@@ -1341,7 +1341,7 @@ function updateWave(dt){
           else popText(W/2,AY0+40,'掃除屋 ×'+crew,'#5ab8ff',16,1.2)}}
       // 陰陽師の襲来：STAGE11以降（後半から。STAGE15後のボーナス面「式神斬り」より前に一度は出会う）、ステージの途中で一度（長引けばもう一度）、外道陰陽師が現れて式神（一撃で倒れる紙の人形）を呼び出し続ける
       // まとめ斬りを気持ちよく決めるための息抜き。式神は血が出ないので床は塗れない
-      if(G.wave>=11&&!G.tut){G.rushT-=dt;if(G.rushT<=0&&G.rush<=0&&prog()<.9){G.rush=1;G.rushT=rand(40,55);queueSpawn('onmyo');callout('陰陽師 出現','式神を呼び出す外道——術者を斬れば、式神は紙に戻る','#b46cff');G.callout.dur=2;SFX.alarm()}}
+      if(G.wave>=11&&!G.tut&&theme.name!=='厨房'){G.rushT-=dt; /* v2.73：厨房には外道陰陽師（式神を呼び続ける）を出さない（ユーザー：敵が多すぎる） */if(G.rushT<=0&&G.rush<=0&&prog()<.9){G.rush=1;G.rushT=rand(40,55);queueSpawn('onmyo');callout('陰陽師 出現','式神を呼び出す外道——術者を斬れば、式神は紙に戻る','#b46cff');G.callout.dur=2;SFX.alarm()}}
       // 式神は陰陽師が呼び出す（陰陽師を倒すか、陰陽師が姿を消すと G.rush=0 に戻る）
       // 同時に出る敵の上限：WAVE1で6体〜最大11体（旧8〜15体）。まとめて薙ぎ払える集団湧きは残す
       s1Tick(dt);
@@ -5255,7 +5255,7 @@ function mkStart(){const top=P.y>AYM,x=rand(AX0+70,AX1-70),y=top?AY0+150:AY1-60;
 function mkTick(dt){const m=G.mikage;if(!m)return;const t0=m.t;m.t+=dt;const hit=k=>t0<k&&m.t>=k;m.ang=Math.atan2(P.y-m.y,P.x-m.x);
   if(hit(1.2))TEXTS.push({x:m.x,y:m.y,txt:MK_LINES[G.wave%MK_LINES.length],col:'#e8d0ff',size:15,t:0,dur:2.8,vy:0,speech:true,follow:m});
   if(hit(4.5)){m.state='windup';tone(220,660,.3,'triangle',.08);
-    if(m.act==='shiki'){for(let i=0,nr=Math.min(5,capRoom());i<nr;i++){const a=rand(0,TAU),r=rand(50,90),x=clamp(m.x+Math.cos(a)*r,AX0+20,AX1-20),y=clamp(m.y+Math.sin(a)*r,AY0+24,AY1-20);if(!nearBlock(x,y,14)){MARKS.push({x,y,ox:x,oy:y,type:Math.random()<.6?'runner':'grunt',t:.35,horde:true});paperBurst(x,y,a,6)}}}
+    if(m.act==='shiki'){for(let i=0,nr=Math.min(theme.name==='厨房'?2:5,capRoom());i<nr;i++){ /* v2.73：厨房では式神は2体 */const a=rand(0,TAU),r=rand(50,90),x=clamp(m.x+Math.cos(a)*r,AX0+20,AX1-20),y=clamp(m.y+Math.sin(a)*r,AY0+24,AY1-20);if(!nearBlock(x,y,14)){MARKS.push({x,y,ox:x,oy:y,type:Math.random()<.6?'runner':'grunt',t:.35,horde:true});paperBurst(x,y,a,6)}}}
     else{const tg=E.filter(e=>!e.boss&&!e.dead&&!(e.empT>0)).sort((a,b)=>dist(a.x,a.y,P.x,P.y)-dist(b.x,b.y,P.x,P.y)).slice(0,4);
       for(const e of tg){e.empT=10;e.spd0=e.spd;e.dmg0=e.dmg;e.spd*=1.3;e.dmg*=1.25;RINGS.push({x:e.x,y:e.y,r:6,R:40,t:0,dur:.4,col:'180,90,255',w:5})}
       if(tg.length)popText(m.x,mkTxtY(m,60),'術をかけた','#d8a8ff',14,1)}}
