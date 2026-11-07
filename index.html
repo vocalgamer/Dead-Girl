@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v2.58 2026-11-07';
+const VERSION='v2.59 2026-11-07';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 // ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
 const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
@@ -1044,7 +1044,7 @@ function updateDevour(dt){
     for(let k=0;k<6;k++)bloodBurst(M.x,M.y,rand(0,TAU),18,rand(200,380),true);
     for(let i=0;i<GN;i++){const t=tileRect(i);if(!DONE[i]&&!BLOCK[i]&&dist(t.x+t.w/2,t.y+t.h/2,M.x,M.y)<140){capFilling=true;fillTile(i);capFilling=false}}}
   // 喰い終えて、わずかな静寂のあと、鬼頭は塵となって崩れ落ちる
-  if(t>10.2){if(M)M.lieK='d3';D.a=devKSpr()?Math.max(0,1-(t-10.5)/1.5):Math.max(0,1-(t-10.2)/1.6);if(D.a>0&&Math.random()<.7)fx({k:'ash',x:K.x+rand(-34,34),y:K.y+rand(-30,10),vx:rand(-20,20),vy:rand(-80,-30),life:1,max:1,sz:rand(2,5),rot:rand(0,TAU)})}
+  if(t>10.2){if(M)M.lieK='d3';D.a=devKSpr()?Math.max(0,1-(t-10.5)/(DEV_FADE+1-10.5)):Math.max(0,1-(t-10.2)/1.6);if(D.a>0&&Math.random()<.7)fx({k:'ash',x:K.x+rand(-34,34),y:K.y+rand(-30,10),vx:rand(-20,20),vy:rand(-80,-30),life:1,max:1,sz:rand(2,5),rot:rand(0,TAU)})}
   if(hit(10.2)){tone(60,30,1.8,'sine',.3);noise(1.8,.2,'lowpass',800,100)}
   // 余韻：静まり返った部屋に灰が漂う。遠くで一度だけ鐘。カメラがゆっくり引いていく
   if(hit(11.8))G.zHold=0;
@@ -1144,11 +1144,13 @@ function drawSink(){
    倒れている e0 → 御影をつかむ e1（爪を伸ばして少し前へ這い出る）→ 引き倒して覆いかぶさる e2 →
    喰らう（顔を突っ込む e2 と、血を滴らせて顔を上げる e3 を噛むたびに繰り返す）→ 事切れた後は顔を上げたまま e3 → 塵になって崩れる e4 → e5 → 消える */
 const DEV_EYE=[.86,.6]; // e0 の目の位置（絵の幅・高さに対する割合。頭が右の時）
+/* v2.59：塵になって崩れた亡骸（e5）を長く見せる（ユーザー：短すぎる）。崩れ始め e4 10.5〜11.5秒、e5 11.5秒〜、14.0秒から1秒で消える（15.2秒に主人公の場面へ） */
+const DEV_E5=11.5,DEV_FADE=14;
 function devKSpr(){return THS.kitoI&&imgOK(THI.kitoI)?THS.kitoI:null}
 function devKPose(D,t){const sd=D.m?D.m.sd:(D.sd||1);
-  const key=t<5.2?'e0':t<6.6?'e1':t<7.1?'e2':t<9.6?(D.bob>0||D.bite>.2?'e2':'e3'):t<10.5?'e3':t<11.1?'e4':'e5';
+  const key=t<5.2?'e0':t<6.6?'e1':t<7.1?'e2':t<9.6?(D.bob>0||D.bite>.2?'e2':'e3'):t<10.5?'e3':t<DEV_E5?'e4':'e5';
   const lu=t<5.2?0:t<6.6?36*Math.min(1,(t-5.2)/.25):t<7.1?lerp(36,8,clamp((t-6.6)/.5,0,1)):8; // つかむ時に前へ這い出し、引き倒しながら戻る
-  const al=t<11.1?1:Math.max(0,1-(t-11.1)/.9);return {key,sd,x:D.k.x+sd*lu,y:D.k.y,al}}
+  const al=t<DEV_FADE?1:Math.max(0,1-(t-DEV_FADE)/1);return {key,sd,x:D.k.x+sd*lu,y:D.k.y,al}}
 function drawDevK(D,t){const S=devKSpr(),q=devKPose(D,t);if(q.al<=0)return;const r=S.f[q.key][0],k=150/S.h;
   g.save();g.globalAlpha=q.al;g.translate(q.x,q.y);if(q.sd<0)g.scale(-1,1);g.drawImage(THI.kitoI,r[0],r[1],r[2],r[3],-r[4]*k,-r[5]*k,r[2]*k,r[3]*k);g.restore();g.globalAlpha=1}
 function devEye(D,t){const S=devKSpr(),q=devKPose(D,t),r=S.f.e0[0],k=150/S.h;return {x:q.x+q.sd*(DEV_EYE[0]*r[2]-r[4])*k,y:q.y+(DEV_EYE[1]*r[3]-r[5])*k}}
