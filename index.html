@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v2.61 2026-11-07';
+const VERSION='v2.63 2026-11-07';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 // ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
 const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
@@ -4641,7 +4641,7 @@ function updateRain(rdt){
   if(rk>=1&&state==='play'){boltT-=rdt;if(boltT<=0){boltT=rand(14,26);bolt=.7;thunderSfx();addShake(6)}}
 }
 /* 雨音：「サー」という2層のノイズ（高いシャー＋低いザー）を鳴らし続け、数秒ごとに強弱の目標を変えてゆっくり追う（風で雨脚が揺れる感じ）。
-   さらに、ときどき近くで粒が当たる「パラッ」を不規則に重ねる。雨の降らないステージでは音量0 */
+   雨の降らないステージでは音量0（v2.62：粒の「パラッ」は雀の声に聞こえたのでやめた） */
 let RA=null;
 function rainAudio(rdt,k){
   if(!AC||!noiseBuf)return;
@@ -4653,7 +4653,7 @@ function rainAudio(rdt,k){
   const sh=1+Math.sin(RA.t*2.3)*.07+Math.sin(RA.t*5.7)*.05,now_=AC.currentTime;
   RA.hi.gn.gain.setTargetAtTime(k*.025*RA.gust*sh,now_,.2);RA.hi.fl.frequency.setTargetAtTime(1700+RA.gust*1100,now_,.3);
   RA.lo.gn.gain.setTargetAtTime(k*.017*RA.lag,now_,.3);
-  if(k>0){RA.dt-=rdt;if(RA.dt<=0){RA.dt=rand(.04,.3)/(k*RA.gust);noise(.025,rand(.003,.01)*k,'bandpass',rand(2500,6500),0,0,0,2)}}
+  /* v2.62：近くで粒が当たる「パラッ」（2500〜6500Hzの短いノイズを不規則に鳴らしていた）はやめた。音の高さが毎回変わる細い高音が、雀の鳴き声のように聞こえたため（ユーザー） */
 }
 function drawRainSplash(){
   if(!SPL.length)return;g.lineWidth=1;
@@ -6338,7 +6338,7 @@ function draw(){
   g.save();
   const sh=G.shake;if(sh>.3)g.translate(rand(-sh,sh),rand(-sh,sh));
   g.translate(0,VY0);g.scale(VS,VS);g.translate(-AX0,-AY0);
-  if(G.zoom>.002){const z=G.zc||P;g.translate(z.x,z.y);g.scale(1+G.zoom,1+G.zoom);g.translate(-z.x,-z.y)}
+  /* v2.63：画面のズーム（カメラの寄り）は全部やめた（ユーザー：違和感しかない）。G.zoom は値が入っても画面には使わない */
   drawWorld();drawSmokes();drawTutWorld();drawAmbient();drawRebirth();drawDevour();drawSink();drawCsSpeech();drawBubbles();drawReady();
   g.restore();
   drawOverlays();
