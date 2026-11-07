@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v2.60 2026-11-07';
+const VERSION='v2.61 2026-11-07';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 // ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
 const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
@@ -1199,7 +1199,7 @@ function drawSkipHint(){
     if(k>0){rr(W-152,H-10,140,4,2,'rgba(255,255,255,.2)');rr(W-152,H-10,140*k,4,2,'#ffffff')}g.globalAlpha=1}}
 /* v2.20 15面：異形・霧島の誕生（約12秒）。御影が初めて名を明かして現れ、白鷺の会社が片付けた霧島の骸を式神に運ばせ、異形として蘇らせる。
    去り際、主人公を見て「妙な匂い」「我が門の術ではない」とだけ漏らす（主人公も誰かの術で蘇ったことを、定かではない形でにおわせる） */
-function startKReb(){G.rebK='kiri';G.skipArm=false;G.skipHold=0;G.rebSkip=lsGet('dg_kreb')==='1'||lsGet('dg_cleared')==='1';G.rebAt=performance.now();G.phase='rebirth';G.rebT=0;G.master=null;G.kCorpse=null;
+function startKReb(){P.blinkT=0;G.rebK='kiri';G.skipArm=false;G.skipHold=0;G.rebSkip=lsGet('dg_kreb')==='1'||lsGet('dg_cleared')==='1';G.rebAt=performance.now();G.phase='rebirth';G.rebT=0;G.master=null;G.kCorpse=null;
   const sx=P.x<AXM?1:-1;G.reb={x:clamp(AXM+sx*60,AX0+90,AX1-90),y:clamp(AYM-60,AY0+120,AY1-120)}}
 function updateKReb(dt){
   const t0=G.rebT;if(!G.csWait)G.rebT+=dt;const t=G.rebT,R=G.reb,hit=k=>t0<k&&t>=k;P.inv=Math.max(P.inv,.5);
@@ -1453,13 +1453,14 @@ function paint(x,y,r,amt){
     PAINT[i]+=amt*PAINT_MUL*(inT?1:.5)*(1+Math.min(1,G.chain/20))*PAINT_K;if(PAINT[i]>=1)fillTile(i); /* v2.30：強化カード「濃い返り血（床の塗り+10%）」は廃止。v2.31：塗りが85%を超えると塗れ方が2倍になる終盤の救済も廃止（どちらも意図しない床が塗られるため） */ // 連続撃破ほど塗りが速い（20連で最大2倍。v0.97で2.2倍から少し下げた）
   }
 }
+const CS_PH=new Set(['rebirth','devour','sink','ending','done']); // 演出の場面（戦闘の効果音・表示を出さない）
 function fillTile(i){
   if(DONE[i])return;
   DONE[i]=1;painted++;paintVer++;if(!capFilling)capNew.push(i);const t=tileRect(i),d=decG;
   d.fillStyle=BLC(85,10,.5);d.fillRect(t.x,t.y,t.w,t.h);
   for(let k=0;k<6;k++){d.fillStyle=BLC(irand(90,140),irand(8,20),rand(.3,.55).toFixed(2));d.beginPath();d.arc(t.x+rand(8,t.w-8),t.y+rand(8,Math.max(9,t.h-8)),rand(5,9),0,TAU);d.fill()}
   // 塗り切った瞬間はマスの枠を白く光らせ、「今ここが塗れた」と分かるようにする（制圧の波で埋まる分は控えめ）
-  fx({k:'tile',x:t.x,y:t.y,w:t.w,h:t.h,life:capFilling?.35:.6,max:capFilling?.35:.6,cap:capFilling});SFX.tile();
+  if(!CS_PH.has(G.phase)){fx({k:'tile',x:t.x,y:t.y,w:t.w,h:t.h,life:capFilling?.35:.6,max:capFilling?.35:.6,cap:capFilling});SFX.tile()} /* v2.61：演出中（異形化・結末・最期）は鳴らさない */
   if(!G.isBossWave&&G.phase==='fight'&&state==='play'&&!P.dead&&painted>=GN&&!G.tutMode){G.lastTile=i;waveClear()}
 }
 function tileAt(x,y){const cx=Math.floor((x-AX0)/TS),cy=Math.floor((y-AY0)/TS);return cx<0||cy<0||cx>=GC||cy>=GR?-1:cy*GC+cx}
@@ -2002,6 +2003,7 @@ function bossDown(e,ang){
   PWARN.length=0;G.banner={top:BOSSES[e.bk].name,main:'撃 破',sub:'+'+pts,t:0,dur:2.8,col:'#ff2f5f'};
   const reborn=e.type==='kito'&&!G.endless&&!e.ikei;
   if(!reborn&&!e.ikei)G.bossWon=true;
+  if(reborn||e.ikei)P.blinkT=0; /* v2.61：被弾直後の白い点滅を演出へ持ち込まない（演出中は点滅が進まず、主人公が真っ白のままだった） */
   if(reborn){G.rebK=null;G.skipArm=false;G.skipHold=0;G.rebSkip=lsGet('dg_ikei')==='1'||lsGet('dg_cleared')==='1';G.rebAt=performance.now();G.phase='rebirth';G.rebT=0;G.rebE=e;G.reb={x:clamp(e.x+Math.cos(ang)*60,AXM-100,AXM+100),y:clamp(e.y+Math.sin(ang)*60,AYM-70,AYM+90)};G.master=null;
     {const c=CORPSES.find(q=>q.e===e);if(c){c.t=-99;c.vx=(G.reb.x-e.x)*3;c.vy=(G.reb.y-e.y)*3;c.vr=4;c.noCrash=true;c.push2=false}}} // 骸は儀式の場所（中央付近）まで転がり、儀式まで残る
   else if(e.ikei&&!G.endless){G.endSkip=lsGet('dg_cleared')==='1';G.skipHold=0;G.skipArm=false;G.master=null;G.phase='devour';G.devT=0;CORPSES=CORPSES.filter(c=>c.e!==e);
