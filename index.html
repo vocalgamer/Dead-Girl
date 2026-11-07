@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v2.71 2026-11-08';
+const VERSION='v2.72 2026-11-08';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 // ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
 const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
@@ -920,7 +920,7 @@ function pickType(n){
   let r=Math.random()*pool.reduce((s,p)=>s+p[1],0),t='grunt';
   for(const p of pool){r-=p[1];if(r<=0){t=p[0];break}}
   // v2.71 厨房：出てくる数はそのままで、遠くから撃つ敵の6割・ほかの敵の2割を料理人に置き換える（全体の約35%）
-  if(themeFor(n).name==='厨房'&&Math.random()<(['gunner','rifle','sniper','bazooka'].includes(t)?.6:.2))t='cook';
+  if(themeFor(n).name==='厨房'&&(t==='shield'||Math.random()<(['gunner','rifle','sniper','bazooka'].includes(t)?.6:.2)))t='cook'; // v2.72：厨房に盾持ちは出さない（料理人に置き換える）
   return t;
 }
 const CLEANER_INFO={mop:['掃除屋 出現','血を拭き取られる前に始末しろ！'],washer:['高圧洗浄機 出現','射線上の血を一気に洗い流す——撃たれる前に潰せ'],bleach:['漂白剤 出現','周りの血を一気に洗い流す——撒かれる前に潰せ']};
@@ -932,7 +932,7 @@ const fightN=()=>{let n=0;for(const e of E)if(!e.dead&&e.type!=='cleaner')n++;fo
 const RIFLE_N=3,RIFLE_GAP=.2; // 小銃兵の連射：3発・0.2秒おき（弾き返しのスローと合わせて、1発ずつ返せる間隔）
 // v1.85：画面に同時にいる敵（出現予告を含む）の総数の上限。式神・御影の呼び出しが上乗せされて30体を超え、見づらく重くなっていた
 // 掃除屋とボスの呼び出しは上限の対象外（塗りを消しに来る役・ボス戦の流れを止めないため）
-const LIVE_CAP=22;
+const LIVE_CAP=22,KITCHEN_CAP=.65; // KITCHEN_CAP：厨房（14面）の1つの群れ・同時に出る数の倍率（v2.72）
 const liveN=()=>{let n=MARKS.length;for(const e of E)if(!e.dead)n++;return n};
 const capRoom=()=>Math.max(0,LIVE_CAP-liveN());
 // 波の群れの大きさ：同時に出る上限の約1.2倍（序盤）〜1.45倍（終盤）。凪がある分、群れを大きくして倒せる総数を保つ
@@ -1350,6 +1350,7 @@ function updateWave(dt){
       mkTick(dt);
       G.spawnT-=dt;let cap=G.wave<=3&&!G.endless?[0,3.5,4.5,5.5][G.wave]*(.45+.55*Math.min(1,G.waveTime/45)):Math.min(5+Math.ceil(G.wave*.7),11)*waveEase(); // 1〜3面は少なめ（1群れ 約4・5・6体）。v2.05：最初の45秒は、さらに半分ほどから少しずつ増える
       if(G.s1&&G.s1.ph===2)cap=Math.min(cap,3.6); // v2.06：1面の終盤（銃撃手2人）は、ほかの敵を少なめに
+      if(theme.name==='厨房')cap*=KITCHEN_CAP; // v2.72：厨房は狭い調理台の間で戦うので、同時に出る敵（1つの群れ）を少なめに（ユーザー：敵が多すぎる）
       // 敵の出方は「波」と「凪」のくり返し（v1.70）。
       // 波：ひとつの方向から群れ（cap体）が一気に押し寄せる（まとめて薙ぎ払う爽快さ）。群れを出し切り、残りが2体以下になるか PACE_WAVE 秒たつと凪へ。
       // 凪：最大 PACE_LULL 秒、新しい敵を出さない。目の前に残った敵を押して運び、囲って沈める時間（全滅させたら PACE_EMPTY 秒、残り1体なら PACE_ONE 秒で次の波）
