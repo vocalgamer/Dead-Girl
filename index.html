@@ -27,7 +27,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v2.63 2026-11-07';
+const VERSION='v2.64 2026-11-07';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 // ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
 const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
@@ -1201,8 +1201,24 @@ function drawSkipHint(){
    去り際、主人公を見て「妙な匂い」「我が門の術ではない」とだけ漏らす（主人公も誰かの術で蘇ったことを、定かではない形でにおわせる） */
 function startKReb(){P.blinkT=0;G.rebK='kiri';G.skipArm=false;G.skipHold=0;G.rebSkip=lsGet('dg_kreb')==='1'||lsGet('dg_cleared')==='1';G.rebAt=performance.now();G.phase='rebirth';G.rebT=0;G.master=null;G.kCorpse=null;
   const sx=P.x<AXM?1:-1;G.reb={x:clamp(AXM+sx*60,AX0+90,AX1-90),y:clamp(AYM-60,AY0+120,AY1-120)}}
+/* v2.64 異形化の場面の主人公：操作できない間、骸の周り（異形が現れる所）や御影の現れる所に立っていれば、
+   障害物と穴を避けた近くの空いた場所へ0.2〜1.7秒で歩いていき、骸の方を向く。そうでなければその場で骸の方を向いて止まる */
+function rebPlayer(dt,t){const R=G.reb;if(!R)return;
+  if(R.pw==null){R.pw=1;R.px0=P.x;R.py0=P.y;
+    const kiri=G.rebK==='kiri',sx=R.x<AXM?1:-1,mx=kiri?clamp(R.x+sx*130,AX0+50,AX1-50):clamp(R.x+(R.x<AXM?140:-140),AX0+50,AX1-50),my=kiri?clamp(R.y-30,AY0+110,AY1-80):clamp(R.y+90,AY0+230,AY1-80);
+    const busy=(x,y)=>dist(x,y,R.x,R.y)<120||dist(x,y,mx,my)<70;
+    if(busy(P.x,P.y)){const bad=(x,y)=>{const i=tileAt(x,y);return i<0||BLOCK[i]||VOID[i]||HOLE[i]};
+      const clear=(x,y)=>{for(let dx=-20;dx<=20;dx+=20)for(let dy=-60;dy<=10;dy+=14)if(bad(x+dx,y+dy))return false;return true};
+      const path=(x,y)=>{for(let k=1;k<=12;k++)if(nearBlock(lerp(P.x,x,k/12),lerp(P.y,y,k/12),16))return false;return true};
+      const C=[];for(const r of [60,90,120,160,200,250,310])for(let k=0;k<16;k++){const a=k/16*TAU,x=clamp(P.x+Math.cos(a)*r,AX0+30,AX1-30),y=clamp(P.y+Math.sin(a)*r,AY0+80,AY1-40);C.push({x,y,d:dist(x,y,P.x,P.y)})}
+      C.sort((a,b)=>a.d-b.d);const q=C.find(q=>!busy(q.x,q.y)&&clear(q.x,q.y)&&path(q.x,q.y))||C.find(q=>!busy(q.x,q.y)&&clear(q.x,q.y));
+      if(q){R.ptx=q.x;R.pty=q.y}}}
+  P.csWalk=false;
+  if(R.ptx!=null&&t<1.9){const p=clamp((t-.2)/1.5,0,1),e2=p*p*(3-2*p),nx=lerp(R.px0,R.ptx,e2),ny=lerp(R.py0,R.pty,e2),mvx=(nx-P.x)/Math.max(dt,1e-3),mvy=(ny-P.y)/Math.max(dt,1e-3);
+    P.x=nx;P.y=ny;P.csWalk=true;if(Math.hypot(mvx,mvy)>8){P.face=Math.atan2(mvy,mvx);P.walk+=Math.hypot(mvx,mvy)*dt*.09}P.vx=mvx;P.vy=mvy}
+  else if(t>.2)P.face=Math.atan2(R.y-P.y,R.x-P.x)}
 function updateKReb(dt){
-  const t0=G.rebT;if(!G.csWait)G.rebT+=dt;const t=G.rebT,R=G.reb,hit=k=>t0<k&&t>=k;P.inv=Math.max(P.inv,.5);
+  const t0=G.rebT;if(!G.csWait)G.rebT+=dt;const t=G.rebT,R=G.reb,hit=k=>t0<k&&t>=k;P.inv=Math.max(P.inv,.5);rebPlayer(dt,t);
   const fo=()=>G.master.fo=G.master.fo||{x:G.master.x,y:G.master.y,r:15}; /* v2.46：実際に描く御影と同じ位置・大きさ（以前は y+20・r14 で、吹き出しが顔に重なった） */
   if(hit(.8)){const sx=R.x<AXM?1:-1;G.master={x:clamp(R.x+sx*130,AX0+50,AX1-50),y:clamp(R.y-30,AY0+110,AY1-80),t:0};masterEntrance(G.master.x,G.master.y)}
   if(hit(2))G.banner={top:'???',main:MASTER_NAME,sub:'鬼頭組を裏で操る男',t:0,dur:2.6,col:'#b46cff'};
@@ -1226,7 +1242,7 @@ function updateKReb(dt){
 }
 function updateRebirth(dt){
   if(G.rebK==='kiri'){updateKReb(dt);return}
-  const t0=G.rebT;if(!G.csWait)G.rebT+=dt;const t=G.rebT,R=G.reb,hit=k=>t0<k&&t>=k;P.inv=Math.max(P.inv,.5);
+  const t0=G.rebT;if(!G.csWait)G.rebT+=dt;const t=G.rebT,R=G.reb,hit=k=>t0<k&&t>=k;P.inv=Math.max(P.inv,.5);rebPlayer(dt,t);
   if(hit(2.2)){G.master={x:clamp(R.x+(R.x<AXM?140:-140),AX0+50,AX1-50),y:clamp(R.y+90,AY0+230,AY1-80),t:0};masterEntrance(G.master.x,G.master.y)}
   if(hit(3.4)){G.banner={top:'— 再 び —',main:MASTER_NAME,sub:'鬼頭組を裏で操っていた男',t:0,dur:2.6,col:'#b46cff'};SFX.alarm()} // v2.20：名は15面で明かしているので「再び」
   if(G.master)G.master.t+=dt;
@@ -4097,6 +4113,7 @@ function tryRage(){
   // 怨念解放は床を塗らない（倒した敵も燃え尽きて灰になり、血は出ない）
   popText(W/2,AY0+70,'怨 念 解 放','#ff2f5f',30,1.3); // 主人公の周りの演出を隠さないよう、画面中央ではなく上部に出す
 }
+const PL_LOCK=new Set(['break','ending','rebirth','devour','sink','done']); // 主人公を操作できない場面
 function updatePlayer(dt){
   // SOULが満タンになった瞬間に大きく告知（1回だけ）
   if(G.soul>=100&&!G.soulReady&&!P.dead&&G.phase!=='sink'){/* 最期の場面では案内を出さない */G.soulReady=true;SFX.soulUp(false);callout('怨念 MAX',(touchMode?'光る主人公をタップで「怨念解放」！':'L / E / Ctrl キーで「怨念解放」！')+(SEEN.has('soul2')?'':'　使わずにためると……？'),'#ffd23a');markSeen('soul2');G.callout.dur=2.2;
@@ -4115,7 +4132,9 @@ function updatePlayer(dt){
   else if(!P.dead&&Math.random()<dt*1.2)SFX.crackle(); // 満タン中はときどきパチッと鳴る
   P.trail=P.trail.filter(t=>(t.t-=dt)>0);
   if(P.dead)return;
-  if(G.phase==='sink'||G.phase==='devour')return; // 最期の場面・結末では操作できない（v2.47：結末で主人公が御影に重ならないよう、結末でも）
+  /* v2.64：ステージクリア後（休憩）・ボス撃破後・演出中（異形化・結末・最期）は操作できない。その場で止まる（動かす必要がある場面は、演出の側で自動で歩かせる）。
+     被弾直後の点滅・無敵の時間だけは進める（止めると白く光ったままになる） */
+  if(PL_LOCK.has(G.phase)){P.inv-=dt;P.blinkT-=dt;P.atk=null;P.atkBuf=0;P.guard=false;P.gT=0;P.kx=P.ky=0;inp.ragePress=false;if(!P.csWalk&&G.phase!=='devour'&&G.phase!=='sink'){P.vx=P.vy=0} /* 結末・最期は、その場面の処理が主人公を歩かせる */return}
   P.inv-=dt;P.blinkT-=dt;P.comboWin-=dt;P.recover-=dt;P.atkBuf-=dt;
   let ix=inp.kx+inp.tx+inp.px,iy=inp.ky+inp.ty+inp.py;const il=Math.hypot(ix,iy);if(il>1){ix/=il;iy/=il}
   rageHoldTick();drinkTick(dt);
