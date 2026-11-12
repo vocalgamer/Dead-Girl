@@ -28,7 +28,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v3.01 2026-11-12';
+const VERSION='v3.02 2026-11-12';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 // ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
 const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
@@ -2355,11 +2355,14 @@ const GIMMICKS={
 const DYN_FUSE=1.55; // ダイナマイトが点火から爆発するまでの秒数（弾が当たった場合は0.45秒短い。誘爆は0.18秒）
 const PROP_N={bottle:3,dyn:4,oil:2,cart:2,tires:2,ext:3};
 let PROPS=[],SMOKES=[],WARNS=[],SHOCKS=[],SPILLS=[],TIRES=[];
-function propSpot(){
-  for(let k=0;k<40;k++){const x=rand(AX0+50,AX1-50),y=rand(AY0+70,AY1-50);if(dist(x,y,P.x,P.y)>130&&!nearBlock(x,y,30)&&PROPS.every(o=>dist(x,y,o.x,o.y)>(G.gim==='chand'&&k<30?(Math.abs(x-o.x)<90?190:120):90)))return{x,y}} /* v3.01 シャンデリアは吊った絵が背が高いので、上下に重ならないよう離す */
-  return{x:rand(AX0+50,AX1-50),y:rand(AY0+70,AY1-50)};
+/* v3.02 仕掛けの絵がはみ出さない置き場所：上＝足元から絵の上端までの高さ（シャンデリアは天井から吊るので高い）、横＝揺れ・倒れた絵の幅を含めた余白。
+   床は画面いっぱいに拡大して描く（床の上端＝画面の上端）ので、上端は画面上の表示（ステージ名・ボスの体力・ボタン、画面で y=48 まで）に隠れない床の座標まで */
+const PROP_UP={chand:176,slot:62,lantern:62,linen:50,andon:46},PROP_XM={chand:72,slot:68,lantern:66,linen:72,andon:60},PROP_TOPY=AY0+48/VS,PROP_DN={chand:66}; /* 下＝落下予告の円（半径62）が画面の下にはみ出さない余白 */
+function propSpot(pk){const xm=Math.max(50,PROP_XM[pk]||0),y0=Math.max(AY0+70,PROP_TOPY+(PROP_UP[pk]||50)) /* 火炎瓶・タイヤ・カートなど従来の物も絵の上端まで約50 */,y1=AY1-Math.max(50,PROP_DN[pk]||0);
+  for(let k=0;k<40;k++){const x=rand(AX0+xm,AX1-xm),y=rand(y0,y1);if(dist(x,y,P.x,P.y)>130&&!nearBlock(x,y,30)&&PROPS.every(o=>dist(x,y,o.x,o.y)>(G.gim==='chand'&&k<30?(Math.abs(x-o.x)<90?190:120):90)))return{x,y}} /* v3.01 シャンデリアは吊った絵が背が高いので、上下に重ならないよう離す */
+  return{x:rand(AX0+xm,AX1-xm),y:rand(y0,y1)};
 }
-function newProp(k){const p=propSpot();return{k,x:p.x,y:p.y,r:k==='cart'?20:k==='oil'?20:k==='tires'?18:16,used:false,lit:false,fuse:0,t:0,vx:0,vy:0,a:k==='cart'?(Math.random()<.5?0:Math.PI/2):0,hits:new Set(),fall:null,fly:null,cargo:true,...propExtra(k)}}
+function newProp(k){const p=propSpot(k);return{k,x:p.x,y:p.y,r:k==='cart'?20:k==='oil'?20:k==='tires'?18:16,used:false,lit:false,fuse:0,t:0,vx:0,vy:0,a:k==='cart'?(Math.random()<.5?0:Math.PI/2):0,hits:new Set(),fall:null,fly:null,cargo:true,...propExtra(k)}}
 function setupGimmick(){
   PROPS=[];SMOKES=[];WARNS=[];SHOCKS=[];SPILLS=[];TIRES=[];SLICKS=[];CRATES=[];G.beamT=rand(7,10);
   G.gim=G.isBossWave&&!BOSS_GIM.has(theme.gim)?null:(theme.gim||null); /* v2.96：ボスの部屋にも仕掛け（シャンデリア・シーツ・畳） */
