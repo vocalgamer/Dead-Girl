@@ -28,7 +28,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v3.25 2026-11-13';
+const VERSION='v3.26 2026-11-13';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 // ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
 const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
@@ -6013,7 +6013,7 @@ const kyoIntroing=e=>e.type==='kyogoku'&&!e.trip&&(!!e.line||e.state==='intro'||
    京極が現れて口上（初回は転んで言い訳まで）を終えるまで、ほかの敵を出さない。終わってから1.5秒あけて最初の群れ */
 function kyoHold(){const K=kyoPlan();if(!K.st.includes(G.wave)||G.endless||G.tutMode)return false;if(K.done)return K.spawned===G.wave&&G.time-(G.kyoGoT||-99)<4; /* v3.25：決着（最期のカットイン）の間はザコを出さない */
   if(K.spawned!==G.wave||MARKS.some(m=>m.type==='kyogoku'))return true;
-  const k=E.find(e=>e.type==='kyogoku'&&!e.dead);if(k&&(K.st[0]===G.wave||K.st[2]===G.wave||k.line||k.state==='intro'||(k.trip&&!k.trip.flee))){G.kyoGoT=G.time;return true} /* v3.18（ユーザー：初登場は京極の独壇場）：1回目はサシの勝負。京極が逃げ去るまでザコは出さない。v3.25：3回目も決着までサシ */
+  const k=E.find(e=>e.type==='kyogoku'&&!e.dead);if(k){G.kyoGoT=G.time;return true} /* v3.18（ユーザー：初登場は京極の独壇場）：1回目はサシの勝負。京極が逃げ去るまでザコは出さない。v3.25：3回目も決着までサシ。v3.26（ユーザー）：2回目もサシ＝京極がいる間は、どの回もザコを出さない */
   return G.time-(G.kyoGoT||-99)<1.5}
 function kyoParried(e,dash){if(e.dead||e.state==='flee'||e.state==='intro'||e.trip)return;e.kpose=null;e.lickT=0;e.state='reel';e.st=0;e.reelT=KYO_REEL*(dash?1.35:1);e.stun=0;e.combo=0;
   popText(e.x,figTop(e)-30,'崩した！ 今だ！','#ffd54a',18,.9);slow(.35,.35);RINGS.push({x:e.x,y:e.y,r:10,R:70,t:0,dur:.35,col:'255,213,74',w:5});
