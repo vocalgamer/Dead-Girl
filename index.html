@@ -28,7 +28,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v3.27 2026-11-13';
+const VERSION='v3.28 2026-11-13';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 // ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
 const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
@@ -1364,7 +1364,7 @@ function spawnBoss(kind){
 function updateWave(dt){
   if(G.phase==='fight'){
     if(G.bonus){updateBonus(dt);return}
-    updateTut(dt);if(G.propSpot>0)G.propSpot-=dt;for(const e of E)if(e.spot>0)e.spot-=dt;
+    updateTut(dt);if(G.propSpot>0&&!kyoFreeze())G.propSpot-=dt; /* v3.28：京極の口上で動けない間は「殴れ！」の案内を減らさない */for(const e of E)if(e.spot>0)e.spot-=dt;
     for(const it of G.intro){it.t-=dt;if(it.t<=0&&!it.shown){it.shown=true;callout(it.txt,it.sub,it.col);G.callout.dur=it.dur||2.2}}    if(G.bossPending>0){G.bossPending-=dt;if(G.bossPending<=0)spawnBoss(G.bossInfo.kind)}
     const alive=E.length+MARKS.length;
     if(G.isBossWave){
@@ -4441,7 +4441,7 @@ function updatePlayer(dt){
   if(P.dead)return;
   /* v2.64：ステージクリア後（休憩）・ボス撃破後・演出中（異形化・結末・最期）は操作できない。その場で止まる（動かす必要がある場面は、演出の側で自動で歩かせる）。
      被弾直後の点滅・無敵の時間だけは進める（止めると白く光ったままになる） */
-  if(PL_LOCK.has(G.phase)){P.inv-=dt;P.blinkT-=dt;P.atk=null;P.atkBuf=0;P.guard=false;P.gT=0;P.kx=P.ky=0;inp.ragePress=false;if(!P.csWalk&&G.phase!=='devour'&&G.phase!=='sink'){P.vx=P.vy=0} /* 結末・最期は、その場面の処理が主人公を歩かせる */return}
+  if(PL_LOCK.has(G.phase)||kyoFreeze()){P.inv-=dt; /* v3.28：京極の登場〜口上（転んで言い訳まで）の間も動けない */P.blinkT-=dt;P.atk=null;P.atkBuf=0;P.guard=false;P.gT=0;P.kx=P.ky=0;inp.ragePress=false;if(!P.csWalk&&G.phase!=='devour'&&G.phase!=='sink'){P.vx=P.vy=0} /* 結末・最期は、その場面の処理が主人公を歩かせる */return}
   P.inv-=dt;P.blinkT-=dt;P.comboWin-=dt;P.recover-=dt;P.atkBuf-=dt;
   const hl_=G.time<(G.handLock||0); /* v2.97：怨霊の手の間（最後に足元の床が塗り終わるまで）は動けない */let ix=hl_?0:inp.kx+inp.tx+inp.px,iy=hl_?0:inp.ky+inp.ty+inp.py;const il=Math.hypot(ix,iy);if(il>1){ix/=il;iy/=il}
   rageHoldTick();drinkTick(dt);
@@ -6007,7 +6007,12 @@ function drawThug(e,rot,alpha){
 const KYO=[null,{hp:1,dmg:12,cmax:3,spd:1,wu:.3},{hp:1.35,dmg:15,cmax:4,spd:1.1,wu:.26},{hp:1.8,dmg:18,cmax:5,spd:1.2,wu:.22}],KYO_AT=.6 /* v3.15（ユーザー）：ステージが始まったら真っ先に登場（以前は9秒後） */,KYO_REEL=1.4,KYO_REEL_DMG=2;
 const KYO_TAUNT=['ヒャハッ！ 死体が歩いとるやないかい！','もっと血ィ見せてんか！','ええ目しとるやないの……惚れてまうわ！','逃げたらアカンでェ！ ……追いかけるのしんどいねん','オレ様の刺青、カッコええやろ!? ローンまだ残っとるけどな！','今のは準備運動や！ ほんまやで！'];
 const kyoHere=()=>E.some(e=>e.type==='kyogoku'&&!e.dead);
-/* v3.25 京極が入ってきて口上を言い終えるまで（初回の転倒・言い訳は除く）。この間は仕掛けで転んだり、むせたり、傷ついたりしない（斬れば今までどおり「名乗っとる途中やろ」で中断） */
+/* v3.25 京極が入ってきて口上を言い終えるまで（初回の転倒・言い訳は除く）。この間は仕掛けで転んだり、むせたり、傷ついたりしない */
+/* v3.28（ユーザー：毎回コケる見せ場を活かしたい）：京極の面では、GO から京極の口上（転倒・言い訳まで）が終わって戦闘に入るまで、主人公は動けない・攻撃できない。
+   そのため口上を斬って中断させる「名乗っとる途中やろ」は廃止。京極が出てこない時の保険として、出る前は開始20秒まで */
+function kyoFreeze(){if(G.phase!=='fight'||state!=='play')return false;const K=kyoPlan();if(K.done||!K.st.includes(G.wave)||G.endless||G.tutMode)return false;
+  if(K.spawned!==G.wave||MARKS.some(m=>m.type==='kyogoku'))return G.waveTime<20;
+  const k=E.find(e=>e.type==='kyogoku'&&!e.dead);return !!k&&(!!k.line||k.state==='intro'||k.state==='enter')}
 const kyoIntroing=e=>e.type==='kyogoku'&&!e.trip&&(!!e.line||e.state==='intro'||e.state==='enter');
 /* v3.15（ユーザー：自己紹介が終わって戦いに入ってから、ほかの敵が出る方がストーリーが伝わる）：京極の出るステージでは、
    京極が現れて口上（初回は転んで言い訳まで）を終えるまで、ほかの敵を出さない。終わってから1.5秒あけて最初の群れ */
@@ -6031,7 +6036,7 @@ function updKyo(dt){if(state!=='play'||G.phase!=='fight'||G.bubHold)return;
   G.callout.dur=2.4;K.met++;SFX.alarm();K.line=n>=3?'今度はもう逃げへん……ほんまやで？ 殺し合おうや！':n===2?'うららららぁ！':'鬼頭組の京極様のお出ましやでェ！'}
 /* v3.10 京極NEW：二刀流。登場の口上は手描きの決めポーズを順に（[ポーズ, 秒, セリフ, カットイン番号]）。
    1回目：仁義を切る→名乗り→見得（カットイン）→決め→床の血で滑って転ぶ→尻もち→言い訳（カットイン）。2回目：名乗り→決め。3回目：二刀を交差（本気のカットイン）→決め。
-   口上の途中で殴ると「まだ名乗ってる途中やろ!?」で中断。挑発でときどき刀を舐める（短い隙）。カットイン（KCUT）は大事な場面だけ */
+   （v3.28：口上の間は主人公が動けないので中断はない）。挑発でときどき刀を舐める（短い隙）。カットイン（KCUT）は大事な場面だけ */
 const KYO_INTRO={1:[['_k_jingi',1,'お控えなすって！'],['_k_nanori',1.3,'手前、生まれも育ちも鬼頭組……'],['_k_mie2',1.8,'鬼頭組の京極様のお出ましやでェ！',1],['_k_kime',.7]],
   2:[['_k_mie2',1.1,'うららららぁ！'],['_k_nanori',1.8,'またまたまたまた、オレ様やぁ！ 京極様やぁ！'],['_k_kime',2.2,'今日こそは本気やからなぁ、腕の5、6本はもろてくでぇ……',1]], /* v3.22（ユーザー）：2回目のセリフ */
   3:[['_k_cross',1.9,'今度はもう逃げへん……ほんまやで？ 殺し合おうや！',7],['_k_kime',.7]]};
@@ -6060,7 +6065,7 @@ function drawKyoCut(){if(!KCUT||state!=='play')return;const S=THS.kyocut,L=S.f[K
   else txt('京極',tx,by+h*.62-4,22,'#ff6080',al,JP,['#000',4],false,900);g.restore()}
 function kyoInterrupt(e){
   if(e.lickT>0){e.lickT=0;e.kpose=null}
-  if(e.state==='intro'&&!e.trip&&!e.introMove&&e.iq&&!e.introHit){e.introHit=1;e.state='chase';e.st=0;e.kpose=null;e.iq=null;e.cd=1;kyoLine(e,'ちょ、まだ名乗っとる途中やろ!?',3,1.8)}}
+  /* v3.28：口上の途中で斬って中断させる「ちょ、まだ名乗っとる途中やろ!?」は廃止（口上の間は主人公が動けない） */}
 function kyoAI(e,dt,d,toP){const K=KYO[e.kyN||1];G.kyoAt={x:e.x,y:e.y};
   if(e.trip&&kyoTripTick(e,dt))return;
   if(e.state==='flee'){ // 捨て台詞で後ずさり（1.1秒）→ 滑って転ぶ → 尻もち → 言い訳 → 走り去る
