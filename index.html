@@ -28,7 +28,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v3.14 2026-11-13';
+const VERSION='v3.15 2026-11-13';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 // ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
 const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
@@ -1390,7 +1390,7 @@ function updateWave(dt){
           else popText(W/2,AY0+40,'掃除屋 ×'+crew,'#5ab8ff',16,1.2)}}
       // 陰陽師の襲来：STAGE11以降（後半から。STAGE15後のボーナス面「式神斬り」より前に一度は出会う）、ステージの途中で一度（長引けばもう一度）、外道陰陽師が現れて式神（一撃で倒れる紙の人形）を呼び出し続ける
       // まとめ斬りを気持ちよく決めるための息抜き。式神は血が出ないので床は塗れない
-      if(G.wave>=11&&!G.tut&&theme.name!=='厨房'){G.rushT-=dt; /* v2.73：厨房には外道陰陽師（式神を呼び続ける）を出さない（ユーザー：敵が多すぎる） */if(G.rushT<=0&&G.rush<=0&&prog()<.9){G.rush=1;G.rushT=rand(40,55);queueSpawn('onmyo');callout('陰陽師 出現','式神を呼び出す外道——術者を斬れば、式神は紙に戻る','#b46cff');G.callout.dur=2;SFX.alarm()}}
+      if(G.wave>=11&&!G.tut&&theme.name!=='厨房'){G.rushT-=dt; /* v2.73：厨房には外道陰陽師（式神を呼び続ける）を出さない（ユーザー：敵が多すぎる） */if(G.rushT<=0&&G.rush<=0&&prog()<.9&&!kyoHold()){G.rush=1;G.rushT=rand(40,55);queueSpawn('onmyo');callout('陰陽師 出現','式神を呼び出す外道——術者を斬れば、式神は紙に戻る','#b46cff');G.callout.dur=2;SFX.alarm()}}
       // 式神は陰陽師が呼び出す（陰陽師を倒すか、陰陽師が姿を消すと G.rush=0 に戻る）
       // 同時に出る敵の上限：WAVE1で6体〜最大11体（旧8〜15体）。まとめて薙ぎ払える集団湧きは残す
       s1Tick(dt);pracTick(dt);
@@ -1405,7 +1405,7 @@ function updateWave(dt){
       // 波：ひとつの方向から群れ（cap体）が一気に押し寄せる（まとめて薙ぎ払う爽快さ）。群れを出し切り、残りが2体以下になるか PACE_WAVE 秒たつと凪へ。
       // 凪：最大 PACE_LULL 秒、新しい敵を出さない。目の前に残った敵を囲って沈める時間（全滅させたら PACE_EMPTY 秒、残り1体なら PACE_ONE 秒で次の波）
       // チュートリアル中は通常の敵は出さない（各手順で必要な敵だけを出す）
-      if(!G.tutMode){
+      if(!G.tutMode&&!kyoHold()){
         if(!G.pace)G.pace=newPack(cap,irand(0,3));
         const pc=G.pace;pc.t+=dt;
         if(pc.st==='wave'){
@@ -6001,9 +6001,15 @@ function drawThug(e,rot,alpha){
    ・京極がいる間はステージが終わらない（塗り終えても「京極を追い払え！」）。出てくるのは 14→9 秒
    ・ガードで防ぐと「崩れ」（KYO_REEL 秒・突進なら長め）：頭に星が回り、斬るダメージ KYO_REEL_DMG 倍。突進で壁や物に突っ込んでも崩れる
    ・逃げ際：「今日はこれくらいにしといてやる！」と後ずさり→つまずいて転ぶ→「……い、今のはワザとだからな！」と走り去る（逃げている間は倒されない） */
-const KYO=[null,{hp:1,dmg:12,cmax:3,spd:1,wu:.3},{hp:1.35,dmg:15,cmax:4,spd:1.1,wu:.26},{hp:1.8,dmg:18,cmax:5,spd:1.2,wu:.22}],KYO_AT=9,KYO_REEL=1.4,KYO_REEL_DMG=2;
+const KYO=[null,{hp:1,dmg:12,cmax:3,spd:1,wu:.3},{hp:1.35,dmg:15,cmax:4,spd:1.1,wu:.26},{hp:1.8,dmg:18,cmax:5,spd:1.2,wu:.22}],KYO_AT=.6 /* v3.15（ユーザー）：ステージが始まったら真っ先に登場（以前は9秒後） */,KYO_REEL=1.4,KYO_REEL_DMG=2;
 const KYO_TAUNT=['ヒャハッ！ 死体が歩いとるやないかい！','もっと血ィ見せてんか！','ええ目しとるやないの……惚れてまうわ！','逃げたらアカンでェ！ ……追いかけるのしんどいねん','オレ様の刺青、カッコええやろ!? ローンまだ残っとるけどな！','今のは準備運動や！ ほんまやで！'];
 const kyoHere=()=>E.some(e=>e.type==='kyogoku'&&!e.dead);
+/* v3.15（ユーザー：自己紹介が終わって戦いに入ってから、ほかの敵が出る方がストーリーが伝わる）：京極の出るステージでは、
+   京極が現れて口上（初回は転んで言い訳まで）を終えるまで、ほかの敵を出さない。終わってから1.5秒あけて最初の群れ */
+function kyoHold(){const K=kyoPlan();if(K.done||!K.st.includes(G.wave)||G.endless||G.tutMode)return false;
+  if(K.spawned!==G.wave||MARKS.some(m=>m.type==='kyogoku'))return true;
+  const k=E.find(e=>e.type==='kyogoku'&&!e.dead);if(k&&(k.line||k.state==='intro'||(k.trip&&!k.trip.flee))){G.kyoGoT=G.time;return true}
+  return G.time-(G.kyoGoT||-99)<1.5}
 function kyoParried(e,dash){if(e.dead||e.state==='flee'||e.state==='intro'||e.trip)return;e.kpose=null;e.lickT=0;e.state='reel';e.st=0;e.reelT=KYO_REEL*(dash?1.35:1);e.stun=0;e.combo=0;
   popText(e.x,figTop(e)-30,'崩した！ 今だ！','#ffd54a',18,.9);slow(.35,.35);RINGS.push({x:e.x,y:e.y,r:10,R:70,t:0,dur:.35,col:'255,213,74',w:5});
   if(Math.random()<.6)kyoLine(e,pick(['いったァ！ 手ェしびれたやんけ！','ちょ、ちょー待って！ タイムや、タイム！']),3,1.8,8)}
@@ -6013,6 +6019,7 @@ function kyoSay(e,t,dur){for(let i=TEXTS.length-1;i>=0;i--)if(TEXTS[i].follow===
 function updKyo(dt){if(state!=='play'||G.phase!=='fight'||G.bubHold)return;
   if(G.kyoHeld&&!P.dead){if(kyoHere()){if(!(G.time-(G.kyoNag||-9)<5)){G.kyoNag=G.time;const k=E.find(e=>e.type==='kyogoku'&&!e.dead);popText(AXM,AY0+70,(k&&k.kyN>=3)?'京極を倒せ！':'京極を追い払え！','#ff6080',20,1.6)}}else{G.kyoHeld=0;waveClear();return}}
   const K=kyoPlan();if(K.done||!K.st.includes(G.wave)||K.spawned===G.wave||G.waveTime<KYO_AT)return;
+  if(G.intro.some(it=>!it.shown)||(G.callout&&G.callout.t<G.callout.dur))return; // v3.15：開始の表示が終わるまで待つ
   K.spawned=G.wave;queueSpawn('kyogoku');const n=K.st.indexOf(G.wave)+1;
   G.kyoFirst=!K.met;if(!K.met)callout('宿 敵 ・ 京 極','鬼頭組の狂犬——血の匂いを嗅ぎつけてきた','#ff4d6d');else if(n<3)callout('京 極 再 び','傷を負ったまま、さらに狂って戻ってきた','#ff4d6d');else callout('京 極 決 着','もう逃げない——ここで終わらせろ','#ffd54a');
   G.callout.dur=2.4;K.met++;SFX.alarm();K.line=n>=3?'今度はもう逃げへん……ほんまやで？ 殺し合おうや！':K.met>1?'よォ、また会うたなァ！ 今日のオレ様はひと味ちゃうでェ！':'鬼頭組の京極様のお出ましやでェ！'}
@@ -6025,14 +6032,14 @@ const KYO_INTRO={1:[['_k_jingi',1,'お控えなすって！'],['_k_nanori',1.3,'
 let KCUT=null;
 /* v3.11（ユーザー：多すぎ・セリフと重なると読めない）：1ステージ KYO_CUT_MAX 回まで。登場・逃げ際・最期（major）を優先し、それ以外は枠が2つ以上残っている時だけ。
    出す場所は京極の反対側：京極（と頭の上の吹き出し）が画面の下半分なら上に、上半分なら下に。左右も京極の反対側からすべり込む */
-const KYO_CUT_MAX=4; // v3.13（ユーザー）：1ステージ最大4回
+const KYO_CUT_MAX=99,KYO_CUT_LEN=1.5; // v3.13 最大4回 → v3.15（ユーザー）：回数制限はいったん解除して様子見。表示時間は1.5倍
 function kyoCut(n,dur,gap,major){if(!THS.kyocut||!imgOK(THI.kyocut))return;if(G.kyoCutW!==G.wave){G.kyoCutW=G.wave;G.kyoCutN=0}
   if(G.kyoCutN>=(major?KYO_CUT_MAX:KYO_CUT_MAX-1))return;if(gap&&G.time-(G.kyoCutT||-99)<gap)return;
   const k=E.find(e=>e.type==='kyogoku')||G.kyoAt,sy=k?VY0+(k.y-AY0)*VS:H,sx=k?(k.x-AX0)*VS:0;
-  G.kyoCutT=G.time;G.kyoCutN++;KCUT={k:'c'+n,t:0,dur:dur||1.6,top:sy>H*.5,right:sx<W*.5};return true}
+  G.kyoCutT=G.time;G.kyoCutN++;KCUT={k:'c'+n,t:0,dur:(dur||1.6)*KYO_CUT_LEN,top:sy>H*.5,right:sx<W*.5};return true}
 /* v3.12（ユーザー：セリフは帯の中の方が読みやすい）：カットインが出る時は、セリフを帯の中に出し、頭の上の吹き出しは「…」だけにする（足元にも赤い輪＝誰がしゃべっているか分かる）。
    カットインが出せない時（回数切れ・間隔）は、今までどおり頭の上の吹き出し */
-function kyoLine(e,t,n,dur,gap,major){if(n&&kyoCut(n,dur,gap,major)){KCUT.txt=t;KCUT.e=e;for(let i=TEXTS.length-1;i>=0;i--)if(TEXTS[i].follow===e)TEXTS.splice(i,1);return}if(t)kyoSay(e,t,dur)}
+function kyoLine(e,t,n,dur,gap,major){if(n&&kyoCut(n,dur,gap,major)){KCUT.txt=t;KCUT.e=e;for(let i=TEXTS.length-1;i>=0;i--)if(TEXTS[i].follow===e)TEXTS.splice(i,1);return true}if(t)kyoSay(e,t,dur);return false}
 function wrapTxt(t,size,maxW){t=tr(t);g.font='900 '+(size*TXT_SCALE)+'px '+JP;const sp=/\s/.test(t)&&!/[\u3000-\u30ff\u4e00-\u9fff\uac00-\ud7af]/.test(t),parts=sp?t.split(' '):[...t],out=[];let cur='';
   for(const p of parts){const nx=cur?cur+(sp?' ':'')+p:p;if(g.measureText(nx).width>maxW&&cur){out.push(cur);cur=p}else cur=nx}if(cur)out.push(cur);return out}
 // 画面の左から胸から上の絵がすべり込む（斜めの赤黒い帯の上）。吹き出しは京極の頭の上に出ている
@@ -6055,12 +6062,12 @@ function kyoAI(e,dt,d,toP){const K=KYO[e.kyN||1];G.kyoAt={x:e.x,y:e.y};
       e.tripped=1;kyoTrip(e,e.fleeA,'おわっ!?',true);return}
     e.kpose=null;e.ang=turn(e.ang,e.fleeA,10*dt);mv(e,e.fleeA,e.spd*1.3,dt);e.walk+=dt*14;if(e.x<AX0-30||e.x>AX1+30||e.y<AY0-30||e.y>AY1+30)kyoGone(e,false);return}
   if(e.line){e.state='intro';e.st=0;e.introLine=e.line;e.line=null;e.introTrip=!!G.kyoFirst;G.kyoFirst=false} // 画面に入ってきた時：部屋の中まで歩いてから口上
-  if(e.state==='intro'){const edge=Math.min(e.x-AX0,AX1-e.x,e.y-AY0,AY1-e.y);e.introMove=!!e.introLine&&edge<100&&d>200&&e.st<1.2; // 壁際（上は画面の表示と重なる）で止まらず、部屋の中まで少し歩いてから。v3.13：主人公の方へは近づかない（部屋の中心へ）
+  if(e.state==='intro'){const edge=Math.min(e.x-AX0,AX1-e.x,e.y-AY0,AY1-e.y);e.introMove=!!e.introLine&&(edge<100||e.y<PROP_TOPY+115)&&d>200&&e.st<2.5; /* v3.15：上は画面の表示の下まで、最大2.5秒 */ // 壁際（上は画面の表示と重なる）で止まらず、部屋の中まで少し歩いてから。v3.13：主人公の方へは近づかない（部屋の中心へ）
     if(e.introMove){const tc=Math.atan2(AYM-e.y,AXM-e.x);e.ang=turn(e.ang,tc,10*dt);mv(e,tc,e.spd*.7,dt);e.walk+=dt*9;return}
     if(e.introLine){e.introLine=null;e.iq=KYO_INTRO[(e.kyN||1)>=3?3:e.introTrip?1:2];e.ii=-1;e.inext=0;e.st=0;tone(110,55,.6,'sawtooth',.18)}
     e.ang=toP;
     if(e.st>=e.inext){e.ii++;const q=e.iq&&e.iq[e.ii];
-      if(q){e.kpose=q[0];e.inext=e.st+q[1];kyoLine(e,q[2],q[3],q[3]?q[1]+.3:q[1]+.5,0,true);
+      if(q){e.kpose=q[0];e.inext=e.st+(kyoLine(e,q[2],q[3],q[3]?q[1]+.3:q[1]+.5,0,true)?Math.max(q[1],KCUT.dur-.35):q[1]);
         if(q[3]){slow(.5,.4);addShake(8);RINGS.push({x:e.x,y:e.y,r:16,R:110,t:0,dur:.6,col:'255,60,90',w:6});tone(82,41,.5,'sawtooth',.2);noise(.3,.3,'lowpass',700,150)}}
       else{e.kpose=null;e.iq=null;if(e.introTrip)kyoTrip(e,toP,'おわっ!?',false);else{e.state='chase';e.st=0;e.cd=1.2}}}
     return}
@@ -6088,8 +6095,8 @@ function kyoTripTick(e,dt){const T=e.trip;T.t+=dt;
   if(T.ph===0){e.kpose='_k_slip';if(T.t>.35){T.ph=1;T.t=0;e.kpose=null;e.slipT=1.05;e.slipCD=3;e.slipRot=(Math.random()<.5?1:-1)*1.45;e.stun=.8; /* 倒れた絵（slipT>.25）が消えると同時に尻もちへ */
       addShake(5);tone(95,45,.22,'sine',.5);noise(.18,.35,'lowpass',500,120);popText(e.x,e.y+18,'ステーン！','#ffe08a',16,.7)}return true}
   if(T.ph===1){T.ph=2;T.t=0;e.kpose='_k_sit';return true} // 倒れている間（stun）は呼ばれない。起き上がったら尻もち
-  if(T.ph===2){if(T.t>.6){T.ph=3;T.t=0;e.kpose='_k_excuse';kyoLine(e,T.flee?'……い、今のはワザとや！ ワザとコケたんや！':'……今のはナシやで！ 見てへんかったことにして！',5,2.2)}return true}
-  if(T.t>1.1){e.trip=null;e.kpose=null;if(T.flee)kyoFleeDir(e);else{e.state='chase';e.st=0;e.cd=1.2}return false}return true}
+  if(T.ph===2){if(T.t>.6){T.ph=3;T.t=0;e.kpose='_k_excuse';T.hold=1.1;if(kyoLine(e,T.flee?'……い、今のはワザとや！ ワザとコケたんや！':'……今のはナシやで！ 見てへんかったことにして！',5,2.2))T.hold=Math.max(1.1,KCUT.dur-.35)}return true}
+  if(T.t>(T.hold||1.1)){e.trip=null;e.kpose=null;if(T.flee)kyoFleeDir(e);else{e.state='chase';e.st=0;e.cd=1.2}return false}return true}
 function kyoFleeDir(e){const toP=Math.atan2(P.y-e.y,P.x-e.x);let best=null,bd=1e9;
   for(const [a,dd] of [[Math.PI,e.x-AX0],[0,AX1-e.x],[-Math.PI/2,e.y-AY0],[Math.PI/2,AY1-e.y]]){if(VOIDN&&Math.abs(Math.cos(a))>.5)continue;const c=dd+(Math.abs(angDiff(a,toP))<.9?400:0);if(c<bd){bd=c;best=a}}
   e.fleeA=best==null?Math.PI/2:best}
