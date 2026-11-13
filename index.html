@@ -28,10 +28,11 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v3.15 2026-11-13';
+const VERSION='v3.17 2026-11-13';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 // ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
 const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
+const refPct=()=>G.endless&&G.wave>20?Math.max(.5,1-(G.wave-20)*.02):1; // v3.17 反射弾が雑魚に与える割合：20面まで即死、21面から1面ごとに2%ずつ下がり、45面以降は最大体力の50%（2発）
 const stageDmg=()=>(G.tutMode?.5:STAGE_DMG[G.wave]||1.1)*(G.shura?1.5:1); /* v2.96：修羅モードは1.5倍 */
 const lowHP=()=>P.hp<P.maxhp*.3; // 危険域（最大HPの30%未満）
 const BIG_HEAL_PER=.15,BIG_HEAL_CAP=2; // 怨念解放・怨霊の手の回復：巻き込んだ敵1体につき基本量の15%を上乗せ（最大で基本量の2倍）
@@ -2154,7 +2155,7 @@ function hurtPlayer(dmg,sx,sy,ho){
   if(P.guard&&front&&!(ho&&ho.noGuard)){
     // ガード：ダメージを完全に防ぎ、敵の攻撃力と同じ数値だけライフが回復し、SOULもたまる。ノックバック小、連撃は途切れない
     // v2.32：構えてから最初に防いだ1回は今までどおり（ライフもSOULも攻撃力と同じだけ）。押したまま防いだ2回目以降はライフ25%・SOUL50%（押しっぱなしで稼ぎ続けられないように）
-    const first=!(P.gBlocks>0),base=atk*GUARD_HEAL*(1+.5*lv('guardh')),heal=lv('c_hunger')?0:base*(first?1:GUARD_HOLD_HP);P.gBlocks=(P.gBlocks||0)+1;
+    const first=!(P.gBlocks>0),base=atk*GUARD_HEAL*(1+.5*lv('guardh')),heal=lv('c_hunger')?0:dmg*GUARD_HEAL*(1+.5*lv('guardh'))*(first?1:GUARD_HOLD_HP); /* v3.17：回復は鎧で減らした後の数値から（食らうより防ぐ方が大きく得をしすぎないように） */P.gBlocks=(P.gBlocks||0)+1;
     P.hp=Math.min(P.maxhp,P.hp+heal);tutComplete(4,.6);G.guards=(G.guards||0)+1;learn('guard');
     G.soul=Math.min(SOUL_MAX,G.soul+base*(first?1:GUARD_HOLD_SOUL));
     const tpx=P.x+Math.cos(a)*48,tpy=P.y+Math.sin(a)*48-14; // 文字を出す位置：敵と反対側
@@ -5154,7 +5155,9 @@ function update(rdt){
       const tr=b.trail||(b.trail=[]);tr.push({x:b.x,y:b.y});if(tr.length>10)tr.shift();
       for(const e of [...E]){
         if(b.hits&&b.hits.has(e))continue;if(dist(b.x,b.y,e.x,e.y)>=e.r+8)continue;
-        const kill=!e.armor&&!e.boss;if(b.hits)b.hits.add(e);
+        let kill=!e.armor&&!e.boss;if(b.hits)b.hits.add(e);
+        /* v3.17（ENDLESS後半で反射が強すぎる）：21面以降は、雑魚も即死ではなく最大体力の refPct() のダメージ（PERFECT×1.4・倍返し1つにつき+25%）。倒しきれば今までどおり貫通 */
+        if(kill&&refPct()<1){const d=e.max*refPct()*(b.perfect?1.4:1)*(1+.25*lv('payback'));if(d<e.hp){hitEnemy(e,d,Math.atan2(b.vy,b.vx),520,{shot:true});if(setOn('ref')&&!b.boomed){b.boomed=1;miniBoom(b.x,b.y,e)}b.life=0;break}}
         hitEnemy(e,kill?e.hp+1:(b.big?16:4)*(b.perfect?2:1)*(1+.5*lv('payback')),Math.atan2(b.vy,b.vx),520,{fin:true,shot:true});if(setOn('ref')&&!b.boomed){b.boomed=1;miniBoom(b.x,b.y,e)}
         if(!kill||b.noPierce){b.life=0;if(kill)popText(e.x,e.y-28,'SHOT KILL',b.perfect?'#ffd54a':'#7ff3ff',15,.8);break}
         b.kills=(b.kills||0)+1;G.score+=150*b.kills;G.hitstop=Math.max(G.hitstop,.06);G.zoom=Math.max(G.zoom,.03);addShake(9);
@@ -6484,7 +6487,7 @@ let DEVUP={};try{DEVUP=JSON.parse(lsGet('dg_devup')||'{}')||{}}catch(e){DEVUP={}
 function devSave(){try{lsSet('dg_devup',JSON.stringify(DEVUP))}catch(e){}}
 const devCount=()=>Object.keys(DEVUP).filter(k=>DEVUP[k]>0).length;
 function devApply(){for(const c of DEVST_CARDS()){const v=Math.min(devMax(c),Math.max(0,DEVUP[c.id]|0));if(v)UP[c.id]=v}
-  if(lv('vital')){P.maxhp=100+18*lv('vital');P.hp=P.maxhp;P.hpLag=P.maxhp}
+  {const m=Math.max(40,100+18*lv('vital')-(lv('c_fury')?25:0));if(m!==100){P.maxhp=m;P.hp=m;P.hpLag=m}} /* v3.16：個別に付けた修羅の呪いの最大HP-25も反映 */
   if(DEVUP._soul)G.soul=Math.min(SOUL_MAX,DEVUP._soul)}
 const DEVST_ROW=i=>({x:i<19?14:W/2+4,y:100+(i%19)*29,w:W/2-18,h:27}); /* v2.96：カードが増えたので2列×19行に */
 const DEVST_BTN=(i,d)=>{const r=DEVST_ROW(i);return {x:r.x+r.w-(d>0?17:53),y:r.y+r.h/2,w:32,h:24}};
@@ -6494,7 +6497,7 @@ function devStTap(p){
   const L=DEVST_CARDS();
   for(let i=0;i<L.length;i++)for(const d of [-1,1])if(inR(p,DEVST_BTN(i,d))){const c=L[i];DEVUP[c.id]=Math.min(devMax(c),Math.max(0,(DEVUP[c.id]|0)+d));if(!DEVUP[c.id])delete DEVUP[c.id];devSave();SFX.ui();return}
   if(inR(p,DEVST_UI.soulM)||inR(p,DEVST_UI.soulP)){const d=inR(p,DEVST_UI.soulP)?25:-25;DEVUP._soul=Math.min(SOUL_MAX,Math.max(0,(DEVUP._soul|0)+d));if(!DEVUP._soul)delete DEVUP._soul;devSave();SFX.ui();return}
-  if(inR(p,DEVST_UI.max)){for(const c of L)DEVUP[c.id]=c.rep?10:c.max;devSave();SFX.ui();return}
+  if(inR(p,DEVST_UI.max)){for(const c of L){if(c.curse){delete DEVUP[c.id];continue}DEVUP[c.id]=c.rep?10:c.max} /* v3.16（ユーザー）：MAXでは呪いを付けない（呪いは個別に＋で） */devSave();SFX.ui();return}
   if(inR(p,DEVST_UI.zero)){DEVUP={};devSave();SFX.ui();return}
   if(inR(p,DEVST_UI.back)){state='dev';stateT=0;SFX.ui()}}
 function drawDevSt(){
