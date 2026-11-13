@@ -28,7 +28,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v3.17 2026-11-13';
+const VERSION='v3.18 2026-11-13';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 // ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
 const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
@@ -6011,12 +6011,12 @@ const kyoHere=()=>E.some(e=>e.type==='kyogoku'&&!e.dead);
    京極が現れて口上（初回は転んで言い訳まで）を終えるまで、ほかの敵を出さない。終わってから1.5秒あけて最初の群れ */
 function kyoHold(){const K=kyoPlan();if(K.done||!K.st.includes(G.wave)||G.endless||G.tutMode)return false;
   if(K.spawned!==G.wave||MARKS.some(m=>m.type==='kyogoku'))return true;
-  const k=E.find(e=>e.type==='kyogoku'&&!e.dead);if(k&&(k.line||k.state==='intro'||(k.trip&&!k.trip.flee))){G.kyoGoT=G.time;return true}
+  const k=E.find(e=>e.type==='kyogoku'&&!e.dead);if(k&&(K.st[0]===G.wave||k.line||k.state==='intro'||(k.trip&&!k.trip.flee))){G.kyoGoT=G.time;return true} /* v3.18（ユーザー：初登場は京極の独壇場）：1回目はサシの勝負。京極が逃げ去るまでザコは出さない */
   return G.time-(G.kyoGoT||-99)<1.5}
 function kyoParried(e,dash){if(e.dead||e.state==='flee'||e.state==='intro'||e.trip)return;e.kpose=null;e.lickT=0;e.state='reel';e.st=0;e.reelT=KYO_REEL*(dash?1.35:1);e.stun=0;e.combo=0;
   popText(e.x,figTop(e)-30,'崩した！ 今だ！','#ffd54a',18,.9);slow(.35,.35);RINGS.push({x:e.x,y:e.y,r:10,R:70,t:0,dur:.35,col:'255,213,74',w:5});
   if(Math.random()<.6)kyoLine(e,pick(['いったァ！ 手ェしびれたやんけ！','ちょ、ちょー待って！ タイムや、タイム！']),3,1.8,8)}
-function kyoPlan(){if(G.kyo)return G.kyo;const ok=!G.endless&&!G.brush&&!G.tutMode&&!G.daily&&!G.bonus;G.kyo={st:ok?[pick([6,7,8]),pick([9,11]),pick([12,13,14])]:[],met:0,fled:0,done:0,spawned:0};return G.kyo}
+function kyoPlan(){if(G.kyo)return G.kyo;const ok=!G.endless&&!G.brush&&!G.tutMode&&!G.daily&&!G.bonus;G.kyo={st:ok?[7,11,14]:[], /* v3.18（ユーザー）：出る面を固定。7面＝霧島戦の後、11面＝白鷺戦の後、14面＝鬼頭戦の直前（以前は6〜8・9か11・12〜14からランダム） */met:0,fled:0,done:0,spawned:0};return G.kyo}
 function kyoInit(e){const K=kyoPlan(),i=K.st.indexOf(G.wave),n=i>=0?i+1:1,Q=KYO[n];e.kyN=n;e.hp*=Q.hp;e.max*=Q.hp;e.dmg=Q.dmg;e.spd*=Q.spd;e.cd=2;e.tauntT=rand(4,7);e.line=K.line;K.line=null}
 function kyoSay(e,t,dur){for(let i=TEXTS.length-1;i>=0;i--)if(TEXTS[i].follow===e)TEXTS.splice(i,1);TEXTS.push({x:e.x,y:e.y,txt:t,col:'#fff',size:14,t:0,dur:dur||1.8,vy:0,speech:true,follow:e})}
 function updKyo(dt){if(state!=='play'||G.phase!=='fight'||G.bubHold)return;
