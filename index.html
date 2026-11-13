@@ -28,7 +28,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v3.28 2026-11-13';
+const VERSION='v3.29 2026-11-13';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 // ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
 const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
@@ -1992,7 +1992,11 @@ function healP(n){if(P.dead)return;const b=P.hp;P.hp=Math.min(P.maxhp,P.hp+n);if
 function rankOf(c){return c>=150?'UNDEAD GOD':c>=100?'MASSACRE':c>=50?'SAVAGE':c>=25?'BRUTAL':c>=10?'COOL':c>=5?'NICE':''}
 
 /* ---------------- combat ---------------- */
-function hitEnemy(e,dmg,ang,kb,o){if(e.type==='kyogoku'){if(kyoIntroing(e)&&GIMC.has(G.cause))return;kyoInterrupt(e)} /* v3.25：登場してすぐ蹴った一斗缶に当たって口上が飛んだ */
+function hitEnemy(e,dmg,ang,kb,o){if(e.type==='kyogoku'){if(kyoIntroing(e)&&GIMC.has(G.cause))return;
+    /* v3.29（ユーザー：逃げる京極を斬り続けると帰らず、斬るたびにカットイン）：斬られて「追いかけ中」に戻り、もう一度逃げ始めていた。
+       逃げ始めた後は、斬っても血しぶき・音だけで、逃げる流れ（後ずさり→転ぶ→言い訳→走り去る）は止めない。体力は1より減らない */
+    if(e.fled){if(e.dead||e.hide)return;e.hp=Math.max(1,e.hp-dmg);e.flash=.11;G.chain++;G.chainT=chainWin();G.chainPop=1;SFX.hit(false);spark(e.x-Math.cos(ang)*e.r*.5,e.y-Math.sin(ang)*e.r*.5,ang,false);bloodBurst(e.x,e.y,ang,8,230);return}
+    kyoInterrupt(e)} /* v3.25：登場してすぐ蹴った一斗缶に当たって口上が飛んだ */
   o=o||{};if(e.dead||e.hide)return;
   /* v2.86：床の穴・屋上の端のあるステージでは、斬った向きの近く（約90）に落ちる所があれば、吹き飛ばしを強める（斬った勢いで落とせる。ガード押しの代わり） */
   if(o.melee&&kb>0&&!e.boss&&!e.armor&&fallZone()){for(let d=20;d<=90;d+=14)if(voidAt(e.x+Math.cos(ang)*d,e.y+Math.sin(ang)*d)){kb=Math.max(kb*2.2,620);break}}if(e.boss&&G.phase==='rebirth')return;
@@ -2391,7 +2395,7 @@ function setupGimmick(){
 }
 // 仕掛けによるダメージ（原因を付けて当てる）
 // 消火剤を吸った敵：むせて動けない（1.2秒は残る）。初めてむせた時だけ「ゴホッ」と出す
-function smokeEnemy(e){if(kyoIntroing(e))return;if(!(e.smoked>0))popText(e.x,figTop(e)-14,'ゴホッ','#e6ecf2',12,.6);e.smoked=1.2;e.stun=Math.max(e.stun,1.2)}
+function smokeEnemy(e){if(kyoIntroing(e)||e.fled)return;if(!(e.smoked>0))popText(e.x,figTop(e)-14,'ゴホッ','#e6ecf2',12,.6);e.smoked=1.2;e.stun=Math.max(e.stun,1.2)}
 function gimHit(cause,e,dmg,ang,kb,o){const pc=G.cause;G.cause=cause;hitEnemy(e,dmg,ang,kb,o);G.cause=pc}
 function hitProp(pr,ang){if(hitPropNew(pr,ang))return;
   // 台車：殴った方向へ滑り出す（何度でも押せる）
@@ -2432,7 +2436,7 @@ function updateCan(pr,dt){
    v2.69（ユーザー：派手に・大きなダメージ・長く）：足をすくわれて体が宙に浮き（SLIP_AIR秒）、背中から床へ叩きつけられて SLIP_DMG のダメージ。
    起き上がれない時間 1.6→SLIP_T 秒 */
 const SLIP_T=2.8,SLIP_AIR=.42,SLIP_DMG=.5; // SLIP_DMG：最大体力に対する割合（後半ほど敵の体力が増えるので、決まった量だと効かなくなる）。鎧の敵は .3
-function slipEnemy(e,a,hit,lf){if(kyoIntroing(e))return;
+function slipEnemy(e,a,hit,lf){if(kyoIntroing(e)||e.fled)return; /* v3.29：逃げ始めた京極も、仕掛けで転ばない（追いかけに戻ってしまう） */
   if(e.boss||e.dead||e.slipCD>0||e.state==='charge')return; // v2.78：突進中の用心棒は、跳ね飛ばした手下の体ではつまずかない
   e.slipT=SLIP_T;e.slipCD=SLIP_T+1.6;e.slipRot=(Math.random()<.5?1:-1)*1.45;e.stun=Math.max(e.stun,SLIP_T);e.state='chase';e.fallT=0;e.fz=0;
   const sp=hit?260:200;e.vx=Math.cos(a)*sp;e.vy=Math.sin(a)*sp;e.slideT=.5;
@@ -6082,7 +6086,7 @@ function kyoAI(e,dt,d,toP){const K=KYO[e.kyN||1];G.kyoAt={x:e.x,y:e.y};
         if(q[3]){slow(.5,.4);addShake(8);RINGS.push({x:e.x,y:e.y,r:16,R:110,t:0,dur:.6,col:'255,60,90',w:6});tone(82,41,.5,'sawtooth',.2);noise(.3,.3,'lowpass',700,150)}}
       else{e.kpose=null;e.iq=null;if(e.introTrip)kyoTrip(e,toP,'おわっ!?',false);else{e.state='chase';e.st=0;e.cd=1.2}}}
     return}
-  if((e.kyN||1)<3&&e.hp<=e.max*.5){kyoFlee(e);return}
+  if((e.kyN||1)<3&&e.hp<=e.max*.5&&!e.fled){kyoFlee(e);return}
   if(e.lickT>0){e.lickT-=dt;e.kpose='_k_lick';if(e.lickT<=0)e.kpose=null;return} // 刀の血を舐める（その間は止まる＝隙）
   e.cd-=dt;e.tauntT-=dt;if(e.tauntT<=0&&e.state==='chase'){e.tauntT=rand(6,10);kyoSay(e,pick(KYO_TAUNT),2.4);if(d>120&&Math.random()<.5){e.lickT=.9;e.kpose='_k_lick'}}
   switch(e.state){
@@ -6113,7 +6117,7 @@ function kyoFleeDir(e){const toP=Math.atan2(P.y-e.y,P.x-e.x);let best=null,bd=1e
   e.fleeA=best==null?Math.PI/2:best}
 // 逃げる：一番近い壁（主人公のいる側は避ける）へ走って、画面の外へ消える。逃げている間は倒されない
 function kyoFlee(e){kyoFleeDir(e);
-  e.state='flee';e.st=0;e.stun=0;e.tripped=0;e.trip=null;e.lickT=0;e.kpose='_k_sute';e.slipT=0;e.ashT=null;e.drag=null;e.burning=false;
+  e.fled=1;e.state='flee';e.st=0;e.stun=0;e.tripped=0;e.trip=null;e.lickT=0;e.kpose='_k_sute';e.slipT=0;e.ashT=null;e.drag=null;e.burning=false;
   e.fleeHold=kyoLine(e,e.kyN===2?'あぁっ！ そやった！ スーパーの惣菜半額の時間や……ほな、さいなら！':'今日はこのくらいにしといたるわ！',6,e.kyN===2?2.6:2,0,true)?Math.max(1.1,KCUT.dur-.4):1.1;callout('京極 逃走','また来る——次はもっと狂って','#ff8090');G.callout.dur=1.6;slow(.6,.4);addShake(6)}
 function kyoGone(e,quiet){const i=E.indexOf(e);if(i>=0)E.splice(i,1);const K=kyoPlan();K.fled++;if(!quiet)popText(clamp(e.x,AX0+60,AX1-60),clamp(e.y,AY0+60,AY1-60),'京極は姿を消した','#ff8090',14,1.2)}
 // 倒されそうになった時（どの倒し方でも）：1・2回目は逃げる。3回目はそのまま倒れる＝決着
@@ -6122,7 +6126,7 @@ function kyoSave(e,o){const K=kyoPlan();
   if(o.fall){K.fled++;popText(e.x,e.y-40,'京極は下へ落ちていった……','#ff8090',14,1.2);return false} // 穴から下の階へ落ちても、生きていて次に戻ってくる
   e.hp=Math.max(1,e.max*.2);e.ashT=null;e.drag=null;e.burning=false;e.slipT=0;e.trip=null;e.kpose=null;e.lickT=0;e.fz=0;e.fallT=null;e.stun=0;e.fear=0;
   if(G.phase!=='fight'){kyoGone(e,true);return true}
-  if(e.state!=='flee')kyoFlee(e);return true}
+  if(!e.fled)kyoFlee(e);return true}
 // 名前と体力（半分の所に目盛り）、突進の予告の赤い帯
 function drawKyoTele(e,t){
   if(e.state==='dashAim'){const p=clamp(t/.65,0,1),L=560*.38*KYO[e.kyN||1].spd;g.save();g.translate(e.x,e.y);g.rotate(e.aim);g.fillStyle=`rgba(255,30,60,${.12+p*.25})`;g.fillRect(0,-e.r,L,e.r*2);
@@ -7005,7 +7009,7 @@ function capBurst(set){const near=i=>{const cx=i%GC,cy=(i/GC)|0;for(let dy=-1;dy
 function capSetFx(e){G.soul=Math.min(SOUL_MAX,G.soul+4);scare(e.x,e.y,180)}
 function dragQ(e){if(e.dragged)return;const o=E.filter(q=>!q.dead&&!q.boss&&!q.shiki&&q.state!=='enter'&&!q.dragged&&dist(q.x,q.y,e.x,e.y)<100).sort((a,b)=>dist(a.x,a.y,e.x,e.y)-dist(b.x,b.y,e.x,e.y))[0];
   if(o){o.dragged=1;o.stun=Math.max(o.stun,.6);(G.dragL||(G.dragL=[])).push({e:o,at:G.time+.35,fx:e.x,fy:e.y})}}
-function bossCaged(e,a){const dm=e.max*.06+8;hitEnemy(e,dm,a,0,{fin:true});e.stun=Math.max(e.stun||0,2);e.caged=2;popText(e.x,figTop(e)-16,'血の檻！','#ff2f5f',20,1.1);addShake(12);SFX.boom()}
+function bossCaged(e,a){if(e.fled)return;const dm=e.max*.06+8;hitEnemy(e,dm,a,0,{fin:true});e.stun=Math.max(e.stun||0,2);e.caged=2;popText(e.x,figTop(e)-16,'血の檻！','#ff2f5f',20,1.1);addShake(12);SFX.boom()}
 function miniBoom(x,y,src){RINGS.push({x,y,r:6,R:52,t:0,dur:.25,col:'127,243,255',w:6});tone(500,200,.1,'square',.05);for(const o of [...E])if(o!==src&&!o.dead&&dist(o.x,o.y,x,y)<50+o.r)hitEnemy(o,o.boss?2:1.5,Math.atan2(o.y-y,o.x-x),300,{shot:true})}
 function guardBurst(){RINGS.push({x:P.x,y:P.y,r:10,R:95,t:0,dur:.3,col:'110,240,255',w:8});for(const e of E)if(!e.boss&&!e.dead&&dist(e.x,e.y,P.x,P.y)<95+e.r){const a=Math.atan2(e.y-P.y,e.x-P.x);e.vx=Math.cos(a)*420;e.vy=Math.sin(a)*420;e.stun=Math.max(e.stun,.5)}}
 function ricoWall(b){if(b.rico)return false;let hit=false;if(b.x<AX0){b.x=AX0;b.vx=Math.abs(b.vx);hit=true}else if(b.x>AX1){b.x=AX1;b.vx=-Math.abs(b.vx);hit=true}
