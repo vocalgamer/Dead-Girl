@@ -28,7 +28,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v3.20 2026-11-13';
+const VERSION='v3.21 2026-11-13';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 // ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
 const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
@@ -1383,7 +1383,7 @@ function updateWave(dt){
           G.cleanT=(late?rand(7,10):Math.max(8,rand(10,16)-G.wave*.2))*(G.waveTime>100?1.5:1)*(G.mod==='sweep'?.4:1);
           popText(P.x,P.y-64,'掃除屋 全滅！','#5ab8ff',18,1.1);G.score+=200*crew}
         G.cleanT-=dt;
-        if(!G.crewOut&&G.cleanT<=0&&painted>=10&&nc===0){G.crewOut=true;
+        if(!G.crewOut&&G.cleanT<=0&&painted>=10&&nc===0&&!kyoHold()){G.crewOut=true; /* v3.21（ユーザー）：掃除屋も京極の口上・初回のサシの勝負の間は出さない（京極の血で床が塗れて出てきていた） */
           // まだ出ていない種類を先に、あとはランダム。実際に出した種類だけを「出会った」にする
           const nw=kinds.filter(k=>!G.seenSub[k]),sent=[];for(let i=0;i<crew;i++){const k=i<nw.length?nw[nw.length-1-i]:pick(kinds);sent.push(k);queueSpawn('cleaner',k)}
           const fresh=sent.filter(k=>!G.seenSub[k]);for(const k of sent)G.seenSub[k]=true;
@@ -3698,7 +3698,7 @@ function checkMilestones(){
   if(G.isBossWave||G.phase!=='fight'||G.tutMode)return;const pr=prog(),m=pr>=.75?3:pr>=.5?2:pr>=.25?1:0;
   // 床の75%を塗った時だけ「あと25%」と知らせる（残りのマスが点滅し始める合図）
   if(!G.dark&&(m>=2&&theme.name==='中庭'||G.mod==='dark'&&pr>=.4))startBlackout();
-  if(m>G.mile){G.mile=m;if(m>=2&&!G.evDone)stageEvent();if(m===3){G.flash=Math.max(G.flash,.18);G.flashCol='255,20,50';tone(70,40,.7,'sine',.6);callout('あと25%','光っているマスを、すべて血で塗れ','#ff2f5f')}}
+  if(m>G.mile){G.mile=m;if(m>=2&&!G.evDone&&!kyoHold())stageEvent();if(m===3){G.flash=Math.max(G.flash,.18);G.flashCol='255,20,50';tone(70,40,.7,'sine',.6);callout('あと25%','光っているマスを、すべて血で塗れ','#ff2f5f')}}
 }
 
 
@@ -5516,7 +5516,7 @@ function hintTick(dt){
 
   if(P.regen>0)hint('regen');
   // v2.05：はじめてSOULが満タンになった時、敵の群れが周りから押し寄せる（「今こそ怨念解放」の場面を作る）
-  if(G.soul>=100&&SEEN.has('hint_move')&&G.waveTime>6&&!SEEN.has('hint_rage')&&!G.isBossWave){hint('rage');rageCrowd()}
+  if(G.soul>=100&&SEEN.has('hint_move')&&G.waveTime>6&&!SEEN.has('hint_rage')&&!G.isBossWave&&!kyoHold()){hint('rage');rageCrowd()}
   if(G.soul>=SOUL_MAX)hint('hands');
   if(HOLEN>0)hint('hole')}
 function drawHint(){const h=HINTCUR;if(!h||state!=='play'||BUBS.length)return;const a=Math.min(1,h.t/.3)*Math.min(1,(h.dur-h.t)/.5),txt_=HINTS[h.k]();
@@ -7422,6 +7422,7 @@ function runCleared(){achGet('all20');if(G.shura)achGet('shura');if(starTotal()>
 function updNew(dt){
   if(G.frenzyT>0)G.frenzyT-=dt;if(G.enrT>0)G.enrT-=dt;
   updNewProps(dt);updChem(dt);updRunaway(dt);
+  if(state==='play'&&G.phase==='fight'&&G.mile>=2&&!G.evDone&&!kyoHold())stageEvent(); // v3.21 京極の間に待たせた出来事を、終わってから
   if(state!=='play')return;
   for(const e of E){if(e.caged>0)e.caged-=dt;if(e.sheet>0)e.sheet-=dt}
   if(G.dragL&&G.dragL.length){G.dragL=G.dragL.filter(q=>{if(G.time<q.at)return true;const o=q.e;if(!o.dead&&E.includes(o)){popText(o.x,figTop(o)-8,'道連れ','#c890ff',14,.8);for(let i=0;i<8;i++)fx({k:'b',x:lerp(q.fx,o.x,i/8),y:lerp(q.fy,o.y,i/8),vx:0,vy:0,life:.3,max:.3,sz:3,np:true,col:'#8a0a1c'});sinkEnemy(o)}return false})}
