@@ -28,7 +28,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v3.18 2026-11-13';
+const VERSION='v3.19 2026-11-13';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 // ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
 const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
@@ -1689,7 +1689,7 @@ const READY_T=1.3;
 // 開始時の「あなたはここ」：周りを暗くして主人公だけを照らし、光の輪が主人公へ縮む。頭の上に矢印。最後に「GO!」
 function drawReady(){
   if(state!=='play'||!(G.ready>0)||G.banner)return;
-  const tm=performance.now()/1000,x=P.x,y=P.y-20,a=Math.min(1,(READY_T-G.ready)/.2)*Math.min(1,G.ready/.2);
+  const tm=performance.now()/1000,x=P.x,y=P.y-20,a=Math.max(0,Math.min(1,(READY_T-G.ready)/.2)*Math.min(1,G.ready/.2)); /* v3.19：★3の条件で READY が長い時は、最後の1.3秒だけ照らす */
   const gr=g.createRadialGradient(x,y,34,x,y,150);gr.addColorStop(0,'rgba(0,0,0,0)');gr.addColorStop(1,'rgba(0,0,0,'+(.62*a)+')');
   g.fillStyle=gr;g.fillRect(AX0-60,AY0-120,AX1-AX0+120,AY1-AY0+240);
   g.lineWidth=3;for(let k=0;k<2;k++){const q=(tm*1.3+k*.5)%1;g.strokeStyle='rgba(127,243,255,'+((1-q)*a)+')';g.beginPath();g.arc(x,y,lerp(95,30,q),0,TAU);g.stroke()}
@@ -5048,7 +5048,7 @@ function update(rdt){
   if(state==='play'&&G.cards&&G.cards.length){if(!G.banner){state='stintro';stateT=0;resetTouch()}return}
   if(state!=='play')return;
   // ステージ開始直後：世界を止めて主人公を照らし、「GO!」で動き出す（ステージ名の帯の間も止めておく）
-  if(G.ready>0){if(!G.banner){if(!G.readyOn){G.readyOn=true;tone(660,660,.1,'triangle',.14);tone(990,990,.2,'triangle',.1,now(.12))}
+  if(G.ready>0){if(!G.banner){if(!G.readyOn){G.readyOn=true;tone(660,660,.1,'triangle',.14);tone(990,990,.2,'triangle',.1,now(.12));if(G.star3){callout('★3 の条件',G.star3,'#ffd54a');G.callout.dur=2.4;G.ready=Math.max(G.ready,2.6);G.star3=null}}
     G.ready-=rdt;if(G.ready<=0){tone(196,392,.28,'sawtooth',.14);noise(.2,.25,'highpass',2000);addShake(4)}}return}
   // チュートリアルで倒れたら、ゲームオーバーにせず、その場で復活して今の手順からやり直す（成功回数はそのまま）
   if(P.dead&&G.tutMode&&G.tut){G.deathT+=rdt;if(G.deathT>1.6){Object.assign(P,{dead:false,hp:P.maxhp,inv:1.5,blinkT:0,vx:0,vy:0,kx:0,ky:0,atk:null});G.deathT=0;G.slowT=0;const r=G.tut.rep;tutSetup(G.tut.step);G.tut.rep=r;callout('再挑戦','この手順からやり直し','#ffd54a');G.callout.dur=1.5;SFX.heal()}}
@@ -7408,7 +7408,7 @@ function modKey(k){if(['arrowleft','a','arrowup','w','1'].includes(k)){G.modSel=
 /* ---- ステージ開始時（startWave の最後に呼ぶ） ---- */
 function newWaveHook(n,bk){RUNAWAY=[];EVT=null;WRECK=null;carEngStop(.1);G.handLock=0;G.seaShot=null;G.seaShotAt=0;
   Object.assign(G,{ccN:0,ccUntil:0,wrefK:0,wgimK:0,wfallK:0,crestN:0,enrT:0,evDone:0,execDone:0,frenzyT:0,stT:0,rerollN:0,dragL:[],capN:0,capLT:null,dealPick:false});
-  if(!G.endless&&!bk&&!G.tutMode&&!G.bonus&&n<=20)G.intro.push({t:2.9,txt:'★3 の条件',sub:chalText(n),col:'#ffd54a',dur:2.4});
+  G.star3=!G.endless&&!bk&&!G.tutMode&&!G.bonus&&n<=20?chalText(n):null; /* v3.19（ユーザー：表示のタイミングがおかしい）：★3の条件は戦闘が始まってからではなく、止まっている READY の間に見せる */
   for(let i=E.length-1;i>=0;i--)if(E[i].type==='kyogoku')E.splice(i,1); /* v3.05：逃げた京極を次のステージへ持ち越さない */
   if(G.endless&&n>=30)achGet('end30')}
 function cpSave(){if(G.bossWon&&[5,10,15].includes(G.wave)&&!G.endless&&!G.brush&&!G.shura&&!G.devRun&&!G.tutMode){const v=G.wave+1;if(v>(+lsGet('dg_cp')||0))lsSet('dg_cp',v)}}
