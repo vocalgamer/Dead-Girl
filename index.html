@@ -28,7 +28,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v3.48 2026-11-14';
+const VERSION='v3.49 2026-11-14';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 // ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
 const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
@@ -3030,7 +3030,7 @@ function useHands(){
   popText(W/2,AY0+80,'怨 霊 の 手','#c890ff',30,1.3);
   for(const e of tg){
     HANDS.push({e,x:e.x,y:e.y,t:0,dur:HAND_T+.3,n:e.boss?8:5+((Math.random()*2)|0),seed:Math.random()*9});
-    if(e.boss){hitEnemy(e,e.max*.12,-Math.PI/2,0,{});e.stun=Math.max(e.stun,1.6)}
+    if(e.boss||e.type==='kyogoku'){hitEnemy(e,e.max*(e.boss?.12:.15),-Math.PI/2,0,{});e.stun=Math.max(e.stun,1.6)} // v3.49 京極も引きずり込まれず、大ダメージだけ
     else{e.drag=0;G.chain++;G.chainT=chainWin();G.chainPop=1}}
   if(tg.length>=3)callout(tg.length+'体 引きずり込み','血の床は、怨霊の巣だ','#c890ff');
   /* v2.95：引きずり込み終えた後、主人公の足元から血が噴き上がり、足元と周りの床（足元を中心に十字と斜めの最大13マス）が血で染まる（最後の1マス対策） */
@@ -4464,6 +4464,7 @@ function tryRage(){
   for(const e of [...E]){const d=dist(P.x,P.y,e.x,e.y);if(d>=R+e.r||e.ashT!=null)continue;
     hitN++;
     if(e.boss)hitEnemy(e,12,Math.atan2(e.y-P.y,e.x-P.x),820,{fin:true});
+    else if(e.type==='kyogoku'){hitEnemy(e,e.max*.15,Math.atan2(e.y-P.y,e.x-P.x),820,{fin:true});e.stun=Math.max(e.stun,1)} // v3.49（ユーザー：怨念解放で京極が一発で死んだ）：京極はボスと同じく大ダメージだけ（最大体力の15%）
     else{e.ashT=e.ashMax=.08+d/R*.3+.42;e.burning=true;e.stun=9;e.state='chase';if(e===G.aimer)G.aimer=null}}
   G.cause=pc;healP(bigHeal(18.4,hitN)); /* v2.95：23→18.4（2割減） */ // 怨念解放の回復：基本23（v1.43で23→46、v2.32で半分の23に）＋巻き込んだ敵の数だけ上乗せ
   for(const b of B)if(!b.friendly&&dist(P.x,P.y,b.x,b.y)<R+5)reflect(b);
@@ -5218,7 +5219,7 @@ function update(rdt){
       const tr=b.trail||(b.trail=[]);tr.push({x:b.x,y:b.y});if(tr.length>10)tr.shift();
       for(const e of [...E]){
         if(b.hits&&b.hits.has(e))continue;if(dist(b.x,b.y,e.x,e.y)>=e.r+8)continue;
-        let kill=!e.armor&&!e.boss;if(b.hits)b.hits.add(e);
+        let kill=!e.armor&&!e.boss&&e.type!=='kyogoku';if(b.hits)b.hits.add(e); // v3.49 京極は反射弾で即死しない
         /* v3.17（ENDLESS後半で反射が強すぎる）：21面以降は、雑魚も即死ではなく最大体力の refPct() のダメージ（PERFECT×1.4・倍返し1つにつき+25%）。倒しきれば今までどおり貫通 */
         if(kill&&refPct()<1){const d=e.max*refPct()*(b.perfect?1.4:1)*(1+.25*lv('payback'));if(d<e.hp){hitEnemy(e,d,Math.atan2(b.vy,b.vx),520,{shot:true});if(setOn('ref')&&!b.boomed){b.boomed=1;miniBoom(b.x,b.y,e)}b.life=0;break}}
         hitEnemy(e,kill?e.hp+1:(b.big?16:4)*(b.perfect?2:1)*(1+.5*lv('payback')),Math.atan2(b.vy,b.vx),520,{fin:true,shot:true});if(setOn('ref')&&!b.boomed){b.boomed=1;miniBoom(b.x,b.y,e)}
