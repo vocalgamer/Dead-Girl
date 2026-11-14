@@ -28,7 +28,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v3.58 2026-11-14';
+const VERSION='v3.59 2026-11-14';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 // ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
 const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
@@ -765,7 +765,7 @@ const BOSSES={kirishima:{name:'若頭・霧島',sub:'私の心臓を撃ち抜い
 function bossFor(n){if(n%5)return null;if(n<=20)return{5:'kirishima',10:'shirasagi',15:'kirishimaI',20:'kito'}[n];return['kirishimaI','shirasagi','kito'][(n/5)%3]}
 
 function resetRun(){
-  Object.assign(G,{onPts:0,ccN:0,ccUntil:0,kyo:null,pickHdr:null,pickTot:0,brush:false,brTime:0,rushRes:null,shura:false,daily:null,drng:null,risk:0,extraPicks:0,enrT:0,frenzyT:0,crestN:0,evDone:0,execDone:0,seaShot:null,seaShotAt:0,rerollN:0,dealPick:false,pickNote:null,dragL:[],mod:null,lastMod:null,modsUsed:[],bubWait:-99,lastCapT:-99,tdemo:null,tdemoPend:false,s1tut:false,tdemoReq:false,tdemoOK:false,nhStreak:0,dark:null,score:0,kills:0,wave:0,chain:0,chainT:0,maxChain:0,chainPop:0,mult:1,soul:0,
+  Object.assign(G,{onPts:0,ccN:0,ccUntil:0,kyo:null,pickHdr:null,pickTot:0,brush:false,brTime:0,rushRes:null,shura:false,daily:null,drng:null,risk:0,extraPicks:0,enrT:0,frenzyT:0,crestN:0,evDone:0,execDone:0,seaShot:null,seaShotAt:0,rerollN:0,dealPick:false,pickNote:null,dragL:[],mod:null,lastMod:null,modsUsed:[],bubWait:-99,lastCapT:-99,tutLast:-99,tdemo:null,tdemoPend:false,s1tut:false,tdemoReq:false,tdemoOK:false,nhStreak:0,dark:null,score:0,kills:0,wave:0,chain:0,chainT:0,maxChain:0,chainPop:0,mult:1,soul:0,
     hitstop:0,slowT:0,slowScale:1,ts:1,shake:0,zoom:0,aimer:null,shotGap:0,crests:[],cleanT:8,seenSub:{},soulReady:false,waveTime:0,flash:0,flashCol:'255,40,70',time:0,
     toSpawn:0,spawnT:0,breakT:0,addsT:0,banner:null,callout:null,boss:null,bossInfo:null,bossPending:0,isBossWave:false,
     phase:'fight',devRun:false,musFin:null,mRem:null,hist:[],csWait:null,omT:0,bolt:null,epiWait:false,tutMode:false,endless:false,deathT:0,endT:0,newBest:false,tut:null,propSpot:0,rush:0,rushT:99,res:null,gim:null,intro:[],cards:null,cardSel:0,beamT:0,cause:null,
@@ -5517,7 +5517,10 @@ const bubStop=()=>G.wave===1&&!G.endless&&!G.tutMode&&!G.bonus&&state==='play';
 const BUB_LOCK=1; // v2.88：吹き出しが出てから、この秒数はクリック・タップ・キーを受け付けない（攻撃の連打で、読む前に閉じてしまうのを防ぐ）
 function bubRelease(){const b=G.bubHold;if(!b||b.ht<BUB_LOCK)return false;G.bubHold=null;b.t=Math.max(b.t,.3);P.atkBuf=0;inp.padAtk=false;SFX.ui();return true}
 /* v3.52（ユーザー：チュートリアルは同時に出さない。先に出た方を優先）：吹き出し・上部のヒントが表示中なら、新しい吹き出しは出さない（false を返す。呼び出し側は条件が続く限り次のフレームでまた試す） */
-function tutBusy(){return !!G.tdemo||BUBS.some(b=>!b.end)||!!HINTCUR||!!(G.callout&&G.callout.t<G.callout.dur)} // 画面中央の大きな告知（「怨念 MAX」など）が出ている間も待つ
+/* v3.59（ユーザー：怨念解放の吹き出しで発動したら、囲いの吹き出しが後から重なった）：どんな状況でも同時に出さない。
+   ①閉じかけの吹き出しも表示中として扱う ②1つ消えてから TUT_GAP 秒は次を出さない ③怨念解放・怨霊の手の演出中も出さない */
+const TUT_GAP=2;
+function tutBusy(){return !!G.tdemo||BUBS.length>0||!!HINTCUR||!!(G.callout&&G.callout.t<G.callout.dur)||!!G.rageFx||G.time<(G.handLock||0)||G.time-(G.tutLast??-99)<TUT_GAP} // 画面中央の大きな告知（「怨念 MAX」など）が出ている間も待つ
 function popBubble(o){if(tutBusy()&&!o.force){G.bubWait=G.time;return false}const b=Object.assign({t:0,dur:4.5},o);BUBS.push(b);if(bubStop()){b.ht=0;G.bubHold=b}tone(880,1320,.08,'triangle',.07);tone(1320,1320,.06,'triangle',.05,now(.08));return true}
 function updBubbles(dt){for(const b of BUBS){b.t+=dt;if(!b.end&&b.until&&b.until()){b.end=1;b.dur=Math.min(b.dur,b.t+.3)}}BUBS=BUBS.filter(b=>b.t<b.dur)}
 function drawBubbles(){if(state!=='play')return;
@@ -5562,7 +5565,7 @@ function pracTick(dt){if(G.wave>3||G.endless||G.tutMode||G.bonus||G.banner||G.ph
   if(!SEEN.has('m_guard')&&!has('guard')&&!has('ok')){const k=G.wave===1?E.find(e=>e.gp&&near(e,999)):E.find(e=>near(e,150)&&(e.state==='windup'||e.state==='slashWind'));
     if(k){markSeen('hint_guard');k.spot=0;const g0=S.guard;popBubble({kind:'guard',txt:S.guard?'もう一度、防いでみよう！':'攻撃を防いでみよう！',sub:touchMode?'右半分を長押しでガード':'U／右クリック長押しでガード',at:at(k),dur:9,until:()=>k.dead||S.guard>g0})}}
   if(S.guard!==(S.gShow||0)&&S.guard<=PRAC_N){S.gShow=S.guard;BUBS=BUBS.filter(b=>b.kind!=='guard'&&b.kind!=='ok');
-    popBubble({kind:'ok',txt:'防いだ！ ライフが回復した！',sub:S.guard<PRAC_N?'もう1回、防いでみよう':'正面の攻撃を防ぐと、ライフとSOULがたまる',col:'#0a8a3a',at:()=>P.dead?null:{x:P.x,y:P.y-SH-4,y2:P.y+8},dur:3.5})}
+    popBubble({force:true,kind:'ok',txt:'防いだ！ ライフが回復した！',sub:S.guard<PRAC_N?'もう1回、防いでみよう':'正面の攻撃を防ぐと、ライフとSOULがたまる',col:'#0a8a3a',at:()=>P.dead?null:{x:P.x,y:P.y-SH-4,y2:P.y+8},dur:3.5})}
   // 弾き返し
   if(!SEEN.has('m_reflect')&&!has('reflect')){const a=E.find(e=>(e.type==='gunner'||e.type==='rifle')&&e.state==='aim'&&!e.dead);
     if(a){markSeen('hint_reflect');for(const o of E)if(o.type==='gunner')o.spot=0;const r0=S.reflect;
@@ -5577,9 +5580,10 @@ function rageCrowd(){const n=Math.min(6,capRoom());
 function hint(k){if(SEEN.has('hint_'+k)||G.tutMode||G.bonus)return;markSeen('hint_'+k);HINTQ.push(k)}
 function hintTick(dt){
   if(state!=='play'||G.phase!=='fight')return;
+  if(BUBS.length||HINTCUR)G.tutLast=G.time; // v3.59 最後にチュートリアルが見えていた時刻
   if(HINTCUR){HINTCUR.t+=dt;if(HINTCUR.t>HINTCUR.dur)HINTCUR=null}
   if(BUBS.length&&HINTCUR)HINTCUR.t=Math.min(HINTCUR.t,.3); // 吹き出しの間は止めておく
-  if(!HINTCUR&&HINTQ.length&&!BUBS.length&&!G.tdemo&&!(G.time-(G.bubWait??-9)<.25)){const k=HINTQ.shift(); /* v3.52：吹き出しが順番を待っている間は、次のヒントを始めない（先に待っていた吹き出しを先に） */HINTCUR={k,t:0,dur:5.5}}
+  if(!HINTCUR&&HINTQ.length&&!tutBusy()&&!(G.time-(G.bubWait??-9)<.25)){const k=HINTQ.shift(); /* v3.52：吹き出しが順番を待っている間は、次のヒントを始めない（先に待っていた吹き出しを先に） */HINTCUR={k,t:0,dur:5.5}}
   if(G.ready>0||G.banner)return;
   if(G.wave===1&&G.waveTime>.6)hint('move');
   if((G.kills||0)>=1&&G.waveTime>4)hint('paint');
