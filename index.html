@@ -28,7 +28,7 @@ canvas{display:block;touch-action:none;box-shadow:0 0 70px rgba(255,40,90,.18)}
    殺された少女がゾンビとなり、鬼頭組に復讐する1画面アクション
    ========================================================= */
 // バージョン表記（タイトル画面右下に表示）。更新のたびに数字と日付を上げる
-const VERSION='v3.71 2026-11-15';
+const VERSION='v3.72 2026-11-15';
 const ENEMY_DMG=1.2; // 敵の攻撃力倍率（v0.95で1.5→1.2：技が必要な敵を増やした分、全体を約20%やさしく）
 // ステージごとの敵の攻撃力の倍率：序盤（1〜3面）は半分、4〜6面は7割、中盤で標準に近づき、終盤は少し強い。チュートリアルは半分
 const STAGE_DMG=[0,.5,.5,.4,.5,.65,.7,.85,.85,.85,.95,.95,.95,1,1,1,1,1.05,1.05,1.05,1.1]; // 3・4面は「バカ押し」でも届くよう少し低め（v1.76の計測で調整）
@@ -316,7 +316,7 @@ function renderBG(){
 
 /* ---------------- audio ---------------- */
 let AC=null,master,musG,sfxG,noiseBuf,muted=false,nextNote=0,step=0;
-try{muted=localStorage.getItem('nb_mute')==='1'}catch(e){}
+try{const v=localStorage.getItem('dg_mute');muted=(v!=null?v:localStorage.getItem('nb_mute'))==='1'}catch(e){} // v3.72：保存名 nb_→dg_（古い保存は引き継ぐ）
 const now=d=>AC?AC.currentTime+(d||0):0;
 /* スマホの音対策
    ・iPhone/Androidとも、音を出す許可が出るのは「指を離した瞬間(pointerup/touchend)」や「クリック」の中だけ。
@@ -722,13 +722,13 @@ function drawMuteIcon(){
   g.fillStyle='#cfd6e4';g.beginPath();const mx=UI.mute.x-7,my=UI.mute.y;g.moveTo(mx,my-3);g.lineTo(mx+4,my-3);g.lineTo(mx+9,my-8);g.lineTo(mx+9,my+8);g.lineTo(mx+4,my+3);g.lineTo(mx,my+3);g.closePath();g.fill();
   if(muted){g.strokeStyle='#ff4060';g.lineWidth=2.2;g.beginPath();g.moveTo(mx-1,my-9);g.lineTo(mx+16,my+9);g.stroke()}
   else{g.strokeStyle='#cfd6e4';g.lineWidth=1.5;g.beginPath();g.arc(mx+9,my,5,-.9,.9);g.stroke()}}
-function toggleMute(){muted=!muted;try{localStorage.setItem('nb_mute',muted?'1':'0')}catch(e){}applyGain()}
+function toggleMute(){muted=!muted;try{localStorage.setItem('dg_mute',muted?'1':'0')}catch(e){}applyGain()}
 
 /* ---------------- state ---------------- */
 let state='title',stateT=0,uid=0,last=0;
 const G={},P={};
 let E=[],B=[],FX=[],RINGS=[],TEXTS=[],MARKS=[],CORPSES=[],SINKS=[];
-let best=0;try{best=+localStorage.getItem('nb_best')||0}catch(e){}
+let best=0;try{best=+(localStorage.getItem('dg_best')||localStorage.getItem('nb_best'))||0}catch(e){}
 const STAGES=[
   {dur:.25,hitAt:.07,range:76,arc:2.7,dmg:1.6,kb:230,from:-1.6,to:1.5,stop:.05,shake:4},
   {dur:.25,hitAt:.07,range:76,arc:2.7,dmg:1.6,kb:230,from:1.6,to:-1.5,stop:.05,shake:4},
@@ -872,7 +872,7 @@ function drawBonusHUD(){
   if(b.kind!=='shiki'){const w=200,x=W/2-w/2;rr(x,84,w,6,3,'rgba(0,0,0,.5)');rr(x,84,w*clamp(b.ref/b.need,0,1),6,3,'#ffd54a')}
 }
 function newEndless(){resetRun();G.endless=true;G.runSeed=1+Math.floor(Math.random()*1e6);state='play';stateT=0;SFX.ui();startWave(21)}
-function saveBest(){if(G.daily){const v=dailyRec();if(!v||v.d!==G.daily||v.id===G.runId)lsSet('dg_daily',JSON.stringify({d:G.daily,s:G.score,id:G.runId}))}if(G.endless&&G.score>best){best=G.score;G.newBest=true;try{localStorage.setItem('nb_best',best)}catch(e){}}
+function saveBest(){if(G.daily){const v=dailyRec();if(!v||v.d!==G.daily||v.id===G.runId)lsSet('dg_daily',JSON.stringify({d:G.daily,s:G.score,id:G.runId}))}if(G.endless&&G.score>best){best=G.score;G.newBest=true;try{localStorage.setItem('dg_best',best)}catch(e){}}
   // TOP5：同じ挑戦を二重に記録しない（復活後は同じ記録を書き換える）
   if(G.tutMode||!G.score||!G.endless)return;let top=[]; /* v2.87：記録はENDLESSのスコアだけ */try{top=JSON.parse(lsGet('dg_top5')||'[]')}catch(e){}
   const d=new Date(),day=(d.getMonth()+1)+'/'+d.getDate();if(!G.runId)G.runId=Date.now();
@@ -2293,7 +2293,7 @@ function pickCard(i){
   if(c.id==='r_heal')P.hp=P.maxhp;if(c.id==='r_soul')G.soul=Math.min(SOUL_MAX,G.soul+60);
   G.lastPick=c;SFX.just();
   // 1枚選んだあとで「動画を見てもう1枚選ぶか」を聞く（ステージクリアごとに1回だけ）
-  if(!G.pickAdUsed&&!G.tutMode){state='offer';stateT=0;return}
+  if(!G.pickAdUsed&&!G.tutMode&&!NO_ADS){state='offer';stateT=0;return}
   afterPick();
 }
 // カード選びを終えて先へ進む。中ボスを倒した後は、次のステージの前にボーナス面を1回挟む
@@ -2385,7 +2385,7 @@ function drawPick(){
     if(i<own.length)cur+=' ほか'+(own.length-i)+'枚';lines.push(cur);
     lines.forEach((l,k)=>txt(l,W/2,688+k*15,11,'#c9cfdc','center',JP,null,false,700))}
   txt(touchMode?'カードをタップで効果を見る・もう一度タップで決定':G.cards.length===2?'クリック／矢印で効果を見る・1・2キーで決定':'クリック／矢印で効果を見る・1・2・3キーで決定',W/2,740,12,'#8b93a8','center',JP,null,false,700);
-  drawCardDemo();drawPickExtra();if(G.devRun)button(SCR.pdev,'開発者画面に戻る','rgba(110,80,10,.95)'); // 開発者モード：カードを選べば次のステージ、ここで開発者画面へ
+  drawCardDemo();drawPickExtra();if(G.devRun&&DEV_OK)button(SCR.pdev,'開発者画面に戻る','rgba(110,80,10,.95)'); // 開発者モード：カードを選べば次のステージ、ここで開発者画面へ
   g.globalAlpha=1;
 }
 
@@ -4054,9 +4054,11 @@ Object.assign(SCR,{pcodex:{x:W/2-62,y:600,w:118,h:40},pstat:{x:W/2+62,y:600,w:11
    ・遊んでいる間だけ gameplayStart、メニュー・カード選び・ゲームオーバーなどで gameplayStop（タブ切り替えで止まった時は知らせない）
    ・区切りの広告：次のステージを始める前と、ゲームオーバーからやり直す・タイトルへ戻る時に「広告を出してよい」と伝える（出すかはサイトが決める）
    ・広告の間は音を消して、操作を受け付けない。CrazyGames の「音を消す」設定にも従う */
-const PORTAL_BUILD=''; // 公開先ごとに固定したい時は 'poki' / 'crazygames' を入れる
+const PORTAL_BUILD=''; // 公開先ごとに固定したい時は 'poki' / 'crazygames' / 'itch' を入れる（itch版は 書き出し\build_itch.py が 'itch' にして書き出す）
 const PORTAL=(()=>{try{const q=new URLSearchParams(location.search).get('portal');if(q)return q;const h=location.hostname;if(/poki/i.test(h))return 'poki';if(/crazygames/i.test(h))return 'crazygames'}catch(e){}return PORTAL_BUILD})();
 let portalReady=false,portalBusy=false,portalMute=false,portalPlaying=false,portalHappy=false;
+/* v3.72 itch.io 版：広告の仕組みが無いので、動画を見て〜の機能（復活・もう1枚・2回目の引き直し）を出さない。開発者モードにもたどり着けない（機能は残す） */
+const NO_ADS=PORTAL==='itch',DEV_OK=PORTAL!=='itch';
 const cgSDK=()=>PORTAL==='crazygames'&&window.CrazyGames&&CrazyGames.SDK&&CrazyGames.SDK.environment!=='disabled'?CrazyGames.SDK:null;
 const pokiSDK=()=>PORTAL==='poki'&&window.PokiSDK?PokiSDK:null;
 const outGain=()=>muted||portalMute||portalBusy?0:.85; // 実際の音量（自分のミュート・サイトのミュート・広告中）
@@ -4107,7 +4109,7 @@ function drawAd(){dim(.92);txt('広告（テスト表示）',W/2,H/2-20,22,'#fff
   txt('本番では、ここに動画広告が流れます',W/2,H/2+14,13,'#8b93a8','center',JP,null,false,700);
   txt(Math.max(0,Math.ceil(AD_T-stateT))+'',W/2,H/2+70,30,'#ffd54a','center',EN,null,true)}
 // 動画を見て復活：その場でライフ半分、周りの敵を吹き飛ばして2.5秒無敵（1回の挑戦で1回まで）
-const canRevive=()=>!G.revived&&!G.tutMode;
+const canRevive=()=>!NO_ADS&&!G.revived&&!G.tutMode;
 function revive(){
   G.revived=true;Object.assign(P,{dead:false,hp:Math.round(P.maxhp*.5),inv:2.5,blinkT:0,vx:0,vy:0,kx:0,ky:0,atk:null});G.deathT=0;G.slowT=0;state='play';stateT=0;B.length=0;
   for(const e of E){if(e.boss)continue;const a=Math.atan2(e.y-P.y,e.x-P.x);if(dist(e.x,e.y,P.x,P.y)<180){e.vx=Math.cos(a)*520;e.vy=Math.sin(a)*520;e.stun=Math.max(e.stun,1)}}
@@ -4145,7 +4147,7 @@ function screenAction(p,key){
   if(state==='epilogue')return; // エンディングは飛ばせない（場面は時間で進み、曲を締めてから結果画面へ）
   // ボーナス集計：並べている途中なら一気に全部出す。出し終わっていれば次へ
   if(state==='bres'){const r=G.bres;if(r.doneT<0){r.n=r.items.length;r.tick=0}else if(r.doneT>.6)finishBonus();return}
-  if(state==='pick'){if(p&&G.devRun&&inR(p,SCR.pdev)){openDev();return}if(p){const i=cardAt(p);if(i>=0){if(G.cardDemo===G.cards&&G.cardSel===i)pickCard(i);else{G.cardSel=i;G.cardDemo=G.cards;G.demoT0=stateT;SFX.ui()}}}else pickCard(G.cardSel);return} /* v3.60（ユーザー）：カードを押すと上部でデモ。同じカードをもう一度押すと決定（G.cardDemo＝デモ中のカードの組。組が変われば自然に消える） */
+  if(state==='pick'){if(p&&G.devRun&&DEV_OK&&inR(p,SCR.pdev)){openDev();return}if(p){const i=cardAt(p);if(i>=0){if(G.cardDemo===G.cards&&G.cardSel===i)pickCard(i);else{G.cardSel=i;G.cardDemo=G.cards;G.demoT0=stateT;SFX.ui()}}}else pickCard(G.cardSel);return} /* v3.60（ユーザー）：カードを押すと上部でデモ。同じカードをもう一度押すと決定（G.cardDemo＝デモ中のカードの組。組が変われば自然に消える） */
   if(state==='offer'){if(stateT<.4)return;if(p&&inR(p,SCR.oad)){rewardAd(()=>{G.pickAdUsed=true;openPick(true)});return}if(!p||inR(p,SCR.onext)){SFX.ui();afterPick()}return}
   if(state==='codex'){if(stateT<.2)return;if(p){if(inR(p,CDX_BACK)){state=codexFrom;stateT=9;SFX.ui();return}for(let i=0;i<CODEX.length;i++)if(inR(p,CDX_CELL(i))){codexSel=i;SFX.ui();return}return}if(key==='back'||key==='title'){state=codexFrom;stateT=9}return}
   if(state==='stats'){if(stateT<.2)return;if(!p||inR(p,ST_BACK)){state='pause';SFX.ui()}return}
@@ -4164,7 +4166,7 @@ function screenAction(p,key){
   if(state==='title'){if(p&&inR(p,SCR.tlang)&&stateT>LOGO_T){setLang(LANGS[(LANGS.indexOf(LANG)+1)%LANGS.length]);SFX.ui();return}
     if(p&&inC(p,UI.mute,8)){toggleMute();G.titleTap=1;SFX.ui();return} // v2.95 タイトルにも右上のスピーカー（ステージ中と同じ）
     if(!touchMode&&!muted&&!(AC&&AC.state==='running')&&!G.titleTap){G.titleTap=1;return}
-    if(p){if(inR(p,SCR.tstart)){if(DEVSHIFT)openDev();else devHold={t:performance.now()}}else if(inR(p,SCR.ttut)){openCodex('title')}else if(inR(p,SCR.tendless)){if(endlessOpen())newEndless();else SFX.wall()}return}
+    if(p){if(inR(p,SCR.tstart)){if(DEVSHIFT&&DEV_OK)openDev();else devHold={t:performance.now()}}else if(inR(p,SCR.ttut)){openCodex('title')}else if(inR(p,SCR.tendless)){if(endlessOpen())newEndless();else SFX.wall()}return}
     if(key==='tut'){openCodex('title');return}
     newGame(false);return}
   if(state==='devst'){if(p)devStTap(p);else if(key==='title'){state='dev';stateT=0}return}
@@ -4181,7 +4183,7 @@ function screenAction(p,key){
     if(inR(p,DEV_UI.reset)){if(DEV.rstAsk&&performance.now()-DEV.rstAsk<3000)factoryReset();else{DEV.rstAsk=performance.now();SFX.ui()}return}
     if(inR(p,DEV_UI.close)){state='title';stateT=0;skipPrologue();SFX.ui()}return}
   if(state==='over'){if(stateT<.9)return;
-    if(p){if(G.devRun&&inR(p,SCR.pdev)){openDev();return}if(canRevive()&&inR(p,SCR.orevive)){rewardAd(revive);return}
+    if(p){if(G.devRun&&DEV_OK&&inR(p,SCR.pdev)){openDev();return}if(canRevive()&&inR(p,SCR.orevive)){rewardAd(revive);return}
       if(inR(p,SCR.oshare)){shareResult();return}
       if(inR(p,SCR.otitle)){portalBreak(()=>{state='title';stateT=0;resetRun();skipPrologue()});return}
       return}
@@ -4192,7 +4194,7 @@ function screenAction(p,key){
     if(p&&inR(p,SCR.presume)){state='play';SFX.ui();return}
     if(p&&inR(p,SCR.pcodex)){openCodex('pause');return}
     if(p&&inR(p,SCR.pstat)){state='stats';stateT=0;SFX.ui();return}
-    if(p&&G.devRun&&inR(p,SCR.ppdev)){openDev();return} // 開発者画面から始めたステージだけ
+    if(p&&G.devRun&&DEV_OK&&inR(p,SCR.ppdev)){openDev();return} // 開発者画面から始めたステージだけ
     if((p&&inR(p,SCR.ptitle))||key==='title'){state='title';stateT=0;resetRun();return}
     state='play';return;
   }
@@ -5086,7 +5088,7 @@ function update(rdt){
   stateT+=rdt;
   if(state!=='play'&&locked())document.exitPointerLock(); // メニュー・カード選びの間はカーソルを戻す
   updateRain(rdt);if(state==='play'){updateKekkai(rdt);updateFoams(rdt*(G.ts||1))}
-  if(state==='title'&&devHold&&performance.now()-devHold.t>DEV_HOLD){devHold=null;openDev()}
+  if(DEV_OK&&state==='title'&&devHold&&performance.now()-devHold.t>DEV_HOLD){devHold=null;openDev()}
   if(state==='title'||state==='dev'||state==='devst'||state==='tutsel'){G.time+=rdt;return}
   if(state==='ad'){if(stateT>AD_T&&adCb){const f=adCb;adCb=null;f()}return}
   if(endSkipOn()){const h=skipHeld();if(!h)G.skipArm=true;if(h&&G.skipArm)G.skipHold=(G.skipHold||0)+rdt;else G.skipHold=0;if(G.skipHold>=1){skipEnding();return}}
@@ -6837,7 +6839,7 @@ function drawTitle(){
     g.globalAlpha=la;const first=!tutDone;
     button(SCR.tstart,'ゲームスタート','rgba(160,20,45,.92)');
     // 長押し中は、開発者メニューが開くまでの残りを輪で見せる（0.3秒を過ぎてから）
-    if(devHold){const k=(performance.now()-devHold.t)/DEV_HOLD;if(k>.2){g.strokeStyle='#ffd54a';g.lineWidth=3;g.beginPath();g.arc(SCR.tstart.x+SCR.tstart.w/2-20,SCR.tstart.y,12,-Math.PI/2,-Math.PI/2+TAU*Math.min(1,k));g.stroke()}}
+    if(devHold&&DEV_OK){const k=(performance.now()-devHold.t)/DEV_HOLD;if(k>.2){g.strokeStyle='#ffd54a';g.lineWidth=3;g.beginPath();g.arc(SCR.tstart.x+SCR.tstart.w/2-20,SCR.tstart.y,12,-Math.PI/2,-Math.PI/2+TAU*Math.min(1,k));g.stroke()}}
     button(SCR.ttut,'キャラクター','rgba(30,32,44,.92)');button(SCR.trec,'モード・記録','rgba(30,32,44,.92)'); // v1.81：チュートリアルを廃止（遊びながら覚える）。この場所はキャラクター紹介に
     // ENDLESS：全20ステージクリアで開放（それまでは鍵付きで見せて、目標にする）
     if(endlessOpen())button(SCR.tendless,'ENDLESS','rgba(160,20,45,.95)',EN);
@@ -6873,7 +6875,7 @@ function drawPause(){
   txt(touchMode?'タップで再開':'P / Enter で再開',W/2,hy,14,'#c9cfdc','center',JP,null,false,700);
   SCR.presume.y=hy+40;SCR.pcodex.y=SCR.pstat.y=hy+92;SCR.ptitle.y=hy+144;SCR.ppdev.y=hy+196;
   button(SCR.presume,'ゲームに戻る','rgba(20,80,110,.95)');button(SCR.pcodex,'キャラクター','rgba(40,40,60,.95)');button(SCR.pstat,'ステータス','rgba(40,40,60,.95)');button(SCR.ptitle,'タイトルへ戻る','rgba(60,20,30,.9)');
-  if(G.devRun)button(SCR.ppdev,'開発者画面に戻る','rgba(110,80,10,.95)'); // 開発者画面から始めたステージだけ
+  if(G.devRun&&DEV_OK)button(SCR.ppdev,'開発者画面に戻る','rgba(110,80,10,.95)'); // 開発者画面から始めたステージだけ
   const why={btn:'ポーズボタン',key:'キー操作',blur:'画面のフォーカスが外れた',hidden:'アプリ切替・画面オフ',rotate:'画面の回転',pad:'コントローラー',back:'戻る操作（画面端のスワイプ）',lock:'ESCでマウスの固定を解除'}[G.pauseWhy];
   if(why)txt('停止の理由：'+why,W/2,H-40,11,'#8b93a8','center',JP,null,false,700);
   if(!touchMode&&mouseLock)txt('再開すると、マウスは再びゲーム画面に固定されます（ESCで解除）',W/2,H-22,10,'#6a7288','center',JP,null,false,700);
@@ -6904,10 +6906,10 @@ function drawOver(){
   if(stateT>.9){
     if(canRevive()){glow(SCR.orevive.x,SCR.orevive.y,170,'#ff2f5f',.18+Math.sin(stateT*4)*.08);button(SCR.orevive,'▶ 動画を見て復活','rgba(160,20,45,.95)');
       txt('この場所から、ライフ半分で戦いに戻れる（1回だけ）',W/2,SCR.orevive.y-40,12,'#ffb0c0','center',JP,['#000',3],false,800)}
-    else txt('復活は、1回の挑戦で1回まで',W/2,SCR.orevive.y,12,'#8b93a8','center',JP,null,false,700);
+    else if(!NO_ADS)txt('復活は、1回の挑戦で1回まで',W/2,SCR.orevive.y,12,'#8b93a8','center',JP,null,false,700);
     button(SCR.oshare,'シェア','rgba(20,80,110,.95)');button(SCR.otitle,'タイトルへ','rgba(30,32,44,.92)');
     if(!touchMode)txt(canRevive()?'Enter：動画を見て復活　Esc：タイトルへ':'Enter／Esc：タイトルへ',W/2,716,11,'#8b93a8','center',JP,null,false,700);
-    if(G.devRun)button(SCR.pdev,'開発者画面に戻る','rgba(110,80,10,.95)')}
+    if(G.devRun&&DEV_OK)button(SCR.pdev,'開発者画面に戻る','rgba(110,80,10,.95)')}
   g.globalAlpha=1;
 }
 /* エンディング（約26秒・タップで場面を送れる）：
@@ -7083,7 +7085,7 @@ function cardTag(c,x,y,w){const l=lv(c.id),parts=[];const s=SETS.find(q=>q.ids.i
 function drawPickNote(a){if(!G.pickNote)return;const ls=wrapJP(G.pickNote,13,W-70);ls.slice(0,3).forEach((l,k)=>txt(l,W/2,388+k*18,13,'#ffd54a','center',JP,['#000',3],false,900))}
 // 引き直し（1回は無料、もう1回は動画）と、血の海の画像
 const SCR2={reroll:{x:W/2-95,y:650,w:176,h:36},shot:{x:W/2+95,y:650,w:176,h:36}};
-function canReroll(){return state==='pick'&&!G.dealPick&&!(G.startPicks>0)&&(G.rerollN||0)<2}
+function canReroll(){return state==='pick'&&!G.dealPick&&!(G.startPicks>0)&&(G.rerollN||0)<(NO_ADS?1:2)} // itch版は無料の1回だけ
 function rerollCards(){const N=G.cards.length,cur=new Set(G.cards.map(c=>c.id));const shuf=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
   let pool=shuf(CARDS.filter(c=>!c.rep&&lv(c.id)<c.max&&!cur.has(c.id)&&cardOK(c))).slice(0,N);if(pool.length<N)pool.push(...shuf(CARDS.filter(c=>c.rep&&!cur.has(c.id))).slice(0,N-pool.length));
   if(pool.length<N){SFX.wall();return}G.cards=pool;G.cardSel=0;stateT=.12;SFX.ui()}
@@ -7905,7 +7907,7 @@ function newWaveHook(n,bk){RUNAWAY=[];EVT=null;WRECK=null;carEngStop(.1);G.handL
   G.star3=!G.endless&&!bk&&!G.tutMode&&!G.bonus&&n<=20?chalText(n):null; /* v3.19（ユーザー：表示のタイミングがおかしい）：★3の条件は戦闘が始まってからではなく、止まっている READY の間に見せる */
   for(let i=E.length-1;i>=0;i--)if(E[i].type==='kyogoku')E.splice(i,1); /* v3.05：逃げた京極を次のステージへ持ち越さない */
   if(G.endless&&n>=30)achGet('end30')}
-function cpSave(){if(G.bossWon&&[5,10,15].includes(G.wave)&&!G.endless&&!G.brush&&!G.shura&&!G.devRun&&!G.tutMode){const v=G.wave+1;if(v>(+lsGet('dg_cp')||0))lsSet('dg_cp',v)}}
+function cpSave(){if(G.bossWon&&[5,10,15].includes(G.wave)&&!G.endless&&!G.brush&&!G.shura&&!G.devRun&&DEV_OK&&!G.tutMode){const v=G.wave+1;if(v>(+lsGet('dg_cp')||0))lsSet('dg_cp',v)}}
 function runCleared(){achGet('all20');if(G.shura)achGet('shura');if(starTotal()>=60)achGet('star60')}
 
 /* ---- 毎フレーム（update の最後に呼ぶ） ---- */
